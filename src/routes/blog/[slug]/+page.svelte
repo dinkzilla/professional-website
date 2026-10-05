@@ -18,7 +18,7 @@
 
 <article class="page">
 	<div class="page-header">
-		<a class="back" href="/blog">← Blog</a>
+		<a class="back" href="/blog/">← Blog</a>
 		<a class="back" href="/">← Main</a>
 	</div>
 
@@ -27,6 +27,9 @@
 			<h1>{post.title}</h1>
 			<p class="label">
 				{site.name} · <time datetime={post.date}>{formatDate(post.date)}</time>
+				{#if post.mediumUrl}
+					· <a href={post.mediumUrl} target="_blank" rel="noopener">Read on Medium</a>
+				{/if}
 			</p>
 		</header>
 		<div class="prose">
@@ -66,6 +69,14 @@
 	.label {
 		margin: 1.25rem 0 0;
 		color: var(--orange);
+	}
+
+	.label a {
+		color: inherit;
+	}
+
+	.label a:hover {
+		color: var(--purple);
 	}
 
 	aside {

@@ -19,3 +19,8 @@ vite.config.ts.timestamp-*
 
 npm-debug.log*
 .vscode/*
+
+# Terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*

@@ -22,7 +22,7 @@
 	<ul class="post-grid">
 		{#each data.posts as post (post.slug)}
 			<li>
-				<a class="card" href="/blog/{post.slug}">
+				<a class="card" href="/blog/{post.slug}/">
 					<p class="label">{formatDate(post.date)}</p>
 					<h3>{post.title}</h3>
 					<p>{post.description}</p>

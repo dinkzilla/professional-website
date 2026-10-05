@@ -10,10 +10,10 @@
 		{ name: 'Katilyst', src: '/logos/katilyst.png' },
 		{ name: 'Altigo', src: '/logos/altigo.png' },
 		{ name: 'SingleComm', src: '/logos/singlecomm.jpg' },
-		{ name: 'DG Dean', src: '/logos/dgdean.png' },
+		//{ name: 'DG Dean', src: '/logos/dgdean.png' },
 		{ name: 'Loeb NYC', src: '/logos/loeb-nyc.jpg' },
 		{ name: 'Advocate', src: '/logos/advocate.svg' },
-		//{ name: 'IBS Club Software', src: '/logos/ibs-club-software.jpg' },
+		{ name: 'IBS Club Software', src: '/logos/ibs-club-software.jpg' },
 		{ name: 'Pangea Health', src: '/logos/pangea-health.jpg' },
 		{ name: 'Altria', src: '/logos/altria.svg' },
 		{ name: 'Dominion Energy', src: '/logos/dominion-energy.svg' },
@@ -44,10 +44,19 @@
 		<div>
 			<p>
 				The development needs of small businesses and startups are often drastically different than
-				those of large companies. When costs and time matter and hard decisions are made daily, it
+				those of large companies.
+			</p>
+			<p>
+				When costs and time matter and hard decisions are made daily, it
 				is important that your development team is doing more than just building tools for you. A
 				true partner should help you make appropriate and realistic technical decisions with a
 				strong understanding of your business's goals, risks, and limitations in mind.
+			</p>
+			<p>
+				I have been working in software development since 2010 and have experience with companies and teams
+				of all sizes. I have managed large teams with massive budgets and built early proof-of-concepts as a solo
+				developer working part-time. My breadth of experience makes me especially adaptable and I have developed a
+				strong sense of what strategies actually provide real value in different environments.
 			</p>
 			<p>
 				I am especially passionate about helping development teams scale. Both technology and
@@ -78,12 +87,12 @@
 	<section>
 		<div class="heading-row">
 			<h2 class="section-title">Blog</h2>
-			<a class="button" href="/blog">All posts →</a>
+			<a class="button" href="/blog/">All posts →</a>
 		</div>
 		<ul class="post-grid">
 			{#each data.posts as post (post.slug)}
 				<li>
-					<a class="card" href="/blog/{post.slug}">
+					<a class="card" href="/blog/{post.slug}/">
 						<p class="label">{formatDate(post.date)}</p>
 						<h3>{post.title}</h3>
 						<p>{post.description}</p>
@@ -97,7 +106,7 @@
 
 <style>
 	/* Stacked and centred on phones (name, photo, tagline); on wider screens the photo
-	   sits to the right of the name and tagline. */
+	   sits to the right of the centred name and tagline. */
 	.page-header {
 		display: grid;
 		justify-items: center;
@@ -107,6 +116,7 @@
 
 	.tagline {
 		margin: 0;
+		font-size: clamp(1.1rem, 2.4vw, 1.35rem);
 	}
 
 	.photo {
@@ -124,10 +134,8 @@
 			grid-template-areas:
 				'name photo'
 				'tagline photo';
-			justify-items: start;
 			align-items: center;
-			column-gap: 2rem;
-			text-align: left;
+			gap: 0.5rem 2rem;
 		}
 
 		.page-title {

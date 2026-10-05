@@ -12,7 +12,7 @@ export default defineConfig({
 			},
 
 			// The whole site is prerendered to static files in /build.
-			adapter: adapter()
+			adapter: adapter({ fallback: '404.html' })
 		})
 	]
 });

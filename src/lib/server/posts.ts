@@ -10,10 +10,13 @@ export interface PostSummary {
 
 export interface Post extends PostSummary {
 	html: string;
+	/** Link to the post on Medium, for posts synced from there. */
+	mediumUrl?: string;
 }
 
 // Each post is a markdown file in src/posts. The filename is the URL slug and
-// the frontmatter needs `title`, `date` (YYYY-MM-DD) and `description`.
+// the frontmatter needs `title`, `date` (YYYY-MM-DD) and `description`. Posts
+// synced from Medium also carry their Medium post id as `medium`.
 const files = import.meta.glob<string>('/src/posts/*.md', {
 	query: '?raw',
 	import: 'default',
@@ -42,7 +45,8 @@ function parse(path: string, raw: string): Post {
 		date: meta.date,
 		description: meta.description,
 		minutes: Math.max(1, Math.round(body.split(/\s+/).length / 230)),
-		html: marked.parse(body, { async: false })
+		html: marked.parse(body, { async: false }),
+		mediumUrl: meta.medium ? `https://medium.com/p/${meta.medium}` : undefined
 	};
 }
 
