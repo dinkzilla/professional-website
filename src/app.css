@@ -88,11 +88,12 @@ img {
 	outline-offset: 3px;
 }
 
-/* Every page is one centred column on the purple background. */
+/* Every page is one centred column on the purple background. The side gutter stays tight on
+   phones so the text columns inside the cards keep their width. */
 .page {
 	max-width: var(--page);
 	margin-inline: auto;
-	padding: clamp(3.5rem, 10vh, 6rem) 1.75rem clamp(3.5rem, 8vw, 5rem);
+	padding: clamp(3.5rem, 10vh, 6rem) clamp(1rem, 4vw, 1.75rem) clamp(3.5rem, 8vw, 5rem);
 }
 
 /* Lines the title and tagline up with the text inside the boxes below. */
