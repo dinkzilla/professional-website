@@ -1,8 +1,51 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+	import { cubicInOut } from 'svelte/easing';
+	import { Tween } from 'svelte/motion';
 	import { formatDate, mailto, site } from '#lib/site.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
+	// The "Why Matt?" card is drawn as three stacked pieces (title, text, contact) that read
+	// as one box. The middle piece folds up like an accordion: while animating it is sliced,
+	// borders and shadow included, into SLATS horizontal strips that hinge on each other and
+	// zigzag in 3D. `unfold` runs from 1 (flat, open) to 0 (folded shut); the fold angle and
+	// the height of the middle piece derive from it.
+	const SLATS = 6;
+	const FOLD_MS = 900;
+	const CARD_SHADOW = 6; // px: the card's drop shadow, so the right-hand strip folds too
+
+	let whyOpen = $state(false);
+	let slide = $state(0); // how far the toggle travels from beside the title to the corner
+	let measuring = $state(false);
+	let whyHeight = $state(0);
+	let whyContent = $state<HTMLDivElement>();
+	const unfold = new Tween(0, { duration: FOLD_MS, easing: cubicInOut });
+
+	const folding = $derived(unfold.current !== unfold.target);
+	const foldAngle = $derived((1 - unfold.current) * 90);
+	const foldShade = $derived(Math.sin((foldAngle * Math.PI) / 180));
+	const bodyHeight = $derived(
+		folding ? `${whyHeight * Math.cos((foldAngle * Math.PI) / 180)}px` : whyOpen ? 'auto' : '0px',
+	);
+
+	async function toggleWhy() {
+		const opening = !whyOpen;
+		if (!folding) {
+			// The text is display:none while folded, so briefly show it (still clipped by the
+			// zero-height body) to measure how tall the unfolded slats need to be.
+			if (opening) {
+				measuring = true;
+				await tick();
+			}
+			whyHeight = whyContent?.offsetHeight ?? 0;
+			measuring = false;
+		}
+		whyOpen = opening;
+		const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		unfold.set(opening ? 1 : 0, { duration: reduceMotion ? 0 : FOLD_MS });
+	}
 
 	const clients = [
 		{ name: 'Jet It', src: '/logos/jet-it.png' },
@@ -10,13 +53,13 @@
 		{ name: 'Katilyst', src: '/logos/katilyst.png' },
 		{ name: 'Altigo', src: '/logos/altigo.png' },
 		{ name: 'SingleComm', src: '/logos/singlecomm.jpg' },
-		//{ name: 'DG Dean', src: '/logos/dgdean.png' },
 		{ name: 'Loeb NYC', src: '/logos/loeb-nyc.jpg' },
+		{ name: 'Dominion Energy', src: '/logos/dominion-energy.svg' },
 		{ name: 'Advocate', src: '/logos/advocate.svg' },
+		{ name: 'DG Dean', src: '/logos/dgdean.png' },
 		{ name: 'IBS Club Software', src: '/logos/ibs-club-software.jpg' },
 		{ name: 'Pangea Health', src: '/logos/pangea-health.jpg' },
 		{ name: 'Altria', src: '/logos/altria.svg' },
-		{ name: 'Dominion Energy', src: '/logos/dominion-energy.svg' },
 		{ name: 'College Board', src: '/logos/college-board.svg' },
 	];
 </script>
@@ -58,42 +101,105 @@
 		</ul>
 	</section>
 
-	<section class="card box why">
-		<h2 class="section-title">Why Matt?</h2>
-		<div>
-			<p>
-				The development needs of small businesses and startups are often drastically different than
-				those of large companies.
-			</p>
-			<p>
-				When costs and time matter and hard decisions are made daily, it
-				is important that your development team is doing more than just building tools for you. A
-				true partner should help you make appropriate and realistic technical decisions with a
-				strong understanding of your business's goals, risks, and limitations in mind.
-			</p>
-			<p>
-				I have been working in software development for 15+ years and have experience with companies and teams
-				of all sizes. I have managed large teams with big budgets and built early proof-of-concepts as a solo
-				developer working part-time. My breadth of experience makes me especially adaptable and I have developed a
-				deep understanding of when different development strategies will actually provide
-				<span style="color: var(--purple)"><b><em>real business value</em></b></span>.
-			</p>
-			<p>
-				I am especially passionate about helping development teams scale. Both technology and
-				process changes are often required to help grow from a single team of developers to multiple
-				teams operating independently. With the right approach, it is possible to navigate these
-				changes while laying the foundation to grow even further.
-			</p>
-			<p>
-				I would love to learn about your business and help you avoid the pitfalls of technical
-				organization growth.
-			</p>
+	<section class="why">
+		<div class="piece why-top">
+			<h2 class="section-title">Why Matt?</h2>
+			<button
+				class="fold-toggle"
+				class:folded={!whyOpen}
+				style:--slide="{slide}px"
+				type="button"
+				aria-expanded={whyOpen}
+				aria-controls="why-body"
+				aria-label={whyOpen ? 'Fold up "Why Matt?"' : 'Unfold "Why Matt?"'}
+				onclick={toggleWhy}
+			>
+				{#if whyOpen}
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path d="M6 6 18 18M18 6 6 18" />
+					</svg>
+				{:else}
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path d="m7 4 5 4 5-4M7 10l5 4 5-4M7 16l5 4 5-4" />
+					</svg>
+				{/if}
+			</button>
+			<span class="spacer" bind:clientWidth={slide}></span>
+		</div>
+		<div id="why-body" class="why-body" class:closed={!whyOpen && !folding} style:height={bodyHeight}>
+			<div class="piece why-mid" class:ghost={folding}>
+				<div
+					class="why-content"
+					bind:this={whyContent}
+					hidden={folding || (!whyOpen && !measuring)}
+				>
+					{@render whyText()}
+				</div>
+			</div>
+			{#if folding}
+				<div
+					class="fold"
+					aria-hidden="true"
+					inert
+					style:--fold="{foldAngle}deg"
+					style:--shade={foldShade}
+					style:--slat="{whyHeight / SLATS}px"
+					style:--shadow="{CARD_SHADOW}px"
+				>
+					{@render slat(0)}
+				</div>
+			{/if}
+		</div>
+		<div class="piece why-bottom">
 			<div class="contact">
 				<a class="button" href={mailto}>Let's Talk!</a>
 				<span><span class="address">{site.email}</span></span>
 			</div>
 		</div>
 	</section>
+
+	{#snippet slat(i: number)}
+		<div class="slat" class:first={i === 0} class:toward={i % 2 === 1} class:away={i > 0 && i % 2 === 0}>
+			<div class="slice">
+				<div class="clone piece why-mid" style:translate="0 calc({-i} * var(--slat))">
+					<div class="why-content">{@render whyText()}</div>
+				</div>
+			</div>
+			{#if i + 1 < SLATS}
+				{@render slat(i + 1)}
+			{/if}
+		</div>
+	{/snippet}
+
+	{#snippet whyText()}
+		<p>
+			The development needs of small businesses and startups are often drastically different than
+			those of large companies.
+		</p>
+		<p>
+			When costs and time matter and hard decisions are made daily, it
+			is important that your development team is doing more than just building tools for you. A
+			true partner should help you make appropriate and realistic technical decisions with a
+			strong understanding of your business's goals, risks, and limitations in mind.
+		</p>
+		<p>
+			I have been working in software development for 15+ years and have experience with companies and teams
+			of all sizes. I have managed large teams with big budgets and built early proof-of-concepts as a solo
+			developer working part-time. My breadth of experience makes me especially adaptable and I have developed a
+			deep understanding of when different development strategies will actually provide
+			<span style="color: var(--purple)"><b><em>real business value</em></b></span>.
+		</p>
+		<p>
+			I am especially passionate about helping development teams scale. Both technology and
+			process changes are often required to help grow from a single team of developers to multiple
+			teams operating independently. With the right approach, it is possible to navigate these
+			changes while laying the foundation to grow even further.
+		</p>
+		<p>
+			I would love to learn about your business and help you avoid the pitfalls of technical
+			organization growth.
+		</p>
+	{/snippet}
 
 	<section class="card box">
 		<h2 class="section-title">Who I've worked with:</h2>
@@ -169,12 +275,205 @@
 		margin-bottom: 1.75rem;
 	}
 
+	/* The card is three stacked pieces (title / text / contact) with no borders between them,
+	   so they read as a single .card. Only the middle piece folds. All three are positioned so
+	   they paint in order and each piece's shadow is covered by the piece below it. */
 	.why {
 		font-size: 1.1875rem;
 	}
 
+	.piece {
+		position: relative;
+		display: flow-root; /* keeps the title's and contact row's margins inside the pieces */
+		padding-inline: var(--box-padding);
+		border: 2px solid var(--ink);
+		background: var(--cream);
+		box-shadow: 6px 6px 0 var(--orange);
+		color: var(--ink);
+	}
+
+	/* Title row: [title][toggle][spacer]. The toggle sits beside the title by default (the
+	   folded state); the spacer's measured width is how far it slides to reach the corner. */
+	.why-top {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding-top: var(--box-padding);
+		padding-bottom: 1.75rem;
+		border-bottom: 0;
+		border-radius: 0.9rem 0.9rem 0 0;
+		/* Trims the shadow at the hinge line so it doesn't poke out under the folding slats. */
+		clip-path: inset(-12px -12px 0 -12px);
+	}
+
+	.why-mid {
+		border-top: 0;
+		border-bottom: 0;
+		box-shadow: 6px 0 0 var(--orange);
+	}
+
+	.why-bottom {
+		padding-bottom: var(--box-padding);
+		border-top: 0;
+		border-radius: 0 0 0.9rem 0.9rem;
+	}
+
+	/* The shadow is offset 6px down, so it starts 6px below this piece's top edge; this fills
+	   that notch in the orange strip. (right: -8px = the 2px border + the 6px shadow.) */
+	.why-bottom::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		right: -8px;
+		width: 6px;
+		height: 6px;
+		background: var(--orange);
+	}
+
 	.why p {
 		margin: 0 0 1.2rem;
+	}
+
+	.why-top .section-title {
+		margin-bottom: 0; /* the row's padding-bottom carries the gap instead */
+	}
+
+	.spacer {
+		flex: 1;
+	}
+
+	.fold-toggle {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		padding: 0;
+		border: 2px solid var(--ink);
+		border-radius: 0.6rem;
+		background: var(--red);
+		box-shadow: 4px 4px 0 var(--ink);
+		color: var(--ink);
+		cursor: pointer;
+		translate: 0 0;
+		transition:
+			transform 0.12s,
+			box-shadow 0.12s,
+			translate 0.9s cubic-bezier(0.65, 0, 0.35, 1),
+			background-color 0.9s;
+	}
+
+	.fold-toggle.folded {
+		background: var(--green);
+	}
+
+	/* Open: slides across to the corner and goes red, in step with the unfold. */
+	.fold-toggle:not(.folded) {
+		translate: var(--slide) 0;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.fold-toggle {
+			transition:
+				transform 0.12s,
+				box-shadow 0.12s;
+		}
+	}
+
+	.fold-toggle:hover {
+		transform: translate(2px, 2px);
+		box-shadow: 2px 2px 0 var(--ink);
+	}
+
+	.fold-toggle svg {
+		width: 1.5rem;
+		height: 1.5rem;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 3;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	.why-body {
+		position: relative;
+	}
+
+	.why-body.closed {
+		overflow: hidden;
+	}
+
+	/* While the slats are showing, the real middle piece gets out of the way. */
+	.why-mid.ghost {
+		visibility: hidden;
+	}
+
+	/* flow-root keeps child margins inside so offsetHeight is the true height of the text. */
+	.why-content {
+		display: flow-root;
+	}
+
+	.why-content[hidden] {
+		display: none;
+	}
+
+	/* The accordion: each slat is a strip of the middle piece, hinged along the bottom edge of
+	   the slat above (nested, so rotations compound) and rotated the opposite way to zigzag.
+	   The fold is widened by the shadow so the orange strip folds too; the clone inside is
+	   pulled back to the real width so its text wraps identically. */
+	.fold {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: calc(-1 * var(--shadow));
+		z-index: 1;
+		perspective: 1400px;
+		perspective-origin: 50% 0;
+	}
+
+	.slat {
+		position: relative;
+		height: var(--slat);
+		transform-origin: 50% 0;
+		transform-style: preserve-3d;
+	}
+
+	.slat .slat {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+	}
+
+	.slat.first {
+		transform: rotateX(calc(-1 * var(--fold)));
+	}
+
+	.slat.away {
+		transform: rotateX(calc(-2 * var(--fold)));
+	}
+
+	.slat.toward {
+		transform: rotateX(calc(2 * var(--fold)));
+	}
+
+	.slice {
+		height: 100%;
+		overflow: hidden;
+	}
+
+	.clone {
+		margin-right: var(--shadow);
+	}
+
+	/* Faces turned away from the light darken as they fold. */
+	.first .clone,
+	.away .clone {
+		filter: brightness(calc(1 - var(--shade) * 0.3));
+	}
+
+	.toward .clone {
+		filter: brightness(calc(1 - var(--shade) * 0.08));
 	}
 
 	.contact {
