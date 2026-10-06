@@ -35,7 +35,7 @@ Confidently, I told myself: I’m a software developer and AI is just software. 
 
 So I went and read about how to set up the standard AI architecture from scratch. But that didn’t really explain how it worked.
 
-Then I read as much as I could about [the historical discoveries that got us to this point](https://medium.com/@mdinkel/a-quick-history-of-ai-9fcdbe0037c7) and how the intuitive leaps were made. That didn’t really explain how it worked either.
+Then I read as much as I could about [the historical discoveries that got us to this point](/blog/a-quick-history-of-ai) and how the intuitive leaps were made. That didn’t really explain how it worked either.
 
 It turns out, we don’t yet fully understand how it works; however, there are a lot of researchers out there trying to figure it out. As you can imagine, the funding is flowing. This research, too, is mostly free to read online.
 

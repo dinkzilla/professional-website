@@ -40,12 +40,25 @@ function emphasis(text, tag, marker) {
 	);
 }
 
-function inline(html) {
+// The Medium post id at the end of a link to one of my own posts, if it is one.
+function ownPostId(url) {
+	const { hostname, pathname } = new URL(url);
+	const own =
+		hostname === 'mdinkel.medium.com' ||
+		(hostname === 'medium.com' && pathname.startsWith('/@mdinkel/'));
+	return own ? /-([0-9a-f]{12})$/.exec(pathname)?.[1] : undefined;
+}
+
+// `localPosts` maps Medium post id -> slug for posts on this site, so links to
+// my other posts point here instead of to Medium.
+function inline(html, localPosts) {
 	let text = html.replaceAll(' ', ' ').replace(/([*_`[\]])/g, '\\$1');
 	text = emphasis(text, 'em', '*');
 	text = emphasis(text, 'strong', '**');
 	text = text.replace(/<a href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g, (_, href, label) => {
-		const url = decode(href).replace(/[?&]source=[^&#]*/, '');
+		let url = decode(href).replace(/[?&]source=[^&#]*/, '');
+		const local = localPosts.get(ownPostId(url));
+		if (local) url = `/blog/${local}`;
 		return `[${label}](${url})`;
 	});
 	text = text.replace(/<br\s*\/?>/g, '  \n');
@@ -61,7 +74,7 @@ function slugFromLink(link) {
 		.replace(/^-+|-+$/g, '');
 }
 
-function toMarkdown(content, slug) {
+function toMarkdown(content, slug, localPosts) {
 	let html = content.replace(/<img src="https:\/\/medium\.com\/_\/stat[^>]*>/g, '');
 
 	// Headings before any body text are not sections: a leading <h3> is the
@@ -89,18 +102,18 @@ function toMarkdown(content, slug) {
 		const [, tag, inner] = match;
 
 		if (tag === 'p') {
-			blocks.push(inline(inner));
+			blocks.push(inline(inner, localPosts));
 		} else if (tag === 'h3') {
-			blocks.push(`## ${inline(inner)}`);
+			blocks.push(`## ${inline(inner, localPosts)}`);
 		} else if (tag === 'h4') {
-			blocks.push(`### ${inline(inner)}`);
+			blocks.push(`### ${inline(inner, localPosts)}`);
 		} else if (tag === 'blockquote') {
-			blocks.push(inline(inner).replace(/^/gm, '> '));
+			blocks.push(inline(inner, localPosts).replace(/^/gm, '> '));
 		} else if (tag === 'pre') {
 			blocks.push('```\n' + decode(inner.replace(/<br\s*\/?>/g, '\n')) + '\n```');
 		} else if (tag === 'ul' || tag === 'ol') {
 			const items = [...inner.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(
-				(item, i) => (tag === 'ol' ? `${i + 1}. ` : '- ') + inline(item[1])
+				(item, i) => (tag === 'ol' ? `${i + 1}. ` : '- ') + inline(item[1], localPosts)
 			);
 			blocks.push(items.join('\n'));
 		} else {
@@ -109,7 +122,7 @@ function toMarkdown(content, slug) {
 			const caption = /<figcaption>([\s\S]*?)<\/figcaption>/.exec(inner);
 			const file = path.basename(new URL(src).pathname).replace(/[^A-Za-z0-9._-]/g, '');
 			images.push({ src, file });
-			blocks.push(`![${caption ? inline(caption[1]) : ''}](/blog-images/${slug}/${file})`);
+			blocks.push(`![${caption ? inline(caption[1], localPosts) : ''}](/blog-images/${slug}/${file})`);
 		}
 	}
 	ensureNothingSkipped(html.slice(position));
@@ -169,11 +182,22 @@ async function main() {
 	const feed = parseFeed(await (await download(FEED_URL)).text());
 	const slugs = await existingSlugs();
 
+	// Every post that will be on this site after the sync: previously synced
+	// files plus whatever is in the feed now.
+	const localPosts = new Map(slugs);
+	for (const item of feed) {
+		if (!localPosts.has(item.id)) localPosts.set(item.id, slugFromLink(item.link));
+	}
+
 	// Convert everything before writing anything, so a post Medium has formatted
 	// in a way this script doesn't understand can't leave a half-finished sync.
 	const posts = feed.map((item) => {
-		const slug = slugs.get(item.id) ?? slugFromLink(item.link);
-		const { title = item.title, body, description, images } = toMarkdown(item.content, slug);
+		const slug = localPosts.get(item.id);
+		const { title = item.title, body, description, images } = toMarkdown(
+			item.content,
+			slug,
+			localPosts
+		);
 		const frontmatter = [
 			'---',
 			`title: ${JSON.stringify(title)}`,
