@@ -169,10 +169,11 @@
 			strong understanding of your business's goals, risks, and limitations in mind.
 		</p>
 		<p>
-			I have been working in software development for 15+ years and have experience with companies and teams
-			of all sizes. I have managed large teams with big budgets and built early proof-of-concepts as a solo
-			developer working part-time. My breadth of experience makes me especially adaptable and I have developed a
-			deep understanding of when different development strategies will actually provide
+			I have been working in software development for over 15 years and have experience with companies and teams
+			of all sizes. I have managed teams of 15 engineers working together and built early proof-of-concepts as a
+			solo developer working part-time. I have worked in Fortune 500 IT departments and in tech startups that are
+			still fighting to become profitable. My breadth of experience makes me especially adaptable and I have
+			developed a deep understanding of when different development strategies will actually provide
 			<span style="color: var(--purple)"><b><em>real business value</em></b></span>.
 		</p>
 		<p>
