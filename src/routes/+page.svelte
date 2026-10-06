@@ -81,8 +81,8 @@
 
 <div class="page">
 	<header class="page-header">
-		<h1 class="page-title">{site.name}</h1>
 		<img class="photo" src="/matt-dinkel.png" alt="Matt Dinkel" width="512" height="512" />
+		<h1 class="page-title">{site.name}</h1>
 		<p class="tagline">
 			Fractional Engineering Leadership for startups and small businesses.
 		</p>
@@ -221,7 +221,7 @@
 </div>
 
 <style>
-	/* Stacked and centred on phones (name, photo, tagline); on wider screens the photo
+	/* Stacked and centred on phones (photo, name, tagline); on wider screens the photo
 	   sits to the right of the centred name and tagline. */
 	.page-header {
 		display: grid;
@@ -236,8 +236,9 @@
 	}
 
 	.photo {
-		width: 9rem;
-		height: 9rem;
+		width: 75%;
+		height: auto;
+		aspect-ratio: 1;
 		border: 2px solid var(--ink);
 		border-radius: 0.9rem;
 		box-shadow: 6px 6px 0 var(--ink);
