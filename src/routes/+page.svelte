@@ -56,7 +56,7 @@
 				I have been working in software development since 2010 and have experience with companies and teams
 				of all sizes. I have managed large teams with massive budgets and built early proof-of-concepts as a solo
 				developer working part-time. My breadth of experience makes me especially adaptable and I have developed a
-				strong sense of what strategies actually provide real value in different environments.
+				deep understanding of when different development strategies will actually provide real value.
 			</p>
 			<p>
 				I am especially passionate about helping development teams scale. Both technology and
