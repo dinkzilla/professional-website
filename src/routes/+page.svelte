@@ -39,6 +39,25 @@
 		</p>
 	</header>
 
+	<section>
+		<div class="heading-row">
+			<h2 class="section-title">Blog</h2>
+			<a class="button" href="/blog/">All posts →</a>
+		</div>
+		<ul class="post-grid">
+			{#each data.posts as post (post.slug)}
+				<li>
+					<a class="card" href="/blog/{post.slug}/">
+						<p class="label">{formatDate(post.date)}</p>
+						<h3>{post.title}</h3>
+						<p>{post.description}</p>
+						<span class="read">Read →</span>
+					</a>
+				</li>
+			{/each}
+		</ul>
+	</section>
+
 	<section class="card box why">
 		<h2 class="section-title">Why Matt?</h2>
 		<div>
@@ -53,10 +72,11 @@
 				strong understanding of your business's goals, risks, and limitations in mind.
 			</p>
 			<p>
-				I have been working in software development since 2010 and have experience with companies and teams
-				of all sizes. I have managed large teams with massive budgets and built early proof-of-concepts as a solo
+				I have been working in software development for 15+ years and have experience with companies and teams
+				of all sizes. I have managed large teams with big budgets and built early proof-of-concepts as a solo
 				developer working part-time. My breadth of experience makes me especially adaptable and I have developed a
-				deep understanding of when different development strategies will actually provide real value.
+				deep understanding of when different development strategies will actually provide
+				<span style="color: var(--purple)"><b><em>real business value</em></b></span>.
 			</p>
 			<p>
 				I am especially passionate about helping development teams scale. Both technology and
@@ -80,25 +100,6 @@
 		<ul class="logos">
 			{#each clients as client (client.src)}
 				<li><img src={client.src} alt={client.name} loading="lazy" /></li>
-			{/each}
-		</ul>
-	</section>
-
-	<section>
-		<div class="heading-row">
-			<h2 class="section-title">Blog</h2>
-			<a class="button" href="/blog/">All posts →</a>
-		</div>
-		<ul class="post-grid">
-			{#each data.posts as post (post.slug)}
-				<li>
-					<a class="card" href="/blog/{post.slug}/">
-						<p class="label">{formatDate(post.date)}</p>
-						<h3>{post.title}</h3>
-						<p>{post.description}</p>
-						<span class="read">Read →</span>
-					</a>
-				</li>
 			{/each}
 		</ul>
 	</section>
