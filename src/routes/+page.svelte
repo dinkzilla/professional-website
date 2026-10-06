@@ -240,7 +240,7 @@
 		height: 9rem;
 		border: 2px solid var(--ink);
 		border-radius: 0.9rem;
-		box-shadow: 6px 6px 0 var(--orange);
+		box-shadow: 6px 6px 0 var(--ink);
 		object-fit: cover;
 	}
 
@@ -297,7 +297,7 @@
 		padding-inline: var(--box-padding);
 		border: 2px solid var(--ink);
 		background: var(--cream);
-		box-shadow: 6px 6px 0 var(--orange);
+		box-shadow: 6px 6px 0 var(--ink);
 		color: var(--ink);
 	}
 
@@ -316,7 +316,7 @@
 
 	/* Trims the shadow at the hinge line so it doesn't poke out under the folding slats. Only
 	   while folding: at rest the piece below covers the shadow anyway, and the clip edge lands
-	   on a fractional pixel, which anti-aliases into a faint orange seam. */
+	   on a fractional pixel, which anti-aliases into a faint seam. */
 	.why-top.folding {
 		clip-path: inset(-12px -12px 0 -12px);
 	}
@@ -324,7 +324,7 @@
 	.why-mid {
 		border-top: 0;
 		border-bottom: 0;
-		box-shadow: 6px 0 0 var(--orange);
+		box-shadow: 6px 0 0 var(--ink);
 	}
 
 	.why-bottom {
@@ -334,7 +334,7 @@
 	}
 
 	/* The shadow is offset 6px down, so it starts 6px below this piece's top edge; this fills
-	   that notch in the orange strip. (right: -8px = the 2px border + the 6px shadow.) */
+	   that notch in the shadow strip. (right: -8px = the 2px border + the 6px shadow.) */
 	.why-bottom::before {
 		content: '';
 		position: absolute;
@@ -342,7 +342,7 @@
 		right: -8px;
 		width: 6px;
 		height: 6px;
-		background: var(--orange);
+		background: var(--ink);
 	}
 
 	.why p {
@@ -445,7 +445,7 @@
 
 	/* The accordion: each slat is a strip of the middle piece, hinged along the bottom edge of
 	   the slat above (nested, so rotations compound) and rotated the opposite way to zigzag.
-	   The fold is widened by the shadow so the orange strip folds too; the clone inside is
+	   The fold is widened by the shadow so the shadow strip folds too; the clone inside is
 	   pulled back to the real width so its text wraps identically. */
 	.fold {
 		position: absolute;
@@ -532,7 +532,7 @@
 		border: 2px solid var(--ink);
 		border-radius: 0.9rem;
 		background: var(--cream);
-		box-shadow: 5px 5px 0 var(--orange);
+		box-shadow: 5px 5px 0 var(--ink);
 	}
 
 	/* Several logos have white baked into the bitmap; multiply turns that white into the

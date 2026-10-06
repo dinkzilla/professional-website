@@ -144,11 +144,12 @@ img {
 	box-shadow: 2px 2px 0 var(--ink);
 }
 
+/* Shadows are ink everywhere except the blog cards, which get orange via --accent. */
 .card {
 	border: 2px solid var(--ink);
 	border-radius: 0.9rem;
 	background: var(--cream);
-	box-shadow: 6px 6px 0 var(--accent, var(--orange));
+	box-shadow: 6px 6px 0 var(--accent, var(--ink));
 	color: var(--ink);
 }
 
@@ -183,6 +184,7 @@ img {
 }
 
 .post-grid a {
+	--accent: var(--orange);
 	display: flex;
 	flex-direction: column;
 	height: 100%;
