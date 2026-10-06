@@ -207,14 +207,14 @@
 		</ul>
 	</section>
 
-	<section class="card box">
-		<h2 class="section-title">Who I've worked with:</h2>
+	<section>
+		<h2 class="section-title outside">Who I've worked with:</h2>
 		<ul class="logos">
 			{#each clients as client (client.src)}
 				<li><img src={client.src} alt={client.name} loading="lazy" /></li>
 			{/each}
 			<li class="you">
-				<a class="you-button" href={mailto}><span class="you-prefix">Next Client:</span>You?</a>
+				<a class="you-button" href={mailto}><span class="you-prefix">Next Partner:</span>You?</a>
 			</li>
 		</ul>
 	</section>
@@ -531,14 +531,17 @@
 		padding: 1.1rem;
 		border: 2px solid var(--ink);
 		border-radius: 0.9rem;
-		background: #fff;
-		box-shadow: 5px 5px 0 var(--purple);
+		background: var(--cream);
+		box-shadow: 5px 5px 0 var(--orange);
 	}
 
+	/* Several logos have white baked into the bitmap; multiply turns that white into the
+	   cream behind it, so they sit on the tile like the transparent ones do. */
 	.logos img {
 		max-width: 100%;
 		max-height: 100%;
 		object-fit: contain;
+		mix-blend-mode: multiply;
 	}
 
 	/* Fills the slots left over after the 13 logos: one on the 2-wide grid, two on the
@@ -606,6 +609,11 @@
 
 	.heading-row .section-title {
 		margin: 0;
+	}
+
+	/* Section titles that sit on the page background rather than inside a card. */
+	.heading-row .section-title,
+	.section-title.outside {
 		color: var(--cream);
 		text-shadow: 0.06em 0.06em 0 var(--ink);
 	}
