@@ -21,7 +21,7 @@ Let’s put the horse in front of the cart and lay out some assumptions about th
 
 Let’s translate that into technical requirements.
 
-If you have any level of success at all, a small teams means you’ll need to grow. When you look to hire, you’ll ideally want people who know your chosen framework already, so you should pick something fairly well known and well established. Avoid obscure or up-and-coming solutions.
+If you have any level of success at all, a small team means you’ll need to grow. When you look to hire, you’ll ideally want people who know your chosen framework already, so you should pick something fairly well known and well established. Avoid obscure or up-and-coming solutions.
 
 Unfortunately, your budget is tight, so you can’t afford the best talent and you’ll likely end up more Junior heavy than you’d like in your early stages or have a high level of turnover (probably both). So you need a framework that is as easy as possible to learn, preferably with clearly documented solutions to many complex problems.
 
@@ -34,7 +34,7 @@ So to summarize, our list of criteria then is:
 3. Good documentation of complex solutions available
 4. Standardized implementation
 
-Now let’s have a look at how react stacks up…
+Now let’s have a look at how React stacks up…
 
 ## What was React built for?
 
@@ -67,7 +67,7 @@ Additionally, because everyone has to build their own custom implementation, the
 
 ### New architectures and best practices
 
-When React was originally released, it’s designers had to spend a lot of time defending it publicly. It violated a lot of best practices that existed at the time. They argued (very legitimately and successfully) that at certain scales new best practices were needed.
+When React was originally released, its designers had to spend a lot of time defending it publicly. It violated a lot of best practices that existed at the time. They argued (very legitimately and successfully) that at certain scales new best practices were needed.
 
 But these best practice changes only made sense for frontends (and only in certain cases). The previous class of frontend framework essentially attempted to mimic the architecture of backend frameworks. This makes them easier to learn if you’re already familiar with (or also learning) backend architecture. This is still true today, since backend architectural patterns and best practices remain largely unchanged.
 

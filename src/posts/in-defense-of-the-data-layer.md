@@ -9,17 +9,17 @@ I’ve noticed a growing trend in online application architecture discussions of
 
 I have a couple problems with this reasoning.
 
-First off, there is the idea that database redesigns and swaps are uncommon. My suspicion is that this misconception comes from the fact that most developers work on teams with established apps at companies with established businesses — the proper technology, tools, and infrastructure have already been worked out. However, if you think for a second about when such a swap would occur, it is when your application or your business is new and growing and still finding it’s usage patterns and market fit. Or when you’re moving so fast on such a low budget that you don’t have time to fully vet every piece of technology or think through every data design implication because your business isn’t even profitable yet. Most developers don’t experience data layer changes very often (if ever) in their careers, and so they don’t realize how common they actually are **during the stage of development where you are actually making the decision to include a data layer or not.**
+First off, there is the idea that database redesigns and swaps are uncommon. My suspicion is that this misconception comes from the fact that most developers work on teams with established apps at companies with established businesses — the proper technology, tools, and infrastructure have already been worked out. However, if you think for a second about when such a swap would occur, it is when your application or your business is new and growing and still finding its usage patterns and market fit. Or when you’re moving so fast on such a low budget that you don’t have time to fully vet every piece of technology or think through every data design implication because your business isn’t even profitable yet. Most developers don’t experience data layer changes very often (if ever) in their careers, and so they don’t realize how common they actually are **during the stage of development where you are actually making the decision to include a data layer or not.**
 
-I could write a whole blog post laying out why data layer refactors are in fact very common, especially at startups. And yes, it cannot be overstated how much easier a data layer abstraction makes those efforts. However, the loud people of the internet are actually kind of right here despite themselves — this is not, on it’s own, a very compelling reason to design a data layer into your application. **Easier data layer refactors are a benefit but not a justification for data layer abstraction.**
+I could write a whole blog post laying out why data layer refactors are in fact very common, especially at startups. And yes, it cannot be overstated how much easier a data layer abstraction makes those efforts. However, the loud people of the internet are actually kind of right here despite themselves — this is not, on its own, a very compelling reason to design a data layer into your application. **Easier data layer refactors are a benefit but not a justification for data layer abstraction.**
 
 ## So what is the justification for a data layer?
 
-**Abstracting your data layer is all about reducing cognitive load.** When you are working on business logic, you shouldn’t have to worry about how and where the data is stored, what tools are used to retrieve it, the efficiency of queries, or the infratructure it’s stored on. All of those are considerations which add to your cognitive load, leaving less space in your mind for the problem you are actually supposed to be working on.
+**Abstracting your data layer is all about reducing cognitive load.** When you are working on business logic, you shouldn’t have to worry about how and where the data is stored, what tools are used to retrieve it, the efficiency of queries, or the infrastructure it’s stored on. All of those are considerations which add to your cognitive load, leaving less space in your mind for the problem you are actually supposed to be working on.
 
 Consider the following basic business logic:
 
-> Whenever a new user is created, a new project should also be created with that user as it’s owner.
+> Whenever a new user is created, a new project should also be created with that user as its owner.
 
 Here is some over-simplified code:
 
@@ -77,8 +77,8 @@ createUser(firstName, lastName, emailAddress, createdByUserId){
 Note what you need to understand and keep in mind any time you work on this function:
 
 - The names of the tables and their columns.
-- Prisma is the ORM in use, so you need to understand it’s behavior and syntax and it had to be initialized in or injected into the class constructor (not shown).
-- A linking table (UserProjects) is used to connect Users to Projects for project membership
+- Prisma is the ORM in use, so you need to understand its behavior and syntax and it had to be initialized in or injected into the class constructor (not shown).
+- A linking table (UserProjects) is used to connect Users to Projects for project membership.
 - The Project owner is linked via the Projects table directly.
 - Email is stored in a different table than the User’s names.
 - The object types used are based on the database table structure and dictated by Prisma, not defined based on the business domain’s conception of the objects. You need to understand both.
@@ -105,7 +105,7 @@ createUser(firstName, lastName, emailAddress) {
 }
 ```
 
-A User is created. AProject is created, named with a certain format, and with the new User as the owner. An email is sent. This code is significantly easier to read and understand because it is just the business logic and thus requires significantly less cognitive load.
+A User is created. A Project is created, named with a certain format, and with the new User as the owner. An email is sent. This code is significantly easier to read and understand because it is just the business logic and thus requires significantly less cognitive load.
 
 Granted, when originally setting up this function, building out the data layer may take more work overall if this is the first time “create user” and “create project” have been needed at that layer. That code still needs to exist. This design also results in multiple files and functions instead of one and more code overall. **But we shouldn’t be designing code based on the efficiency of the initial writing of it — that isn’t design at all, it’s just hacking.** **We should be designing code for long term readability and maintainability.** That’s how we avoid future bugs and how we set ourselves up for easier and faster development down the line.
 
