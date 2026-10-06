@@ -1,7 +1,7 @@
 ---
-title: "Is AI “just\" probability?"
+title: "Is AI “just” probability?"
 date: 2026-09-23
-description: "It’s time to stop calling AI “just probability”"
+description: "A look at what scientific research has to say about this common claim."
 medium: c2f1157ffb55
 ---
 

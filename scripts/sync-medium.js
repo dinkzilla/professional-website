@@ -64,11 +64,14 @@ function slugFromLink(link) {
 function toMarkdown(content, slug) {
 	let html = content.replace(/<img src="https:\/\/medium\.com\/_\/stat[^>]*>/g, '');
 
-	// A heading before any body text is Medium's subtitle, not a section.
+	// Headings before any body text are not sections: a leading <h3> is the
+	// story's title and an <h4> after it (or on its own) is Medium's subtitle.
+	let title;
 	let subtitle;
-	const lead = /^<h4>([\s\S]*?)<\/h4>/.exec(html) ?? /^<h3>([\s\S]*?)<\/h3>(?=<p)/.exec(html);
-	if (lead) {
-		subtitle = plainText(lead[1]);
+	const lead = /^(?:<h3>([\s\S]*?)<\/h3>)?(?:<h4>([\s\S]*?)<\/h4>)?/.exec(html);
+	if (lead[0]) {
+		if (lead[1] !== undefined) title = plainText(lead[1]);
+		if (lead[2] !== undefined) subtitle = plainText(lead[2]);
 		html = html.slice(lead[0].length);
 	}
 
@@ -117,7 +120,7 @@ function toMarkdown(content, slug) {
 		description = first.length <= 180 ? first : first.slice(0, 180).replace(/\s+\S*$/, '') + '…';
 	}
 
-	return { body: blocks.join('\n\n') + '\n', description, images };
+	return { title, body: blocks.join('\n\n') + '\n', description, images };
 }
 
 function parseFeed(xml) {
@@ -170,16 +173,16 @@ async function main() {
 	// in a way this script doesn't understand can't leave a half-finished sync.
 	const posts = feed.map((item) => {
 		const slug = slugs.get(item.id) ?? slugFromLink(item.link);
-		const { body, description, images } = toMarkdown(item.content, slug);
+		const { title = item.title, body, description, images } = toMarkdown(item.content, slug);
 		const frontmatter = [
 			'---',
-			`title: ${JSON.stringify(item.title)}`,
+			`title: ${JSON.stringify(title)}`,
 			`date: ${item.date}`,
 			`description: ${JSON.stringify(description)}`,
 			`medium: ${item.id}`,
 			'---'
 		].join('\n');
-		return { slug, title: item.title, images, markdown: `${frontmatter}\n\n${body}` };
+		return { slug, title, images, markdown: `${frontmatter}\n\n${body}` };
 	});
 
 	const counts = { added: 0, updated: 0, unchanged: 0 };
