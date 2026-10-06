@@ -49,7 +49,7 @@
 
 	const clients = [
 		{ name: 'Jet It', src: '/logos/jet-it.png' },
-		{ name: 'EZLinks', src: '/logos/ez-links.jpg' },
+		{ name: 'EZLinks', src: '/logos/ez-links.png' },
 		{ name: 'Katilyst', src: '/logos/katilyst.png' },
 		{ name: 'Altigo', src: '/logos/altigo.png' },
 		{ name: 'SingleComm', src: '/logos/singlecomm.jpg' },
@@ -57,7 +57,7 @@
 		{ name: 'Dominion Energy', src: '/logos/dominion-energy.svg' },
 		{ name: 'Advocate', src: '/logos/advocate.svg' },
 		{ name: 'DG Dean', src: '/logos/dgdean.png' },
-		{ name: 'IBS Club Software', src: '/logos/ibs-club-software.jpg' },
+		{ name: 'IBS Club Software', src: '/logos/ibs-club-software.png' },
 		{ name: 'Pangea Health', src: '/logos/pangea-health.jpg' },
 		{ name: 'Altria', src: '/logos/altria.svg' },
 		{ name: 'College Board', src: '/logos/college-board.svg' },
@@ -207,6 +207,9 @@
 			{#each clients as client (client.src)}
 				<li><img src={client.src} alt={client.name} loading="lazy" /></li>
 			{/each}
+			<li class="you">
+				<a class="you-button" href={mailto}><span class="you-prefix">Next Client:</span>You?</a>
+			</li>
 		</ul>
 	</section>
 </div>
@@ -491,7 +494,7 @@
 
 	@media (min-width: 40rem) {
 		.logos {
-			grid-template-columns: repeat(4, 1fr);
+			grid-template-columns: repeat(3, 1fr);
 			gap: 1.25rem;
 		}
 	}
@@ -512,6 +515,60 @@
 		max-width: 100%;
 		max-height: 100%;
 		object-fit: contain;
+	}
+
+	/* Fills the slots left over after the 13 logos: one on the 2-wide grid, two on the
+	   3-wide grid. A big orange "Let's Talk!" in the title font. */
+	.logos .you {
+		padding: 0;
+		border: 0;
+		background: none;
+		box-shadow: none;
+	}
+
+	.you-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.3em;
+		width: 100%;
+		height: 100%;
+		border: 2px solid var(--ink);
+		border-radius: 0.9rem;
+		background: var(--orange);
+		box-shadow: 5px 5px 0 var(--ink);
+		color: var(--ink);
+		font-family: var(--display);
+		font-size: 2.5rem;
+		font-weight: 700;
+		letter-spacing: -0.025em;
+		text-decoration: none;
+		transition:
+			transform 0.12s,
+			box-shadow 0.12s;
+	}
+
+	.you-button:hover {
+		transform: translate(2px, 2px);
+		box-shadow: 3px 3px 0 var(--ink);
+	}
+
+	.you-prefix {
+		display: none;
+	}
+
+	@media (min-width: 40rem) {
+		.logos .you {
+			grid-column: span 2;
+		}
+
+		.you-button {
+			font-size: clamp(1.5rem, 4vw, 2rem);
+		}
+
+		.you-prefix {
+			display: inline;
+		}
 	}
 
 	.heading-row {
