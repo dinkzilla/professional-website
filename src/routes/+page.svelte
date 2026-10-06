@@ -273,12 +273,9 @@
 		}
 	}
 
+	/* 60px on desktop, easing down to 40px on phones. */
 	section {
-		margin-top: clamp(3.5rem, 8vw, 5rem);
-	}
-
-	header + section {
-		margin-top: clamp(2rem, 4vw, 2.5rem);
+		margin-top: clamp(2.5rem, 7vw, 3.75rem);
 	}
 
 	.section-title {

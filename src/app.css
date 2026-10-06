@@ -12,6 +12,9 @@
 	--green: #57d472;
 	--cream: #fff5e9;
 	--muted: #5a5470;
+	--dot: rgba(255, 245, 233, 0.14);
+	--dot-size: 28px;
+	--grain: 0.08;
 	--page: 54.5rem;
 	--box-padding: clamp(1.5rem, 5vw, 3rem);
 	--display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
@@ -30,15 +33,33 @@ html {
 	background: var(--purple-deep);
 }
 
+/* Dot grid plus a faint grain overlay so the purple reads as paper, not a flat fill. */
 body {
 	margin: 0;
-	background: var(--purple-deep);
+	background-color: var(--purple-deep);
+	background-image: radial-gradient(var(--dot) 1.5px, transparent 1.6px);
+	background-size: var(--dot-size) var(--dot-size);
 	color: var(--ink);
 	font-family: var(--font);
 	font-size: 1.0625rem;
 	font-weight: 500;
 	line-height: 1.65;
 	-webkit-font-smoothing: antialiased;
+}
+
+/* The grain sits over the cards too (that's what makes it read as print) but lets clicks
+   through. The SVG is one 200px noise tile, rasterised once: raw turbulence is a murky
+   low-contrast grey, so the component transfer stretches it to full black-to-white and
+   makes it opaque before --grain fades the whole layer. */
+body::after {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	pointer-events: none;
+	opacity: var(--grain);
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='4' intercept='-1.5'/%3E%3CfeFuncG type='linear' slope='4' intercept='-1.5'/%3E%3CfeFuncB type='linear' slope='4' intercept='-1.5'/%3E%3CfeFuncA type='table' tableValues='1 1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+	background-size: 200px 200px;
 }
 
 h1,
