@@ -1,7 +1,7 @@
 ---
 title: "React just isn’t designed for startups"
 date: 2024-12-11
-description: "The framework you pick for your application has a huge impact on your team and implications that will be with your business for years, if not forever. It’s likely one of the most…"
+description: "What does your business need from a web framework?"
 medium: d0d9f218c5ad
 ---
 

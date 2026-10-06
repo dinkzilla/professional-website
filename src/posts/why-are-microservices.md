@@ -1,7 +1,7 @@
 ---
 title: "Why are Microservices?"
 date: 2023-07-07
-description: "We all cringe when a client, product owner, executive, or other layperson tries to use the latest technology buzzwords. But let’s be honest: as an industry, we’re also really bad…"
+description: "The difference between “serverless”, “distributed”, and “microservice” architectures becomes much more clear when you focus on the why."
 medium: 43eb102fac22
 ---
 

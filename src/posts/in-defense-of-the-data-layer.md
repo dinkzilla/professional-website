@@ -1,7 +1,7 @@
 ---
 title: "In Defense of the Data Layer"
 date: 2024-10-10
-description: "It has nothing to do with replacing your database"
+description: "It has nothing to do with replacing your database."
 medium: 977c223ef3c8
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "Startups, your technical challenge is doing you harm. Stop it."
 date: 2023-10-11
-description: "I find it odd that this is such a controversial opinion. I have asked a lot of managers over the years why they are implementing a technical challenge as part of their recruiting…"
+description: "Do you even know why you’re doing it in the first place?"
 medium: 1eb508be08df
 ---
 

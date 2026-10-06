@@ -1,7 +1,7 @@
 ---
 title: "Security is an Economics Discipline More Than a Technological One"
 date: 2023-08-04
-description: "I spent four years in an undergraduate program which was focused on security. Classes in economics comprised a large part of this curriculum. Many of my peers complained about…"
+description: "Is technological specialization the best path to being good at “security”?"
 medium: 90ac0d07dd26
 ---
 

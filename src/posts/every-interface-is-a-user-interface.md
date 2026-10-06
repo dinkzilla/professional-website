@@ -1,7 +1,7 @@
 ---
 title: "Every Interface is a User Interface"
 date: 2024-12-04
-description: "In my opinion, the most important skill of any developer is their ability to design good interfaces."
+description: "Good architecture and good interface design are functionally synonymous."
 medium: 3b728cde5fc6
 ---
 
