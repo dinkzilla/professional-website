@@ -23,7 +23,13 @@
 	let whyContent = $state<HTMLDivElement>();
 	const unfold = new Tween(0, { duration: FOLD_MS, easing: cubicInOut });
 
-	const folding = $derived(unfold.current !== unfold.target);
+	// Past this point the slats are flat to the eye, but the seams between them still show; swap
+	// in the real piece early rather than let them linger through the easing's long tail.
+	const FLAT = 0.97;
+
+	const folding = $derived(
+		unfold.current !== unfold.target && !(unfold.target === 1 && unfold.current > FLAT),
+	);
 	const foldAngle = $derived((1 - unfold.current) * 90);
 	const foldShade = $derived(Math.sin((foldAngle * Math.PI) / 180));
 	const bodyHeight = $derived(
@@ -82,32 +88,12 @@
 		</p>
 	</header>
 
-	<section>
-		<div class="heading-row">
-			<h2 class="section-title">Blog</h2>
-			<a class="button" href="/blog/">All posts →</a>
-		</div>
-		<ul class="post-grid">
-			{#each data.posts as post (post.slug)}
-				<li>
-					<a class="card" href="/blog/{post.slug}/">
-						<p class="label">{formatDate(post.date)}</p>
-						<h3>{post.title}</h3>
-						<p>{post.description}</p>
-						<span class="read">Read →</span>
-					</a>
-				</li>
-			{/each}
-		</ul>
-	</section>
-
 	<section class="why">
-		<div class="piece why-top">
+		<div class="piece why-top" class:open={whyOpen} class:folding style:--slide="{slide}px">
+			<span class="spacer" bind:clientWidth={slide}></span>
 			<h2 class="section-title">Why Matt?</h2>
 			<button
 				class="fold-toggle"
-				class:folded={!whyOpen}
-				style:--slide="{slide}px"
 				type="button"
 				aria-expanded={whyOpen}
 				aria-controls="why-body"
@@ -124,7 +110,7 @@
 					</svg>
 				{/if}
 			</button>
-			<span class="spacer" bind:clientWidth={slide}></span>
+			<span class="spacer"></span>
 		</div>
 		<div id="why-body" class="why-body" class:closed={!whyOpen && !folding} style:height={bodyHeight}>
 			<div class="piece why-mid" class:ghost={folding}>
@@ -200,6 +186,26 @@
 			organization growth.
 		</p>
 	{/snippet}
+
+
+	<section>
+		<div class="heading-row">
+			<h2 class="section-title">Blog</h2>
+			<a class="button" href="/blog/">All posts →</a>
+		</div>
+		<ul class="post-grid">
+			{#each data.posts as post (post.slug)}
+				<li>
+					<a class="card" href="/blog/{post.slug}/">
+						<p class="label">{formatDate(post.date)}</p>
+						<h3>{post.title}</h3>
+						<p>{post.description}</p>
+						<span class="read">Read →</span>
+					</a>
+				</li>
+			{/each}
+		</ul>
+	</section>
 
 	<section class="card box">
 		<h2 class="section-title">Who I've worked with:</h2>
@@ -295,8 +301,9 @@
 		color: var(--ink);
 	}
 
-	/* Title row: [title][toggle][spacer]. The toggle sits beside the title by default (the
-	   folded state); the spacer's measured width is how far it slides to reach the corner. */
+	/* Title row: [spacer][title][toggle][spacer]. The equal spacers centre the pair by default
+	   (the folded state); one spacer's measured width is how far each slides to reach its
+	   corner, the title left and the toggle right. */
 	.why-top {
 		display: flex;
 		align-items: center;
@@ -305,7 +312,12 @@
 		padding-bottom: 1.75rem;
 		border-bottom: 0;
 		border-radius: 0.9rem 0.9rem 0 0;
-		/* Trims the shadow at the hinge line so it doesn't poke out under the folding slats. */
+	}
+
+	/* Trims the shadow at the hinge line so it doesn't poke out under the folding slats. Only
+	   while folding: at rest the piece below covers the shadow anyway, and the clip edge lands
+	   on a fractional pixel, which anti-aliases into a faint orange seam. */
+	.why-top.folding {
 		clip-path: inset(-12px -12px 0 -12px);
 	}
 
@@ -339,6 +351,8 @@
 
 	.why-top .section-title {
 		margin-bottom: 0; /* the row's padding-bottom carries the gap instead */
+		translate: 0 0;
+		transition: translate 0.9s cubic-bezier(0.65, 0, 0.35, 1);
 	}
 
 	.spacer {
@@ -366,16 +380,25 @@
 			background-color 0.9s;
 	}
 
-	.fold-toggle.folded {
+	.why-top:not(.open) .fold-toggle {
 		background: var(--green);
 	}
 
-	/* Open: slides across to the corner and goes red, in step with the unfold. */
-	.fold-toggle:not(.folded) {
+	/* Open: the title and toggle slide apart to their corners, in step with the unfold, and
+	   the toggle goes red. */
+	.why-top.open .section-title {
+		translate: calc(-1 * var(--slide)) 0;
+	}
+
+	.why-top.open .fold-toggle {
 		translate: var(--slide) 0;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
+		.why-top .section-title {
+			transition: none;
+		}
+
 		.fold-toggle {
 			transition:
 				transform 0.12s,
@@ -480,6 +503,7 @@
 	}
 
 	.contact {
+		justify-content: center;
 		margin-top: 0.75rem;
 	}
 
