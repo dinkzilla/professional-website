@@ -62,6 +62,16 @@ body::after {
 	background-size: 200px 200px;
 }
 
+/* The personal page is plain black: no dots, no grain. Its route sets the class. */
+html.void,
+html.void body {
+	background: #000;
+}
+
+html.void body::after {
+	display: none;
+}
+
 h1,
 h2,
 h3 {
