@@ -8,7 +8,10 @@ declare global {
 		// interface Error {}
 		// interface Locals {}
 		// interface PageData {}
-		// interface PageState {}
+		interface PageState {
+			/** The shelf object currently picked up (personal side), so Back puts it down. */
+			picked?: string;
+		}
 		// interface Platform {}
 	}
 }
