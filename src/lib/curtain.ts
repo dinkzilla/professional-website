@@ -5,7 +5,9 @@
 // Usage: `const drop = await prepare(clickX)` captures the page and puts the (still flat, so
 // invisible) cloth over it; change the page underneath, then call `drop()`.
 
-import { getFontEmbedCSS, toCanvas } from 'html-to-image';
+import { canAnimate, capture, link as linkProgram, overlay, upload, viewport, warm } from '#lib/capture.ts';
+
+export { canAnimate as canDrop, warm };
 
 const COLS = 40; // cloth cells across; rows follow from the viewport's aspect ratio
 const STEP = 1 / 120; // s: fixed simulation timestep
@@ -13,7 +15,6 @@ const RELAX = 4; // constraint passes per step: more is stiffer cloth
 const DAMPING = 0.996;
 const RIP_S = 0.32; // s: how long the tear takes to travel across the top edge
 const MAX_S = 4; // s: hard stop, in case the cloth somehow never leaves the screen
-const Z_INDEX = 10001; // above the grain overlay (9999)
 
 const VERTEX = `
 attribute vec3 position;
@@ -48,94 +49,14 @@ void main() {
 	gl_FragColor = vec4(texture2D(page, vUv).rgb * shade, 1.0);
 }`;
 
-let fontCSS: Promise<string> | undefined;
-
-/** Whether the animation should run at all; if not, navigate normally. */
-export function canDrop(): boolean {
-	if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
-	return !!document.createElement('canvas').getContext('webgl');
-}
-
-/** Start the slow part of capturing (inlining the web fonts) ahead of the click. */
-export function warm(): void {
-	fontCSS ??= getFontEmbedCSS(document.body).catch(() => '');
-}
-
-async function capture(width: number, height: number, ratio: number) {
-	warm();
-	const root = document.documentElement;
-	const image = await toCanvas(document.body, {
-		width,
-		height,
-		pixelRatio: ratio,
-		fontEmbedCSS: await fontCSS,
-		backgroundColor: getComputedStyle(root).backgroundColor,
-		filter: (node) => node.tagName !== 'SCRIPT',
-		// The clone is the whole body, shifted up so the scrolled-to part fills the image. The
-		// height override keeps the body's own background (the dot grid) behind all of it.
-		style: {
-			margin: '0',
-			width: `${width}px`,
-			height: `${root.scrollHeight}px`,
-			transform: `translateY(${-window.scrollY}px)`,
-		},
-	});
-	await printGrain(image, ratio);
-	return image;
-}
-
-// The grain overlay (body::after in work.css) doesn't survive the capture, and without it the
-// page visibly loses its texture the moment the cloth appears. Print the same tile onto the
-// image, at the same opacity and anchored to the viewport as the real one is.
-async function printGrain(image: HTMLCanvasElement, ratio: number) {
-	const grain = getComputedStyle(document.body, '::after');
-	// Greedy on purpose: the tile is an SVG data URI with a `url(#…)` of its own inside it.
-	const url = /^url\("(.*)"\)$/.exec(grain.backgroundImage)?.[1];
-	const context = image.getContext('2d');
-	if (!url || !context || grain.display === 'none') return;
-	const tile = new Image();
-	tile.src = url.replace(/\\"/g, '"');
-	try {
-		await tile.decode();
-	} catch {
-		return;
-	}
-	const pattern = context.createPattern(tile, 'repeat');
-	if (!pattern) return;
-	const scale = (parseFloat(grain.backgroundSize) || tile.width) / tile.width;
-	context.save();
-	context.globalAlpha = parseFloat(grain.opacity) || 0;
-	context.scale(ratio * scale, ratio * scale);
-	context.fillStyle = pattern;
-	context.fillRect(0, 0, image.width, image.height);
-	context.restore();
-}
-
-function compile(gl: WebGLRenderingContext, type: number, source: string) {
-	const shader = gl.createShader(type)!;
-	gl.shaderSource(shader, source);
-	gl.compileShader(shader);
-	if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-		throw new Error(gl.getShaderInfoLog(shader) ?? 'shader failed to compile');
-	}
-	return shader;
-}
-
 /**
  * Capture the visible page and lay it over the viewport as a flat sheet of cloth.
  * Resolves to a function that rips the sheet down, starting from the side nearest `originX`.
  */
 export async function prepare(originX = 0): Promise<() => void> {
-	const width = document.documentElement.clientWidth;
-	const height = window.innerHeight;
-	const ratio = Math.min(window.devicePixelRatio || 1, 2);
+	const { width, height, ratio } = viewport();
 	const image = await capture(width, height, ratio);
-
-	const canvas = document.createElement('canvas');
-	canvas.width = Math.round(width * ratio);
-	canvas.height = Math.round(height * ratio);
-	canvas.setAttribute('aria-hidden', 'true');
-	canvas.style.cssText = `position:fixed;top:0;left:0;width:${width}px;height:${height}px;z-index:${Z_INDEX};pointer-events:none;`;
+	const canvas = overlay(width, height, ratio);
 
 	const gl = canvas.getContext('webgl', { alpha: true, antialias: true });
 	if (!gl) throw new Error('WebGL unavailable');
@@ -192,14 +113,7 @@ export async function prepare(originX = 0): Promise<() => void> {
 	}
 
 	// --- WebGL setup. ---
-	const program = gl.createProgram()!;
-	gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, VERTEX));
-	gl.attachShader(program, compile(gl, gl.FRAGMENT_SHADER, FRAGMENT));
-	gl.linkProgram(program);
-	if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-		throw new Error(gl.getProgramInfoLog(program) ?? 'program failed to link');
-	}
-	gl.useProgram(program);
+	const program = linkProgram(gl, VERTEX, FRAGMENT);
 
 	const eye = Math.max(width, height) * 1.6;
 	gl.uniform2f(gl.getUniformLocation(program, 'size'), width, height);
@@ -221,12 +135,7 @@ export async function prepare(originX = 0): Promise<() => void> {
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
 
-	gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+	upload(gl, image);
 
 	gl.viewport(0, 0, canvas.width, canvas.height);
 	gl.enable(gl.DEPTH_TEST);
