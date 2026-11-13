@@ -1,11 +1,9 @@
 // The paint roller: the visible page is rasterised to an image and laid over the viewport, then
 // it is painted away in long, slightly tilted, overlapping strokes, as if by a roller (which is
-// not itself drawn), revealing whatever has been rendered underneath in the meantime. The first
-// stroke runs up the middle of the screen
-// and the rest widen the painted patch outwards, a stroke on one side then one on the other,
-// until it runs off both edges.
+// not itself drawn), revealing whatever has been rendered underneath in the meantime. Every stroke
+// runs up the screen, and they go on in order from the left edge to the right.
 //
-// Usage: `const roll = await prepare(clickX)` captures the page and covers it with the (so far
+// Usage: `const roll = await prepare()` captures the page and covers it with the (so far
 // unpainted, so invisible) image; change the page underneath, then call `roll()`.
 
 import { canAnimate, capture, link, overlay, upload, viewport, warm } from '#lib/capture.ts';
@@ -92,7 +90,7 @@ type Stroke = {
  * steepest tilt so that neighbours overlap along their whole length, whichever way each leans,
  * and the outermost strokes overhang the sides of the screen.
  */
-function plan(width: number, height: number, originX: number) {
+function plan(width: number, height: number) {
 	const perSide = Math.max(1, Math.min(3, Math.round((width / SPACING - 1) / 2)));
 	const count = 2 * perSide + 1;
 	const spacing = (width - OVERLAP) / count;
@@ -128,10 +126,9 @@ function plan(width: number, height: number, originX: number) {
 
 /**
  * Capture the visible page and lay it over the viewport.
- * Resolves to a function that paints it away, working outwards from the middle and taking the
- * side nearest `originX` first.
+ * Resolves to a function that paints it away, from left to right.
  */
-export async function prepare(originX = 0): Promise<() => void> {
+export async function prepare(): Promise<() => void> {
 	const { width, height, ratio } = viewport();
 	const image = await capture(width, height, ratio);
 	const canvas = overlay(width, height, ratio);
@@ -155,7 +152,7 @@ export async function prepare(originX = 0): Promise<() => void> {
 	gl.viewport(0, 0, canvas.width, canvas.height);
 	gl.clearColor(0, 0, 0, 0);
 
-	const { strokes, halfWidth } = plan(width, height, originX);
+	const { strokes, halfWidth } = plan(width, height);
 	const strokeS = Math.max(MIN_STROKE_S, Math.min(MAX_STROKE_S, TOTAL_S / strokes.length));
 
 	const lines = new Float32Array(MAX_STROKES * 4);

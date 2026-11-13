@@ -24,7 +24,7 @@
 		let roll: (() => void) | undefined;
 		try {
 			const roller = await import('#lib/roller.ts');
-			if (roller.canRoll()) roll = await roller.prepare(event.clientX);
+			if (roller.canRoll()) roll = await roller.prepare();
 		} catch {
 			// No roller (capture or WebGL failed): just go.
 		}
