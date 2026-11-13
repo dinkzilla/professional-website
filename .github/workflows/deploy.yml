@@ -41,3 +41,32 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # dink.money: the same site built with the personal side at the top level, pushed to a
+  # second repository whose GitHub Pages serves its gh-pages branch. Skipped until that
+  # repository is set up:
+  #   - repository variable PERSONAL_REPO, e.g. "owner/repo"
+  #   - secret PERSONAL_DEPLOY_KEY: the private half of a deploy key that has write access
+  #     to that repository
+  personal:
+    if: vars.PERSONAL_REPO != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build:personal
+
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.PERSONAL_DEPLOY_KEY }}
+          external_repository: ${{ vars.PERSONAL_REPO }}
+          publish_branch: gh-pages
+          publish_dir: build-personal
+          cname: dink.money
+          force_orphan: true

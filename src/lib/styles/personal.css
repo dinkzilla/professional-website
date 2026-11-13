@@ -1,0 +1,21 @@
+/* The personal side's stylesheet. Like work.css, every rule is scoped to its side's wrapper
+   (.side-personal, rendered by the personal layout), because SvelteKit keeps a stylesheet
+   loaded after a client-side navigation. Document-level rules go in the first two blocks;
+   everything else nests inside the third. */
+:where(:root:has(.side-personal)) {
+	background: #000;
+}
+
+:where(:root:has(.side-personal)) body {
+	margin: 0;
+	background: #000;
+}
+
+:where(.side-personal) {
+	&,
+	*,
+	*::before,
+	*::after {
+		box-sizing: border-box;
+	}
+}

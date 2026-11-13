@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import { href } from '#lib/sides.ts';
 
 export interface PostSummary {
 	slug: string;
@@ -45,9 +46,18 @@ function parse(path: string, raw: string): Post {
 		date: meta.date,
 		description: meta.description,
 		minutes: Math.max(1, Math.round(body.split(/\s+/).length / 230)),
-		html: marked.parse(body, { async: false }),
+		html: localLinks(marked.parse(body, { async: false })),
 		mediumUrl: meta.medium ? `https://medium.com/p/${meta.medium}` : undefined
 	};
+}
+
+// Posts link to each other as /blog/<slug> (the sync script writes them that way). Point
+// those at wherever the blog lives in this deployment, with the trailing slash every page has.
+function localLinks(html: string) {
+	return html.replace(
+		/href="\/blog\/([^"\/#?]+)\/?([#?][^"]*)?"/g,
+		(_match, slug: string, rest = '') => `href="${href('work', `/blog/${slug}/`)}${rest}"`
+	);
 }
 
 const posts = Object.entries(files)

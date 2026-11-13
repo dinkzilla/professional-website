@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { cubicInOut } from 'svelte/easing';
 	import { Tween } from 'svelte/motion';
+	import { canonical, href } from '#lib/sides.ts';
 	import { formatDate, mailto, site } from '#lib/site.ts';
 	import type { PageProps } from './$types';
 
@@ -106,7 +107,8 @@
 	<meta property="og:title" content={site.name} />
 	<meta property="og:description" content={site.description} />
 	<meta property="og:type" content="website" />
-	<meta property="og:url" content={site.url} />
+	<meta property="og:url" content={canonical('work', '/')} />
+	<link rel="canonical" href={canonical('work', '/')} />
 </svelte:head>
 
 <div class="page">
@@ -114,7 +116,7 @@
 		<img class="photo" src="/matt-dinkel.png" alt="Matt Dinkel" width="512" height="512" />
 		<h1 class="page-title">{site.name}</h1>
 		<p class="tagline">
-			Fractional Engineering Leadership for startups and small businesses.
+			Fractional Engineering Leadership for startups and small businesses
 		</p>
 	</header>
 
@@ -222,12 +224,12 @@
 	<section>
 		<div class="heading-row">
 			<h2 class="section-title">Blog</h2>
-			<a class="button" href="/blog/">All posts →</a>
+			<a class="button" href={href('work', '/blog/')}>All Posts →</a>
 		</div>
 		<ul class="post-grid">
 			{#each data.posts as post (post.slug)}
 				<li>
-					<a class="card" href="/blog/{post.slug}/">
+					<a class="card" href={href('work', `/blog/${post.slug}/`)}>
 						<p class="label">{formatDate(post.date)}</p>
 						<h3>{post.title}</h3>
 						<p>{post.description}</p>
@@ -253,7 +255,7 @@
 	<p class="personal">
 		<a
 			class="back"
-			href="/personal/"
+			href={href('personal', '/')}
 			onpointerenter={warmCurtain}
 			onfocus={warmCurtain}
 			onclick={dropCurtain}>personal stuff →</a

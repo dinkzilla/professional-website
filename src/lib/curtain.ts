@@ -13,7 +13,7 @@ const RELAX = 4; // constraint passes per step: more is stiffer cloth
 const DAMPING = 0.996;
 const RIP_S = 0.32; // s: how long the tear takes to travel across the top edge
 const MAX_S = 4; // s: hard stop, in case the cloth somehow never leaves the screen
-const Z_INDEX = 10001; // above the grain overlay (9999) and the black page (10000)
+const Z_INDEX = 10001; // above the grain overlay (9999)
 
 const VERTEX = `
 attribute vec3 position;
@@ -84,7 +84,7 @@ async function capture(width: number, height: number, ratio: number) {
 	return image;
 }
 
-// The grain overlay (body::after in app.css) doesn't survive the capture, and without it the
+// The grain overlay (body::after in work.css) doesn't survive the capture, and without it the
 // page visibly loses its texture the moment the cloth appears. Print the same tile onto the
 // image, at the same opacity and anchored to the viewport as the real one is.
 async function printGrain(image: HTMLCanvasElement, ratio: number) {

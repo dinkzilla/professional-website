@@ -5,8 +5,11 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
+		"dev:personal": "DEFAULT_SIDE=personal vite dev",
 		"build": "vite build",
-		"preview": "vite preview",
+		"build:personal": "DEFAULT_SIDE=personal vite build",
+		"preview": "vite build && vite preview",
+		"preview:personal": "DEFAULT_SIDE=personal vite build && DEFAULT_SIDE=personal vite preview",
 		"sync": "node scripts/sync-medium.js",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

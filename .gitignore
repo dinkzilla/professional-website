@@ -3,6 +3,7 @@ node_modules
 # Output
 /.svelte-kit
 /build
+/build-personal
 
 # OS
 .DS_Store

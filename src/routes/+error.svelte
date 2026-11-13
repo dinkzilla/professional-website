@@ -1,29 +1,16 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { site } from '#lib/site.ts';
+	import PersonalError from '#lib/PersonalError.svelte';
+	import { sideOf } from '#lib/sides.ts';
+	import WorkError from '#lib/WorkError.svelte';
+
+	// Errors render outside both sides' layouts, so each side's error page brings its own
+	// wrapper and stylesheet. The URL decides which side's page to show.
+	const side = $derived(sideOf(page.url.pathname));
 </script>
 
-<svelte:head>
-	<title>{page.status === 404 ? 'Page not found' : 'Error'} | {site.name}</title>
-</svelte:head>
-
-<div class="page">
-	<header class="page-header">
-		<h1 class="page-title">{page.status}</h1>
-		<p class="tagline">
-			{page.status === 404 ? "That page doesn't exist." : 'Something went wrong.'}
-		</p>
-		<p class="actions">
-			<a class="button" href="/">Main</a>
-			<a class="button" href="/blog/">Blog</a>
-		</p>
-	</header>
-</div>
-
-<style>
-	.actions {
-		display: flex;
-		gap: 1rem;
-		margin: 2rem 0 0;
-	}
-</style>
+{#if side === 'work'}
+	<WorkError />
+{:else}
+	<PersonalError />
+{/if}

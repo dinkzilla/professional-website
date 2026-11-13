@@ -1,6 +1,5 @@
 export const site = {
 	name: 'Matt Dinkel',
-	url: 'https://mdinkel.com',
 	email: 'Matt@mdinkel.com',
 	description:
 		'Matt Dinkel - Fractional CTO/CISO and Engineering Leadership for startups and small businesses.'

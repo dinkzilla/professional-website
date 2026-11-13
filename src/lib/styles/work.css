@@ -1,0 +1,259 @@
+@import '@fontsource-variable/manrope';
+@import '@fontsource-variable/fraunces';
+@import '@fontsource-variable/martian-mono';
+
+/* The work side's stylesheet. SvelteKit keeps a stylesheet loaded after a client-side
+   navigation, so nothing here may touch the personal side: every rule is scoped to the
+   .side-work wrapper that the work layout renders, and the document-level rules (variables,
+   page background, grain) apply only while that wrapper is in the page. :where() keeps the
+   scoping from adding specificity, so the pages' own scoped styles still win. */
+:where(:root:has(.side-work)) {
+	--night: #1a1533;
+	--ink: #17132b;
+	--purple: #6d3fd9;
+	--purple-deep: #4b2a9f;
+	--orange: #ff8a4c;
+	--red: #ff5e5e;
+	--green: #57d472;
+	--cream: #fff5e9;
+	--muted: #5a5470;
+	--dot: rgba(255, 245, 233, 0.14);
+	--dot-size: 28px;
+	--grain: 0.08;
+	--page: 54.5rem;
+	--box-padding: clamp(1.5rem, 5vw, 3rem);
+	--display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+	--font: 'Manrope Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--mono: 'Martian Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+:where(:root:has(.side-work)) {
+	-webkit-text-size-adjust: 100%;
+	background: var(--purple-deep);
+}
+
+/* Dot grid plus a faint grain overlay so the purple reads as paper, not a flat fill. */
+:where(:root:has(.side-work)) body {
+	margin: 0;
+	background-color: var(--purple-deep);
+	background-image: radial-gradient(var(--dot) 1.5px, transparent 1.6px);
+	background-size: var(--dot-size) var(--dot-size);
+	color: var(--ink);
+	font-family: var(--font);
+	font-size: 1.0625rem;
+	font-weight: 500;
+	line-height: 1.65;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* The grain sits over the cards too (that's what makes it read as print) but lets clicks
+   through. The SVG is one 200px noise tile, rasterised once: raw turbulence is a murky
+   low-contrast grey, so the component transfer stretches it to full black-to-white and
+   makes it opaque before --grain fades the whole layer. */
+:where(:root:has(.side-work)) body::after {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	pointer-events: none;
+	opacity: var(--grain);
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='4' intercept='-1.5'/%3E%3CfeFuncG type='linear' slope='4' intercept='-1.5'/%3E%3CfeFuncB type='linear' slope='4' intercept='-1.5'/%3E%3CfeFuncA type='table' tableValues='1 1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+	background-size: 200px 200px;
+}
+
+:where(.side-work) {
+	&,
+	*,
+	*::before,
+	*::after {
+		box-sizing: border-box;
+	}
+
+	h1,
+	h2,
+	h3 {
+		margin: 0;
+		font-family: var(--display);
+		font-weight: 700;
+		line-height: 1.05;
+		letter-spacing: -0.025em;
+		text-wrap: balance;
+	}
+
+	a {
+		color: var(--purple);
+		text-underline-offset: 0.2em;
+	}
+
+	img {
+		max-width: 100%;
+		height: auto;
+	}
+
+	:focus-visible {
+		outline: 3px solid var(--orange);
+		outline-offset: 3px;
+	}
+
+	/* Every page is one centred column on the purple background. The side gutter stays tight on
+	   phones so the text columns inside the cards keep their width. */
+	.page {
+		max-width: var(--page);
+		margin-inline: auto;
+		padding: clamp(3.5rem, 10vh, 6rem) clamp(1rem, 4vw, 1.75rem) clamp(3.5rem, 8vw, 5rem);
+	}
+
+	/* Lines the title and tagline up with the text inside the boxes below. */
+	.page-header {
+		padding-inline: calc(var(--box-padding) + 2px);
+	}
+
+	.page-title {
+		color: var(--orange);
+		font-size: clamp(3.25rem, 11vw, 6rem);
+		letter-spacing: -0.04em;
+		text-shadow: 0.05em 0.05em 0 var(--ink);
+	}
+
+	.tagline {
+		margin: 1.25rem 0 0;
+		color: var(--cream);
+		font-family: var(--display);
+		font-size: clamp(1.3rem, 3.2vw, 1.75rem);
+		font-weight: 600;
+		line-height: 1.25;
+		letter-spacing: -0.015em;
+		text-shadow: 0.07em 0.07em 0 var(--ink);
+	}
+
+	.back {
+		display: inline-block;
+		margin-bottom: 1rem;
+		color: var(--cream);
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.back:hover {
+		color: var(--orange);
+	}
+
+	.label {
+		margin: 0 0 1.25rem;
+		font-family: var(--mono);
+		font-size: 0.75rem;
+		font-weight: 500;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.section-title {
+		font-size: clamp(2rem, 5vw, 3.25rem);
+	}
+
+	.button {
+		display: inline-block;
+		padding: 0.8rem 1.4rem;
+		border: 2px solid var(--ink);
+		border-radius: 0.6rem;
+		background: var(--orange);
+		box-shadow: 4px 4px 0 var(--ink);
+		color: var(--ink);
+		font-weight: 800;
+		font-size: 1rem;
+		line-height: 1.2;
+		text-decoration: none;
+		transition:
+			transform 0.12s,
+			box-shadow 0.12s;
+	}
+
+	.button:hover {
+		transform: translate(2px, 2px);
+		box-shadow: 2px 2px 0 var(--ink);
+	}
+
+	/* Shadows are ink everywhere except the blog cards, which get orange via --accent. */
+	.card {
+		border: 2px solid var(--ink);
+		border-radius: 0.9rem;
+		background: var(--cream);
+		box-shadow: 6px 6px 0 var(--accent, var(--ink));
+		color: var(--ink);
+	}
+
+	.box {
+		padding: var(--box-padding);
+	}
+
+	.contact {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 1rem 1.5rem;
+	}
+
+	.contact .address {
+		color: var(--purple);
+	}
+
+	.post-grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 1.5rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	@media (min-width: 40rem) {
+		.post-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	.post-grid a {
+		--accent: var(--orange);
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		padding: 1.5rem;
+		text-decoration: none;
+		transition:
+			transform 0.12s,
+			box-shadow 0.12s;
+	}
+
+	.post-grid a:hover {
+		transform: translate(3px, 3px);
+		box-shadow: 3px 3px 0 var(--orange);
+	}
+
+	.post-grid .label {
+		margin-bottom: 0.9rem;
+		color: var(--muted);
+		font-size: 0.65rem;
+		letter-spacing: 0.02em;
+		white-space: nowrap;
+	}
+
+	.post-grid h3 {
+		font-size: 1.4rem;
+		line-height: 1.12;
+		/* Balancing breaks short titles in odd places, e.g. stranding "Is AI" on its own line. */
+		text-wrap: wrap;
+	}
+
+	.post-grid p:not(.label) {
+		margin: 0.75rem 0 1.25rem;
+		color: var(--muted);
+		font-size: 0.975rem;
+		line-height: 1.55;
+	}
+
+	.post-grid .read {
+		margin-top: auto;
+		color: var(--purple);
+		font-weight: 800;
+	}
+}

@@ -1,9 +1,11 @@
 <script lang="ts">
+	import { canonical, href } from '#lib/sides.ts';
 	import { formatDate, mailto, site } from '#lib/site.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let post = $derived(data.post);
+	let url = $derived(canonical('work', `/blog/${post.slug}/`));
 </script>
 
 <svelte:head>
@@ -12,14 +14,15 @@
 	<meta property="og:title" content={post.title} />
 	<meta property="og:description" content={post.description} />
 	<meta property="og:type" content="article" />
-	<meta property="og:url" content="{site.url}/blog/{post.slug}" />
+	<meta property="og:url" content={url} />
+	<link rel="canonical" href={url} />
 	<meta property="article:published_time" content={post.date} />
 </svelte:head>
 
 <article class="page">
 	<div class="page-header">
-		<a class="back" href="/blog/">← Blog</a>
-		<a class="back" href="/">← Main</a>
+		<a class="back" href={href('work', '/blog/')}>← Blog</a>
+		<a class="back" href={href('work', '/')}>← Main</a>
 	</div>
 
 	<div class="card box">

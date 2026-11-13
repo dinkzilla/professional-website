@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { canonical, href } from '#lib/sides.ts';
 	import { formatDate, site } from '#lib/site.ts';
 	import type { PageProps } from './$types';
 
@@ -11,18 +12,19 @@
 		name="description"
 		content="Writing on software architecture, engineering leadership, startups, security and AI."
 	/>
+	<link rel="canonical" href={canonical('work', '/blog/')} />
 </svelte:head>
 
 <div class="page">
 	<header class="page-header">
-		<a class="back" href="/">← Main</a>
+		<a class="back" href={href('work', '/')}>← Main</a>
 		<h1 class="page-title">Blog</h1>
 	</header>
 
 	<ul class="post-grid">
 		{#each data.posts as post (post.slug)}
 			<li>
-				<a class="card" href="/blog/{post.slug}/">
+				<a class="card" href={href('work', `/blog/${post.slug}/`)}>
 					<p class="label">{formatDate(post.date)}</p>
 					<h3>{post.title}</h3>
 					<p>{post.description}</p>
