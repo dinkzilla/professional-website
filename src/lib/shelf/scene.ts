@@ -3,9 +3,8 @@
 //
 // The page scrolls natively; the canvas is fixed and the camera follows the scroll position, so
 // the unit behaves like a column of ordinary page content. The camera looks at the wall square-on
-// from a little above, with the frustum shifted down rather than the camera tilted (a "shift
-// lens"), so the unit's verticals stay vertical and one world unit is the same number of pixels
-// (`ppu`) all the way down the shelves' front edge.
+// from its left at about eye level. One world unit is `ppu` pixels where the middle of the unit's
+// front edge is drawn.
 //
 // Nothing is drawn unless something changed: scroll, resize, hover, or an object in flight.
 
@@ -32,32 +31,47 @@ import {
 } from 'three';
 import { items, type Item } from './items.ts';
 
-// The unit, in world units (one is about half a metre). The wall is the plane z = 0 and the
-// unit's top edge is y = 0, with the shelves going down from there.
-const WIDTH = 2.4; // inside, between the side panels
+// The unit, in world units (one is about half a metre). The wall is the plane z = 0, and y = 0 is
+// a little above the tallest thing on the top shelf, with the shelves going down from there.
+const WIDTH = 2.0; // inside, between the side panels
 const DEPTH = 0.7;
-const PITCH = 1.3; // from one shelf's surface to the next
-const BOARD = 0.05; // thickness of shelves and side panels
+const HEADROOM = 0.2; // clear space left above the tallest object on a shelf
+const MIN_PITCH = 0.5; // the least distance from one shelf's surface to the next
+const BOARD = 0.05; // thickness of the shelves
+const POST = 0.06; // the posts are square, and stand a touch proud of the shelves
 const FULL_WIDTH = WIDTH + 2 * BOARD;
 
-const FOV = (24 * Math.PI) / 180; // vertical field of view across the window
-const ELEVATION = (13 * Math.PI) / 180; // how far above the window's centre the camera looks from
-const MARGIN = 28; // px kept clear above and below the unit
+const rad = (degrees: number) => (degrees * Math.PI) / 180;
+
+// The view: from the unit's left, about level with its upper shelves, so that shelves above eye
+// level slope one way on screen and those below it the other. The camera turns to face the unit
+// but does not tilt: the little height it has over the window's centre comes from shifting the
+// frustum (a "shift lens"), which keeps the posts vertical.
+const FOV = rad(26); // vertical field of view across the window
+const TURN = rad(-16); // how far round the unit is seen from; negative is from its left
+const RISE = rad(3); // how far above the window's centre the camera looks from
+// The unit's width as it appears: its front, turned, plus the end that shows.
+const SEEN_WIDTH = FULL_WIDTH * Math.cos(TURN) + DEPTH * Math.abs(Math.sin(TURN));
+const MARGIN = 44; // px kept clear above and below the unit
 const GUTTER = 16; // px kept clear either side
-const FIT_SHELVES = 3; // the unit is sized so this many shelves fit the window's height...
+const FIT_SHELVES = 4; // the unit is sized so this many shelves fit the window's height...
 const MIN_PPU = 150; // ...unless that would make it narrower than this many px per unit
-const FLANK_MIN = 300; // px of wall needed beside the unit to hold a picked object there
-const FLANK_MAX = 480;
+const OFF_CENTRE = 0.12; // in wide windows the unit sits this share of the width left of centre
+const PANEL_MIN = 280; // px of wall needed right of the unit for the panel to go there
 const PICK_S = 0.55; // seconds for an object to come forward or go back
+const SHELF_LIGHT = 3.2;
 const DIM = 0.65; // how much of the shelf lighting is lost while an object is held
 
-export type LayoutMode = 'tall' | 'flank' | 'split';
+export type LayoutMode = 'tall' | 'side';
 
 export interface Layout {
-	/** Where a picked object and its panel go: stacked, either side of the unit, or half each. */
+	/**
+	 * Tall: the unit is centred, and a picked object shows above its panel. Side: the unit sits
+	 * left of centre, a picked object comes up in front of it, and the panel is on its right.
+	 */
 	mode: LayoutMode;
-	/** The unit's width on screen. */
-	unitPx: number;
+	/** Where the unit's right edge is on screen. */
+	unitRight: number;
 	/** How tall the document has to be for the whole unit to scroll into view. */
 	contentPx: number;
 }
@@ -78,6 +92,7 @@ interface Placed {
 	group: Group;
 	label: HTMLElement;
 	centre: Vector3; // of its bounding box, in its own coordinates
+	height: number; // above the shelf it stands on
 	size: number; // roughly its largest dimension
 	shelfPosition: Vector3;
 	shelfRotation: Quaternion;
@@ -138,6 +153,7 @@ export function createShelf(options: Options) {
 			group,
 			label,
 			centre: bounds.getCenter(new Vector3()),
+			height: bounds.max.y,
 			size: bounds.getSize(new Vector3()).length() * 0.8,
 			shelfPosition: new Vector3(),
 			shelfRotation: new Quaternion().setFromAxisAngle(Y_AXIS, item.yaw ?? 0),
@@ -148,8 +164,16 @@ export function createShelf(options: Options) {
 		};
 	});
 
-	const unitHeight = () => shelves * PITCH + BOARD;
-	const shelfY = (index: number) => -(index + 1) * PITCH;
+	// Each shelf is only as tall as its tallest object needs. `pitch` is the distance from the
+	// surface above (the underside of the unit's top, for the first) to the shelf's own surface.
+	const pitch: number[] = [];
+	for (const p of placed) {
+		const needed = p.height + HEADROOM + BOARD;
+		pitch[p.item.shelf] = Math.max(pitch[p.item.shelf] ?? MIN_PITCH, needed);
+	}
+	const drop = (count: number) => pitch.slice(0, count).reduce((sum, h) => sum + h, 0);
+	const unitHeight = (count = shelves) => drop(count) + BOARD;
+	const shelfY = (index: number) => -drop(index + 1);
 
 	function buildUnit() {
 		scene.remove(unit);
@@ -166,18 +190,22 @@ export function createShelf(options: Options) {
 			m.receiveShadow = true;
 			unit.add(m);
 		};
+		// Open shelving: no back or sides, just a post at each corner. The posts stop at the top
+		// shelf, which has nothing over it, and the wall shows through behind.
+		const posts = height + shelfY(0);
 		for (const side of [-1, 1]) {
-			add(BOARD, height, DEPTH, (side * (WIDTH + BOARD)) / 2, -height / 2, DEPTH / 2);
+			for (const z of [POST / 2 - 0.005, DEPTH - POST / 2 + 0.005]) {
+				add(POST, posts, POST, side * (FULL_WIDTH / 2 - POST / 2 + 0.005), shelfY(0) - posts / 2, z);
+			}
 		}
-		add(FULL_WIDTH, 0.02, 0.02, 0, 0, 0); // keeps the top edge crisp against the wall
-		add(FULL_WIDTH, BOARD, DEPTH, 0, -BOARD / 2, DEPTH / 2);
-		add(WIDTH, height, 0.02, 0, -height / 2, 0.01); // the back panel
 		for (let i = 0; i < shelves; i++) {
-			add(WIDTH, BOARD, DEPTH, 0, shelfY(i) - BOARD / 2, DEPTH / 2);
+			add(FULL_WIDTH, BOARD, DEPTH, 0, shelfY(i) - BOARD / 2, DEPTH / 2);
 
-			// One light per shelf, tucked under the board above at the front, pointing down and back.
-			const light = new SpotLight(0xffdfb8, 5, 5, 1.2, 0.85, 1.4);
-			light.position.set(0, shelfY(i) + PITCH - BOARD - 0.03, DEPTH * 0.98);
+			// One light per shelf at the front, pointing down and back: tucked under the shelf above,
+			// or for the top shelf hanging in the air over it.
+			const light = new SpotLight(0xffdfb8, SHELF_LIGHT, 5, 1.2, 0.85, 1.4);
+			const over = i === 0 ? pitch[0] + 0.25 : pitch[i] - BOARD - 0.03;
+			light.position.set(0, shelfY(i) + over, DEPTH * 0.98);
 			light.target.position.set(0, shelfY(i), DEPTH * 0.3);
 			light.castShadow = true;
 			light.shadow.mapSize.set(1024, 1024);
@@ -209,6 +237,8 @@ export function createShelf(options: Options) {
 	let ppu = 1; // px per world unit at the shelves' front edge
 	let focal = 1; // px: the camera's distance from that plane, in screen pixels
 	let shift = 0; // px: how far below the camera's axis the window's centre is
+	let aside = 0; // px: how far to the right of the camera's axis it is
+	let offset = 0; // px: how far right of the window's centre the unit is (negative: left)
 	let top = 0; // px from the top of the document to the top of the unit
 	let mode: LayoutMode = 'tall';
 	let held: Placed | undefined;
@@ -220,27 +250,44 @@ export function createShelf(options: Options) {
 		renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 		renderer.setSize(width, height, false);
 
-		const widthFit = (width - 2 * GUTTER) / FULL_WIDTH;
-		const heightFit = (fit - 2 * MARGIN) / (FIT_SHELVES * PITCH + BOARD);
+		const widthFit = (width - 2 * GUTTER) / SEEN_WIDTH;
+		const heightFit = (fit - 2 * MARGIN) / unitHeight(FIT_SHELVES);
 		ppu = Math.min(widthFit, Math.max(heightFit, MIN_PPU));
 
-		const unitPx = FULL_WIDTH * ppu;
+		const unitPx = SEEN_WIDTH * ppu;
 		const contentPx = unitHeight() * ppu + 2 * MARGIN;
 		top = contentPx <= fit ? (fit - unitHeight() * ppu) / 2 : MARGIN;
 
-		const beside = (width - unitPx) / 2;
-		mode = width < fit ? 'tall' : beside >= FLANK_MIN ? 'flank' : 'split';
+		// In a wide window the unit moves left of centre, leaving the wall on its right for the
+		// panel. If that would not leave enough, it stays centred and the panel goes underneath.
+		const spare = (width - unitPx) / 2;
+		const move = Math.max(0, Math.min(width * OFF_CENTRE, spare - GUTTER));
+		mode = width >= fit && spare + move >= PANEL_MIN ? 'side' : 'tall';
+		offset = mode === 'side' ? -move : 0;
 
 		focal = height / 2 / Math.tan(FOV / 2);
-		shift = focal * Math.tan(ELEVATION);
+		shift = focal * Math.tan(RISE);
 		camera.fov = (2 * Math.atan((height / 2 + shift) / focal) * 180) / Math.PI;
 		camera.near = 0.1;
 		camera.far = 200;
-		// The window is the lower part of a taller frustum, which puts the camera's axis above
-		// the window's centre without tilting it. This also sets the aspect ratio.
-		camera.setViewOffset(width, height + 2 * shift, 0, 2 * shift, width, height);
+		// The window is an off-centre part of a larger frustum, which puts the camera's axis above
+		// or beside the window's centre without turning it. This also sets the aspect ratio.
+		// Moving the unit off-centre is done the same way, so it looks the same wherever it sits.
+		aside = -offset;
+		camera.setViewOffset(
+			width + 2 * Math.abs(aside),
+			height + 2 * shift,
+			Math.abs(aside) + aside,
+			2 * shift,
+			width,
+			height
+		);
 
-		options.onLayout({ mode, unitPx, contentPx: Math.max(contentPx, fit) });
+		options.onLayout({
+			mode,
+			unitRight: spare + unitPx + offset,
+			contentPx: Math.max(contentPx, fit)
+		});
 		follow();
 	}
 
@@ -248,7 +295,15 @@ export function createShelf(options: Options) {
 	function follow() {
 		const distance = focal / ppu;
 		const centre = (top - window.scrollY - height / 2) / ppu; // world y at the window's centre
-		camera.position.set(0, centre + distance * Math.tan(ELEVATION), DEPTH + distance);
+		// The window is centred on the unit's front and its visible side together.
+		const middle = (DEPTH * Math.sin(TURN)) / 2;
+		// The camera is placed so that this point lands in the middle of the window.
+		camera.rotation.set(0, TURN, 0);
+		camera.position
+			.set((aside + offset) / ppu, -shift / ppu, -distance)
+			.applyQuaternion(camera.quaternion)
+			.negate()
+			.add(new Vector3(middle, centre, DEPTH));
 		camera.updateMatrixWorld();
 		for (const p of placed) hold(p);
 		request();
@@ -257,10 +312,8 @@ export function createShelf(options: Options) {
 	/** Where on screen (CSS px) a picked object is shown. */
 	function stage() {
 		if (mode === 'tall') return { x: width / 2, y: fit * 0.27, w: width, h: fit * 0.5 };
-		if (mode === 'split') return { x: width / 4, y: fit / 2, w: width / 2, h: fit };
-		const beside = (width - FULL_WIDTH * ppu) / 2;
-		const w = Math.min(beside, FLANK_MAX);
-		return { x: beside - w / 2, y: fit / 2, w, h: fit };
+		// In front of the unit.
+		return { x: width / 2 + offset, y: fit / 2, w: SEEN_WIDTH * ppu, h: fit };
 	}
 
 	/** Work out an object's held position and attitude: centred on the stage, facing the camera. */
@@ -270,20 +323,27 @@ export function createShelf(options: Options) {
 		const room = Math.min(s.w, s.h) * 0.72;
 		const dz = Math.min(Math.max((p.size * focal) / room, 1.2), distance * 0.8);
 		const down = s.y - height / 2 + shift; // px below the camera's axis
-		const target = new Vector3(
-			((s.x - width / 2) / focal) * dz,
-			camera.position.y - (down / focal) * dz,
-			camera.position.z - dz
-		);
-		// Tip it back to face the camera, which is above it, then apply its own attitude.
-		const pitch = -Math.atan(down / focal) + (p.item.held?.pitch ?? 0);
+		const right = s.x - width / 2 + aside; // px to the right of the camera's axis
+		// Placed in the camera's own frame, since the camera may be turned relative to the wall.
+		const target = new Vector3((right / focal) * dz, -(down / focal) * dz, -dz)
+			.applyQuaternion(camera.quaternion)
+			.add(camera.position);
+		// Turn and tip it to face the camera, which looks at it off its axis, then apply its own
+		// attitude.
+		const tip = -Math.atan(down / focal) + (p.item.held?.pitch ?? 0);
 		p.heldRotation
-			.setFromAxisAngle(X_AXIS, pitch)
+			.copy(camera.quaternion)
+			.multiply(new Quaternion().setFromAxisAngle(Y_AXIS, -Math.atan(right / focal)))
+			.multiply(new Quaternion().setFromAxisAngle(X_AXIS, tip))
 			.multiply(new Quaternion().setFromAxisAngle(Y_AXIS, p.item.held?.yaw ?? 0));
 		// The group's origin is its base, so offset it to put its middle on the target.
 		p.heldPosition.copy(target).sub(p.centre.clone().applyQuaternion(p.heldRotation));
 		if (p === held) {
-			heldLight.position.set(target.x, target.y + 2.4, target.z + 1.4);
+			heldLight.position
+				.set(0, 0, 1.4)
+				.applyQuaternion(camera.quaternion)
+				.add(target)
+				.setY(target.y + 2.4);
 			heldLight.target.position.copy(target);
 		}
 	}
@@ -326,7 +386,7 @@ export function createShelf(options: Options) {
 			lift = Math.max(lift, e);
 		}
 
-		for (const light of shelfLights) light.intensity = 5 * (1 - DIM * lift);
+		for (const light of shelfLights) light.intensity = SHELF_LIGHT * (1 - DIM * lift);
 		wash.intensity = 60 * (1 - DIM * lift);
 		heldLight.intensity = 9 * lift;
 
@@ -376,18 +436,16 @@ export function createShelf(options: Options) {
 		const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
 		if (moved > 10 || Math.abs(window.scrollY - start.scroll) > 4) return;
 		const hit = itemAt(event);
-		if (held) {
-			if (hit !== held) options.onTap(null);
-		} else if (hit) {
-			options.onTap(hit.item.id);
-		}
+		// With something held, a tap anywhere (the object included) puts it back.
+		if (held) options.onTap(null);
+		else if (hit) options.onTap(hit.item.id);
 	}
 
 	function onPointerMove(event: PointerEvent) {
 		if (event.pointerType !== 'mouse') return;
 		const hit = itemAt(event);
 		const over = held ? (hit === held ? hit : undefined) : hit;
-		canvas.style.cursor = (held ? hit !== held : hit) ? 'pointer' : '';
+		canvas.style.cursor = held || hit ? 'pointer' : '';
 		if (over !== hovered) {
 			hovered = over;
 			request();

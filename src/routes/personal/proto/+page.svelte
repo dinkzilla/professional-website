@@ -13,8 +13,8 @@
 	let labels: HTMLElement;
 	let probe: HTMLElement;
 	let shelf: ReturnType<typeof import('#lib/shelf/scene.ts').createShelf> | undefined = $state();
-	let layout: Layout = $state({ mode: 'tall', unitPx: 0, contentPx: 0 });
-	let fourth = $state(false);
+	let layout: Layout = $state({ mode: 'tall', unitRight: 0, contentPx: 0 });
+	let extra = $state(false);
 	let showLabels = $state(true);
 
 	// Which object is picked up lives in the history entry, so Back puts it down.
@@ -45,7 +45,7 @@
 	});
 
 	$effect(() => shelf?.pick(picked?.id ?? null));
-	$effect(() => shelf?.setShelves(fourth ? 4 : 3));
+	$effect(() => shelf?.setShelves(extra ? 5 : 4));
 
 	// The page does not scroll while something is held.
 	$effect(() => {
@@ -73,7 +73,7 @@
 <div class="spacer" style:height="{layout.contentPx}px"></div>
 
 {#if picked}
-	<aside class="panel {layout.mode}" style:--unit="{layout.unitPx}px">
+	<aside class="panel {layout.mode}" style:--unit-right="{layout.unitRight}px">
 		<button class="close" onclick={() => tap(null)} aria-label="Put it back">×</button>
 		<h2>{picked.label}</h2>
 		<p>{picked.blurb}</p>
@@ -84,7 +84,7 @@
 {/if}
 
 <form class="controls">
-	<label><input type="checkbox" bind:checked={fourth} /> 4th shelf</label>
+	<label><input type="checkbox" bind:checked={extra} /> 5th shelf</label>
 	<label><input type="checkbox" bind:checked={showLabels} /> labels</label>
 </form>
 
@@ -171,19 +171,11 @@
 			border-width: 1px 0 0;
 		}
 
-		/* On the wall to the right of the unit, the object being on its left. */
-		&.flank {
+		/* On the wall to the right of the unit, the object being in front of the unit. */
+		&.side {
 			top: 50svh;
-			left: calc(50% + var(--unit) / 2 + 2rem);
-			width: min(24rem, 50% - var(--unit) / 2 - 4rem);
-			transform: translateY(-50%);
-		}
-
-		/* No room beside the unit: the object takes the left half and this the right. */
-		&.split {
-			top: 50svh;
-			left: calc(50% + 1rem);
-			right: 1rem;
+			left: calc(var(--unit-right) + 2rem);
+			width: min(24rem, 100% - var(--unit-right) - 3rem);
 			transform: translateY(-50%);
 		}
 	}
