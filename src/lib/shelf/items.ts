@@ -13,12 +13,10 @@ import {
 	type BufferGeometry,
 	type Material
 } from 'three';
+import { catalogue, type Entry } from './catalogue.ts';
 
-export interface Item {
+interface Placement {
 	id: string;
-	label: string;
-	/** Placeholder copy for the panel shown when the item is picked up. */
-	blurb: string;
 	/** Which shelf it sits on, counting from the top, and where along it (0 is the middle). */
 	shelf: number;
 	x: number;
@@ -30,6 +28,8 @@ export interface Item {
 	held?: { pitch?: number; yaw?: number };
 	build: () => Group;
 }
+
+export type Item = Entry & Placement;
 
 const light = new MeshStandardMaterial({ color: 0xbdbcb6, roughness: 0.85 });
 const mid = new MeshStandardMaterial({ color: 0x77767a, roughness: 0.8 });
@@ -187,21 +187,17 @@ function book() {
 	return g;
 }
 
-export const items: Item[] = [
+const placements: Placement[] = [
 	{
 		id: 'turntable',
-		label: 'turntable',
-		blurb: 'Plays the album. Drag the record to scratch it.',
-		shelf: 3,
+		shelf: 2,
 		x: -0.5,
 		held: { pitch: 0.95, yaw: 0 },
 		build: turntable
 	},
 	{
 		id: 'album',
-		label: 'album',
-		blurb: 'The sleeve flips over to show the notes on the back.',
-		shelf: 3,
+		shelf: 2,
 		x: 0.6,
 		back: 0.86,
 		held: { pitch: 0.2, yaw: -0.25 },
@@ -209,9 +205,7 @@ export const items: Item[] = [
 	},
 	{
 		id: 'headphones',
-		label: 'headphones',
-		blurb: 'Set dressing for the turntable, or possibly the volume control.',
-		shelf: 2,
+		shelf: 1,
 		x: 0.55,
 		yaw: -0.5,
 		held: { pitch: 0.1, yaw: 0.5 },
@@ -219,9 +213,7 @@ export const items: Item[] = [
 	},
 	{
 		id: 'mothersheet',
-		label: 'mothersheet',
-		blurb: 'The lid lifts and the instruction manual slides out, with a link to the character sheet.',
-		shelf: 2,
+		shelf: 1,
 		x: -0.45,
 		yaw: 0.2,
 		held: { pitch: 0.8, yaw: 0.15 },
@@ -229,28 +221,22 @@ export const items: Item[] = [
 	},
 	{
 		id: 'work',
-		label: 'work',
-		blurb: 'The way back to the work side of the site.',
-		shelf: 1,
-		x: -0.42,
+		shelf: 3,
+		x: 0.5,
 		yaw: -0.35,
 		held: { pitch: 0.25, yaw: -0.5 },
 		build: hardhat
 	},
 	{
 		id: 'kickball',
-		label: 'kickball phone',
-		blurb: 'The batting-order texter. The description shows on the screen and the keys scroll it.',
-		shelf: 1,
-		x: 0.5,
+		shelf: 3,
+		x: -0.42,
 		yaw: -0.3,
 		held: { pitch: 0.45, yaw: 0.25 },
 		build: flipPhone
 	},
 	{
 		id: 'video-module',
-		label: 'video module',
-		blurb: 'The knobs work, and the monitor shows what the module is putting out.',
 		shelf: 0,
 		x: -0.5,
 		yaw: 0.55,
@@ -259,8 +245,6 @@ export const items: Item[] = [
 	},
 	{
 		id: 'monitor',
-		label: 'monitor',
-		blurb: 'Shows the video module’s output.',
 		shelf: 0,
 		x: 0.38,
 		yaw: -0.15,
@@ -269,8 +253,6 @@ export const items: Item[] = [
 	},
 	{
 		id: 'book',
-		label: 'book',
-		blurb: 'In progress. The bookmark shows how far along it is.',
 		shelf: 4,
 		x: -0.2,
 		yaw: 0.3,
@@ -278,3 +260,8 @@ export const items: Item[] = [
 		build: book
 	}
 ];
+
+export const items: Item[] = placements.map((placement) => ({
+	...catalogue.find((entry) => entry.id === placement.id)!,
+	...placement
+}));

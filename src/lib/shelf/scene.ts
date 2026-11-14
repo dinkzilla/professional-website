@@ -7,6 +7,10 @@
 // front edge is drawn.
 //
 // Nothing is drawn unless something changed: scroll, resize, hover, or an object in flight.
+//
+// The scene outlives the page that shows it. It owns its canvas, so it can be built and drawn
+// once before the personal page is ever visited (see ready.ts), then put on that page the moment
+// it mounts, and taken off again, intact, when the visitor leaves.
 
 import {
 	ACESFilmicToneMapping,
@@ -53,6 +57,9 @@ const RISE = rad(3); // how far above the window's centre the camera looks from
 // The unit's width as it appears: its front, turned, plus the end that shows.
 const SEEN_WIDTH = FULL_WIDTH * Math.cos(TURN) + DEPTH * Math.abs(Math.sin(TURN));
 const MARGIN = 44; // px kept clear above and below the unit
+// The unit sits this many px above centre: there is clear air over the things on its top shelf,
+// and its near bottom corner hangs low in perspective, so true centre looks too low.
+const RAISE = 32;
 const GUTTER = 16; // px kept clear either side
 const FIT_SHELVES = 4; // the unit is sized so this many shelves fit the window's height...
 const MIN_PPU = 150; // ...unless that would make it narrower than this many px per unit
@@ -76,16 +83,16 @@ export interface Layout {
 	contentPx: number;
 }
 
-export interface Options {
-	canvas: HTMLCanvasElement;
-	/** An overlay the scene fills with one caption per object. */
-	labels: HTMLElement;
+/** What the scene needs from the page it is shown on. */
+export interface Host {
 	/** The height to lay out for: the viewport with the browser's bars showing. */
 	fitHeight: () => number;
 	onLayout: (layout: Layout) => void;
 	/** An object was tapped (its id), or the space around a held object was (null). */
 	onTap: (id: string | null) => void;
 }
+
+export type Shelf = ReturnType<typeof createShelf>;
 
 interface Placed {
 	item: Item;
@@ -107,8 +114,20 @@ const Y_AXIS = new Vector3(0, 1, 0);
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-export function createShelf(options: Options) {
-	const { canvas, labels } = options;
+/** Build the scene and draw it once, off the page, so that it can be shown without delay. */
+export async function prepare(): Promise<Shelf> {
+	const shelf = createShelf();
+	await shelf.warm();
+	return shelf;
+}
+
+function createShelf() {
+	const canvas = document.createElement('canvas');
+	// An overlay holding one caption per object.
+	const labels = document.createElement('div');
+	labels.className = 'labels';
+	// The page showing the scene, if one is.
+	let host: Host | undefined;
 
 	const renderer = new WebGLRenderer({ canvas, antialias: true });
 	renderer.shadowMap.enabled = true;
@@ -213,6 +232,9 @@ export function createShelf(options: Options) {
 			light.shadow.camera.far = 4;
 			light.shadow.bias = -0.0015;
 			light.shadow.radius = 4;
+			// Its shadows are only redrawn when something on its shelf moves (see draw).
+			light.shadow.autoUpdate = false;
+			light.shadow.needsUpdate = true;
 			unit.add(light, light.target);
 			shelfLights.push(light);
 		}
@@ -233,7 +255,7 @@ export function createShelf(options: Options) {
 
 	let width = 0; // of the canvas, in CSS px
 	let height = 0;
-	let fit = 0; // the height the unit is fitted to (see Options.fitHeight)
+	let fit = 0; // the height the unit is fitted to (see Host.fitHeight)
 	let ppu = 1; // px per world unit at the shelves' front edge
 	let focal = 1; // px: the camera's distance from that plane, in screen pixels
 	let shift = 0; // px: how far below the camera's axis the window's centre is
@@ -244,9 +266,10 @@ export function createShelf(options: Options) {
 	let held: Placed | undefined;
 
 	function layout() {
-		width = canvas.clientWidth;
-		height = canvas.clientHeight;
-		fit = Math.min(options.fitHeight(), height);
+		// Off the page, lay out for the window as a whole, which is what the canvas will cover.
+		width = host ? canvas.clientWidth : window.innerWidth;
+		height = host ? canvas.clientHeight : window.innerHeight;
+		fit = Math.min(host?.fitHeight() ?? height, height);
 		renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 		renderer.setSize(width, height, false);
 
@@ -256,7 +279,7 @@ export function createShelf(options: Options) {
 
 		const unitPx = SEEN_WIDTH * ppu;
 		const contentPx = unitHeight() * ppu + 2 * MARGIN;
-		top = contentPx <= fit ? (fit - unitHeight() * ppu) / 2 : MARGIN;
+		top = (contentPx <= fit ? (fit - unitHeight() * ppu) / 2 : MARGIN) - RAISE;
 
 		// In a wide window the unit moves left of centre, leaving the wall on its right for the
 		// panel. If that would not leave enough, it stays centred and the panel goes underneath.
@@ -283,7 +306,7 @@ export function createShelf(options: Options) {
 			height
 		);
 
-		options.onLayout({
+		host?.onLayout({
 			mode,
 			unitRight: spare + unitPx + offset,
 			contentPx: Math.max(contentPx, fit)
@@ -294,7 +317,8 @@ export function createShelf(options: Options) {
 	/** Put the camera where the scroll position says, and anything held in front of it. */
 	function follow() {
 		const distance = focal / ppu;
-		const centre = (top - window.scrollY - height / 2) / ppu; // world y at the window's centre
+		const scroll = host ? window.scrollY : 0;
+		const centre = (top - scroll - height / 2) / ppu; // world y at the window's centre
 		// The window is centred on the unit's front and its visible side together.
 		const middle = (DEPTH * Math.sin(TURN)) / 2;
 		// The camera is placed so that this point lands in the middle of the window.
@@ -356,17 +380,20 @@ export function createShelf(options: Options) {
 	const projected = new Vector3();
 
 	function request() {
-		if (!frame) frame = requestAnimationFrame(draw);
+		if (host && !frame) frame = requestAnimationFrame(draw);
 	}
 
 	function draw(now: number) {
 		frame = 0;
-		const dt = Math.min((now - (last || now)) / 1000, 0.05);
+		// Real elapsed time, so that a slow device drops frames instead of slowing the motion down.
+		const dt = Math.min((now - (last || now)) / 1000, 0.25);
 		last = now;
 		let moving = false;
 		let lift = 0;
 
 		for (const p of placed) {
+			const was = p.t;
+			const leant = p.nudge;
 			const goal = p === held ? 1 : 0;
 			if (p.t !== goal) {
 				const step = dt / PICK_S;
@@ -378,6 +405,10 @@ export function createShelf(options: Options) {
 				const step = dt / 0.15;
 				p.nudge = lean > p.nudge ? Math.min(lean, p.nudge + step) : Math.max(lean, p.nudge - step);
 				moving = true;
+			}
+			if (p.t !== was || p.nudge !== leant) {
+				const light = shelfLights[p.item.shelf];
+				if (light) light.shadow.needsUpdate = true;
 			}
 			const e = ease(p.t);
 			p.group.position.lerpVectors(p.shelfPosition, p.heldPosition, e);
@@ -437,8 +468,8 @@ export function createShelf(options: Options) {
 		if (moved > 10 || Math.abs(window.scrollY - start.scroll) > 4) return;
 		const hit = itemAt(event);
 		// With something held, a tap anywhere (the object included) puts it back.
-		if (held) options.onTap(null);
-		else if (hit) options.onTap(hit.item.id);
+		if (held) host?.onTap(null);
+		else if (hit) host?.onTap(hit.item.id);
 	}
 
 	function onPointerMove(event: PointerEvent) {
@@ -465,11 +496,8 @@ export function createShelf(options: Options) {
 	canvas.addEventListener('pointercancel', onPointerLeave);
 	canvas.addEventListener('pointermove', onPointerMove);
 	canvas.addEventListener('pointerleave', onPointerLeave);
-	window.addEventListener('scroll', follow, { passive: true });
-	window.addEventListener('resize', layout);
 
 	buildUnit();
-	layout();
 
 	return {
 		/** Bring an object forward (by id), or put whatever is held back (null). */
@@ -484,17 +512,54 @@ export function createShelf(options: Options) {
 			buildUnit();
 			layout();
 		},
-		destroy() {
+		/**
+		 * A copy of the canvas as it looks now, laid out exactly over it. A WebGL canvas reads back
+		 * blank except straight after it is drawn, so the page transitions (#lib/capture.ts), which
+		 * take a picture of the page, need this put in front of it first.
+		 */
+		canvas,
+		snapshot(): HTMLCanvasElement {
+			const copy = document.createElement('canvas');
+			copy.width = canvas.width;
+			copy.height = canvas.height;
+			copy.style.cssText = `position:fixed;top:0;left:0;width:${width}px;height:${height}px;`;
+			renderer.render(scene, camera);
+			copy.getContext('2d')?.drawImage(canvas, 0, 0);
+			return copy;
+		},
+		/** Compile the scene's shaders without blocking the page, then draw it once. */
+		async warm() {
+			layout();
+			await renderer.compileAsync(scene, camera);
+			// A full draw, which is what stands the objects on their shelves; the shadows drawn here
+			// are kept until something moves.
+			draw(performance.now());
+		},
+		/** Put the scene on a page, inside `element`, drawn before this returns. */
+		attach(element: HTMLElement, page: Host) {
+			host = page;
+			element.append(canvas, labels);
+			window.addEventListener('scroll', follow, { passive: true });
+			window.addEventListener('resize', layout);
+			layout();
 			cancelAnimationFrame(frame);
-			canvas.removeEventListener('pointerdown', onPointerDown);
-			canvas.removeEventListener('pointerup', onPointerUp);
-			canvas.removeEventListener('pointercancel', onPointerLeave);
-			canvas.removeEventListener('pointermove', onPointerMove);
-			canvas.removeEventListener('pointerleave', onPointerLeave);
+			frame = 0;
+			draw(performance.now());
+		},
+		/** Take the scene off its page, with everything back on the shelf, and keep it for later. */
+		detach() {
+			host = undefined;
+			cancelAnimationFrame(frame);
+			frame = 0;
+			last = 0;
 			window.removeEventListener('scroll', follow);
 			window.removeEventListener('resize', layout);
-			for (const p of placed) p.label.remove();
-			renderer.dispose();
+			canvas.remove();
+			labels.remove();
+			held = hovered = undefined;
+			labels.classList.remove('held');
+			for (const p of placed) p.t = p.nudge = 0;
+			for (const light of shelfLights) light.shadow.needsUpdate = true;
 		}
 	};
 }

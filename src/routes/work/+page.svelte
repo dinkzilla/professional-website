@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { cubicInOut } from 'svelte/easing';
 	import { Tween } from 'svelte/motion';
+	import PersonalLink from '#lib/PersonalLink.svelte';
 	import { canonical, href } from '#lib/sides.ts';
 	import { formatDate, mailto, site } from '#lib/site.ts';
 	import type { PageProps } from './$types';
@@ -53,35 +53,6 @@
 		whyOpen = opening;
 		const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		unfold.set(opening ? 1 : 0, { duration: reduceMotion ? 0 : FOLD_MS });
-	}
-
-	// The "personal stuff" link drops the whole page like a curtain (see #lib/curtain.ts). The
-	// module is loaded when the link is first hovered or focused, not with the page.
-	let dropping = false;
-
-	function warmCurtain() {
-		import('#lib/curtain.ts').then((curtain) => curtain.warm());
-	}
-
-	async function dropCurtain(event: MouseEvent) {
-		// Leave new-tab clicks alone.
-		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-			return;
-		}
-		event.preventDefault();
-		if (dropping) return;
-		dropping = true;
-		const href = (event.currentTarget as HTMLAnchorElement).pathname;
-		let drop: (() => void) | undefined;
-		try {
-			const curtain = await import('#lib/curtain.ts');
-			if (curtain.canDrop()) drop = await curtain.prepare(event.clientX);
-		} catch {
-			// No curtain (capture or WebGL failed): just go.
-		}
-		await goto(href);
-		drop?.();
-		dropping = false;
 	}
 
 	const clients = [
@@ -253,13 +224,7 @@
 	</section>
 
 	<p class="personal">
-		<a
-			class="back"
-			href={href('personal', '/')}
-			onpointerenter={warmCurtain}
-			onfocus={warmCurtain}
-			onclick={dropCurtain}>personal stuff →</a
-		>
+		<PersonalLink class="back">personal stuff →</PersonalLink>
 	</p>
 </div>
 
@@ -657,7 +622,7 @@
 		text-align: right;
 	}
 
-	.personal .back {
+	.personal :global(.back) {
 		margin-bottom: 0;
 	}
 
