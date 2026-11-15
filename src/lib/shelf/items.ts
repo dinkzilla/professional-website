@@ -12,6 +12,7 @@ import {
 	Mesh,
 	MeshStandardMaterial,
 	PlaneGeometry,
+	RepeatWrapping,
 	Shape,
 	SphereGeometry,
 	SRGBColorSpace,
@@ -72,6 +73,9 @@ export const HOOK = { x: 0.99, y: 2.08 };
 export const RACK_WIDTH = 1.1;
 export const RACK_DEPTH = 0.7;
 export const BOARD = 0.05;
+// How far the back of the rack stands off the wall: clear of the pinboard, which runs behind it,
+// with room for the cable that goes down behind the tv.
+export const STANDOFF = 0.1;
 export const LEGS = 0.14; // how far the posts carry on below the bottom shelf, down to the floor
 
 // The amp on the floor under the pinboard (built in room.ts): where along the wall its middle is,
@@ -88,6 +92,9 @@ const page = new MeshStandardMaterial({ color: 0xe6e1d4, roughness: 0.95 });
 // Bright enough to show in the dim of the room.
 const pink = new MeshStandardMaterial({ color: 0xff2e93, roughness: 0.6, emissive: 0xff2e93, emissiveIntensity: 0.25 });
 const pinkShade = new MeshStandardMaterial({ color: 0xc81f70, roughness: 0.6, emissive: 0xc81f70, emissiveIntensity: 0.2 });
+// The plugs on the two cables, matching the flecks in their braid.
+const plugRed = new MeshStandardMaterial({ color: 0xc22424, roughness: 0.6 });
+const plugGreen = new MeshStandardMaterial({ color: 0x52cf6c, roughness: 0.6 });
 const ginger = new MeshStandardMaterial({ color: 0xd9782d, roughness: 0.9 });
 const white = new MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.9 });
 const screen = new MeshStandardMaterial({
@@ -121,6 +128,32 @@ function horn(length: number, r: number, material: Material) {
 	const g = new Group();
 	g.add(mesh(new CylinderGeometry(r * 0.12, r, length, 20), material, 0, length / 2, 0));
 	return g;
+}
+
+/**
+ * A braided cable along this path: a sleeve of one colour with flecks of a second running round
+ * it in both directions, every `every`th strand (2 is half and half). `R` is its radius.
+ */
+export function braided(path: CatmullRomCurve3, base: string, fleck: string, every: number, R = 0.014) {
+	const CELLS = 8;
+	const PX = 8;
+	const canvas = document.createElement('canvas');
+	canvas.width = canvas.height = CELLS * PX;
+	const c = canvas.getContext('2d')!;
+	c.fillStyle = base;
+	c.fillRect(0, 0, canvas.width, canvas.height);
+	c.fillStyle = fleck;
+	for (let i = 0; i < CELLS; i++) {
+		for (let j = 0; j < CELLS; j++) {
+			if ((i + j) % every === 0 && (i - j + CELLS) % 2 === 0) c.fillRect(i * PX, j * PX, PX, PX);
+		}
+	}
+	const map = new CanvasTexture(canvas);
+	map.colorSpace = SRGBColorSpace;
+	map.wrapS = map.wrapT = RepeatWrapping;
+	// The tile goes twice round the cable, and as often along it as keeps it square.
+	map.repeat.set(path.getLength() / (Math.PI * R), 2);
+	return mesh(new TubeGeometry(path, 160, R, 10), new MeshStandardMaterial({ map, roughness: 0.8 }));
 }
 
 // The width of a rack-mounted panel: right across the rack, over the fronts of its posts.
@@ -248,23 +281,27 @@ function videoModule() {
 	lever.rotation.x = Math.PI / 2 - 0.5; // sticking out, thrown upward
 	g.add(lever);
 
-	// The HDMI socket at the left, and the cable plugged into it. The cable hangs in a loop in
-	// front of the rack, goes round the left-hand post, climbs the rack's side to its top, and
-	// ends out of sight behind the tv.
-	const port = new Vector3(-0.42, 0.1, 0);
-	g.add(box(0.07, 0.035, 0.004, dark, port.x, port.y - 0.0175, 0));
-	g.add(box(0.05, 0.022, 0.07, dark, port.x, port.y - 0.011, 0.035)); // the plug
-	const side = -(PANEL / 2 + 0.03); // just clear of the rack's left side
-	const top = h + BOARD + 0.014; // lying on the rack's top
-	const wall = -(RACK_DEPTH + 0.008); // the wall, from the front of the panel
-	const behind = wall + (RACK_DEPTH * (1 - TV_BACK) - TV_DEPTH / 2) / 2; // between tv and wall
+	// The HDMI socket at the left, upright, and the cable plugged into it, its plug far bigger
+	// than life. The cable hangs in a long loop in front of the rack, goes round the left-hand
+	// post, climbs the rack's side to its top, and ends out of sight behind the tv.
+	const port = new Vector3(-0.42, 0.15, 0);
+	const plug = { w: 0.065, h: 0.13, d: 0.13 };
+	g.add(box(plug.w + 0.02, plug.h + 0.02, 0.004, dark, port.x, port.y - plug.h / 2 - 0.01, 0));
+	g.add(box(plug.w, plug.h, plug.d, plugRed, port.x, port.y - plug.h / 2, plug.d / 2));
+	g.add(box(plug.w - 0.02, plug.h - 0.03, 0.02, light, port.x, port.y - plug.h / 2 + 0.015, 0.012)); // its metal end
+	g.add(round(0.024, 0.05, plugRed, port.x, port.y, plug.d)); // where the cable leaves it
+	const out = plug.d + 0.05;
+	const side = -(PANEL / 2 + 0.035); // just clear of the rack's left side
+	const top = h + BOARD + 0.017; // lying on the rack's top
+	const wall = -(RACK_DEPTH + 0.008); // the back of the rack, from the front of the panel
+	const behind = wall + (RACK_DEPTH * (1 - TV_BACK) - TV_DEPTH / 2) / 2; // between the tv and the rack's back
 	const path = new CatmullRomCurve3([
-		new Vector3(port.x, port.y, 0.06),
-		new Vector3(port.x, port.y - 0.01, 0.12),
-		new Vector3(port.x - 0.02, port.y - 0.1, 0.16),
-		new Vector3(port.x - 0.08, -0.14, 0.14),
-		new Vector3(side + 0.04, -0.2, 0.08),
-		new Vector3(side, -0.14, -0.04),
+		new Vector3(port.x, port.y, out),
+		new Vector3(port.x, port.y - 0.02, out + 0.08),
+		new Vector3(port.x - 0.03, port.y - 0.22, out + 0.12),
+		new Vector3(port.x - 0.1, -0.26, out + 0.06),
+		new Vector3(side + 0.03, -0.32, 0.12),
+		new Vector3(side, -0.22, -0.05),
 		new Vector3(side, 0.02, -0.2),
 		new Vector3(side, 0.22, -0.4),
 		new Vector3(side + 0.02, top, -0.55),
@@ -273,8 +310,7 @@ function videoModule() {
 		new Vector3(-0.15, top + 0.06, behind),
 		new Vector3(-0.1, top + 0.3, behind)
 	]);
-	const cable = mesh(new TubeGeometry(path, 120, 0.011, 8), dark);
-	g.add(cable);
+	g.add(braided(path, '#131313', '#c22424', 4)); // black, flecked with red
 	return g;
 }
 
@@ -297,26 +333,28 @@ function cassettePlayer() {
 	// from the amp's input to the floor, lies in a loose curve round the foot of the rack, and
 	// comes up to the socket. The amp's place is given from the floor and the wall.
 	const floor = -(BOARD + LEGS);
-	const wall = -(RACK_DEPTH + 0.008);
-	const socket = new Vector3(-0.4, 0.035, 0);
+	const wall = -(RACK_DEPTH + 0.008 + STANDOFF);
+	const socket = new Vector3(-0.4, 0.038, 0);
 	const amp = new Vector3(AMP_JACK.x, floor + AMP_JACK.y, wall + AMP_JACK.z);
-	const lying = floor + 0.012;
-	g.add(round(0.02, 0.004, dark, socket.x, socket.y, 0));
-	g.add(round(0.013, 0.07, dark, socket.x, socket.y, 0));
-	g.add(round(0.013, 0.07, dark, amp.x, amp.y, amp.z));
+	const lying = floor + 0.015;
+	g.add(round(0.034, 0.004, dark, socket.x, socket.y, 0));
+	g.add(round(0.027, 0.1, plugGreen, socket.x, socket.y, 0));
+	g.add(round(0.027, 0.1, plugGreen, amp.x, amp.y, amp.z));
 	const path = new CatmullRomCurve3([
-		new Vector3(socket.x, socket.y, 0.07),
-		new Vector3(socket.x - 0.01, socket.y - 0.03, 0.13),
-		new Vector3(socket.x - 0.05, lying + 0.03, 0.18),
-		new Vector3(socket.x - 0.15, lying, 0.21),
-		new Vector3(-0.7, lying, 0.24),
-		new Vector3(-0.84, lying, 0.12),
-		new Vector3(amp.x + 0.04, lying + 0.06, amp.z + 0.17),
-		new Vector3(amp.x + 0.01, floor + 0.45, amp.z + 0.14),
-		new Vector3(amp.x, amp.y - 0.06, amp.z + 0.12),
-		new Vector3(amp.x, amp.y, amp.z + 0.07)
+		new Vector3(socket.x, socket.y, 0.1),
+		new Vector3(socket.x - 0.01, socket.y - 0.03, 0.17),
+		new Vector3(socket.x - 0.04, lying + 0.03, 0.22),
+		new Vector3(socket.x - 0.1, lying, 0.3),
+		new Vector3(-0.6, lying, 0.42),
+		new Vector3(-0.85, lying, 0.36),
+		new Vector3(-0.92, lying, 0.16),
+		new Vector3(-0.8, lying, 0.04),
+		new Vector3(amp.x + 0.05, lying + 0.06, amp.z + 0.2),
+		new Vector3(amp.x + 0.01, floor + 0.4, amp.z + 0.17),
+		new Vector3(amp.x, amp.y - 0.08, amp.z + 0.17),
+		new Vector3(amp.x, amp.y, amp.z + 0.1)
 	]);
-	g.add(mesh(new TubeGeometry(path, 120, 0.011, 8), dark));
+	g.add(braided(path, '#2c66d8', '#52cf6c', 4)); // blue, flecked with green
 	return g;
 }
 

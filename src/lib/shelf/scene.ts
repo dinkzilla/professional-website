@@ -35,9 +35,10 @@ import {
 	WebGLRenderer
 } from 'three';
 import { buildRoom } from './room.ts';
-import { BOARD, items, LEGS, RACK_DEPTH, RACK_WIDTH, WALL, type Item } from './items.ts';
+import { BOARD, items, LEGS, RACK_DEPTH, RACK_WIDTH, STANDOFF, WALL, type Item } from './items.ts';
 
-// The unit, in world units (one is about half a metre). The wall is the plane z = 0, and y = 0 is
+// The unit, in world units (one is about half a metre). The wall is the plane z = 0, the unit
+// stands a little off it (STANDOFF), and y = 0 is
 // a little above the tallest thing on the top shelf, with the shelves going down from there.
 const WIDTH = RACK_WIDTH; // inside, between the posts
 const DEPTH = RACK_DEPTH;
@@ -246,6 +247,7 @@ function createShelf() {
 			unit.add(light, light.target);
 			shelfLights.set(i, light);
 		}
+		unit.position.z = STANDOFF;
 		scene.add(unit);
 
 		room.group.position.y = -height;
@@ -264,7 +266,7 @@ function createShelf() {
 				p.item.x,
 				shelfY(p.item.shelf) + p.sunk,
 				// A mounted panel lies against the fronts of the posts.
-				p.item.flush ? DEPTH + 0.008 : DEPTH * (1 - (p.item.back ?? 0.5))
+				STANDOFF + (p.item.flush ? DEPTH + 0.008 : DEPTH * (1 - (p.item.back ?? 0.5)))
 			);
 		}
 	}
@@ -345,7 +347,7 @@ function createShelf() {
 			.set((aside + offset) / ppu, -shift / ppu, -distance)
 			.applyQuaternion(camera.quaternion)
 			.negate()
-			.add(new Vector3(middle, centre, DEPTH));
+			.add(new Vector3(middle, centre, DEPTH + STANDOFF));
 		camera.updateMatrixWorld();
 		for (const p of placed) hold(p);
 		request();
