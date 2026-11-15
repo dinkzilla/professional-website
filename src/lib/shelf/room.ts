@@ -426,13 +426,16 @@ export function buildRoom(rackHeight: number) {
 	const shell = flat(0xe9e1cf);
 	shell.vertexColors = true;
 	add(new Mesh(facets, shell), DOME.x, -0.1, DOME.z);
-	box(0.9, 1.5, 0.2, pile, DOME.x - 0.6, 0.5, DOME.z + DOME.r - 0.25); // its door
 	const farDock = new Group();
 	farDock.position.set(DOME.x - 2.5, 0, DOME.z + DOME.r);
 	farDock.rotation.y = -0.5;
 	const farDeck = new Mesh(new BoxGeometry(9, 0.22, 1.2), plank);
 	farDeck.position.set(-4.5, 0.25, 0);
 	farDock.add(farDeck);
+	// The dome's door, standing on the deck at the end of the dock, against the shell behind it.
+	const farDoor = new Mesh(new BoxGeometry(0.7, 1.2, 0.2), pile);
+	farDoor.position.set(-0.35, 0.36 + 0.6, -0.7);
+	farDock.add(farDoor);
 	for (let along = 1; along <= 9; along += 2) {
 		const post = new Mesh(new BoxGeometry(0.2, 1.1, 0.2), pile);
 		post.position.set(-along, 0.2, 0.6);
