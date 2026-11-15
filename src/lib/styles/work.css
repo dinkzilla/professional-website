@@ -19,7 +19,7 @@
 	--muted: #5a5470;
 	--dot: rgba(255, 245, 233, 0.14);
 	--dot-size: 28px;
-	--grain: 0.08;
+	--grain: 0.05;
 	--page: 54.5rem;
 	--box-padding: clamp(1.5rem, 5vw, 3rem);
 	--display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
