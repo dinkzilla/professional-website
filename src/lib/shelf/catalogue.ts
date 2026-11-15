@@ -10,48 +10,44 @@ export interface Entry {
 
 export const catalogue: Entry[] = [
 	{
-		id: 'turntable',
-		label: 'turntable',
-		blurb: 'Plays the album. Drag the record to scratch it.'
+		id: 'tv',
+		label: 'tv',
+		blurb: 'Shows what the video module is putting out.'
 	},
 	{
-		id: 'album',
-		label: 'album',
-		blurb: 'The sleeve flips over to show the notes on the back.'
-	},
-	{
-		id: 'headphones',
-		label: 'headphones',
-		blurb: 'Set dressing for the turntable, or possibly the volume control.'
-	},
-	{
-		id: 'mothersheet',
-		label: 'mothersheet',
-		blurb: 'The lid lifts and the instruction manual slides out, with a link to the character sheet.'
-	},
-	{
-		id: 'work',
-		label: 'work',
-		blurb: 'The way back to the work side of the site.'
-	},
-	{
-		id: 'kickball',
-		label: 'kickball phone',
-		blurb: 'The batting-order texter. The description shows on the screen and the keys scroll it.'
+		id: 'cat',
+		label: 'cat',
+		blurb: 'Asleep on the warm spot.'
 	},
 	{
 		id: 'video-module',
 		label: 'video module',
-		blurb: 'The knobs work, and the monitor shows what the module is putting out.'
+		blurb: 'The knob and the switch work, and the tv shows the result.'
 	},
 	{
-		id: 'monitor',
-		label: 'monitor',
-		blurb: 'Shows the video module’s output.'
+		id: 'skull',
+		label: 'triceratops',
+		blurb: 'Holds the books up.'
+	},
+	...['one', 'two', 'three', 'four', 'five'].map((n, i) => ({
+		id: `book-${i + 1}`,
+		label: `book ${n}`,
+		blurb: 'Placeholder: what this book is about.'
+	})),
+	...['one', 'two', 'three', 'four', 'five'].map((n, i) => ({
+		id: `flier-${i + 1}`,
+		label: `flier ${n}`,
+		blurb: 'Placeholder: which show this was.'
+	})),
+	{
+		// The way back to the work side: the page adds the link under this (see routes/personal).
+		id: 'tie',
+		label: 'tie',
+		blurb: 'Still tied, for getting back into quickly.'
 	},
 	{
-		id: 'book',
-		label: 'book',
-		blurb: 'In progress. The bookmark shows how far along it is.'
+		id: 'cassette',
+		label: 'cassette player',
+		blurb: 'Plays the tape. The transport buttons work.'
 	}
 ];

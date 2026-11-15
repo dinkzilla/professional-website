@@ -1,5 +1,7 @@
-// The shelving unit (grey-box prototype): a narrow unit of shelves on a dark wall, a light over
-// each shelf, and block-out objects (see items.ts) that come forward off the shelf when picked.
+// The rack (grey-box prototype): a tall, narrow equipment rack on legs against a dark wall, with a
+// light over its one open shelf, and block-out objects (see items.ts). Some are mounted in it, their
+// panels flush with its front; the others stand on its shelves, and some of those come forward
+// when picked.
 //
 // The page scrolls natively; the canvas is fixed and the camera follows the scroll position, so
 // the unit behaves like a column of ordinary page content. The camera looks at the wall square-on
@@ -24,7 +26,6 @@ import {
 	Object3D,
 	PCFSoftShadowMap,
 	PerspectiveCamera,
-	PlaneGeometry,
 	Quaternion,
 	Raycaster,
 	Scene,
@@ -33,15 +34,14 @@ import {
 	Vector3,
 	WebGLRenderer
 } from 'three';
-import { items, type Item } from './items.ts';
+import { buildRoom } from './room.ts';
+import { BOARD, items, LEGS, RACK_DEPTH, RACK_WIDTH, WALL, type Item } from './items.ts';
 
 // The unit, in world units (one is about half a metre). The wall is the plane z = 0, and y = 0 is
 // a little above the tallest thing on the top shelf, with the shelves going down from there.
-const WIDTH = 2.0; // inside, between the side panels
-const DEPTH = 0.7;
+const WIDTH = RACK_WIDTH; // inside, between the posts
+const DEPTH = RACK_DEPTH;
 const HEADROOM = 0.2; // clear space left above the tallest object on a shelf
-const MIN_PITCH = 0.5; // the least distance from one shelf's surface to the next
-const BOARD = 0.05; // thickness of the shelves
 const POST = 0.06; // the posts are square, and stand a touch proud of the shelves
 const FULL_WIDTH = WIDTH + 2 * BOARD;
 
@@ -97,9 +97,9 @@ export type Shelf = ReturnType<typeof createShelf>;
 interface Placed {
 	item: Item;
 	group: Group;
-	label: HTMLElement;
 	centre: Vector3; // of its bounding box, in its own coordinates
-	height: number; // above the shelf it stands on
+	height: number; // how far its top is above the shelf it stands on
+	sunk: number; // how far its origin is above the shelf, its lowest point resting on it
 	size: number; // roughly its largest dimension
 	shelfPosition: Vector3;
 	shelfRotation: Quaternion;
@@ -111,6 +111,7 @@ interface Placed {
 
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
+const Z_AXIS = new Vector3(0, 0, 1);
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
@@ -123,9 +124,6 @@ export async function prepare(): Promise<Shelf> {
 
 function createShelf() {
 	const canvas = document.createElement('canvas');
-	// An overlay holding one caption per object.
-	const labels = document.createElement('div');
-	labels.className = 'labels';
 	// The page showing the scene, if one is.
 	let host: Host | undefined;
 
@@ -138,12 +136,7 @@ function createShelf() {
 	scene.background = new Color(0x000000);
 	const camera = new PerspectiveCamera();
 
-	const wood = new MeshStandardMaterial({ color: 0x4a443d, roughness: 0.9 });
-	const wallMaterial = new MeshStandardMaterial({ color: 0x2b2a2d, roughness: 1 });
-
-	const wall = new Mesh(new PlaneGeometry(60, 60), wallMaterial);
-	wall.receiveShadow = true;
-	scene.add(wall);
+	const steel = new MeshStandardMaterial({ color: 0x3b3b40, roughness: 0.7 });
 	scene.add(new HemisphereLight(0xcfd8ff, 0x1a1410, 0.22));
 
 	// Lights the wall around the unit, brightest at the top and falling off to the sides.
@@ -156,26 +149,30 @@ function createShelf() {
 
 	// The unit and its lights are rebuilt whenever the number of shelves changes.
 	let unit = new Group();
-	let shelfLights: SpotLight[] = [];
+	let shelfLights = new Map<number, SpotLight>(); // by shelf
 	let shelves = FIT_SHELVES;
 
 	const placed: Placed[] = items.map((item) => {
 		const group = item.build();
 		group.traverse((o) => (o.userData.item = item.id));
 		const bounds = new Box3().setFromObject(group);
-		const label = document.createElement('span');
-		label.textContent = item.label;
-		labels.append(label);
+		// Measured again as it stands on the shelf: turned, and tipped over if it leans, which lifts
+		// one edge of its base and drops the other.
+		const shelfRotation = new Quaternion()
+			.setFromAxisAngle(Y_AXIS, item.yaw ?? 0)
+			.multiply(new Quaternion().setFromAxisAngle(Z_AXIS, item.lean ?? 0));
+		group.quaternion.copy(shelfRotation);
+		const standing = new Box3().setFromObject(group);
 		scene.add(group);
 		return {
 			item,
 			group,
-			label,
 			centre: bounds.getCenter(new Vector3()),
-			height: bounds.max.y,
+			height: standing.max.y - standing.min.y + (item.up ?? 0),
+			sunk: item.flush ? 0 : (item.up ?? 0) - standing.min.y,
 			size: bounds.getSize(new Vector3()).length() * 0.8,
 			shelfPosition: new Vector3(),
-			shelfRotation: new Quaternion().setFromAxisAngle(Y_AXIS, item.yaw ?? 0),
+			shelfRotation,
 			heldPosition: new Vector3(),
 			heldRotation: new Quaternion(),
 			t: 0,
@@ -187,30 +184,39 @@ function createShelf() {
 	// surface above (the underside of the unit's top, for the first) to the shelf's own surface.
 	const pitch: number[] = [];
 	for (const p of placed) {
-		const needed = p.height + HEADROOM + BOARD;
-		pitch[p.item.shelf] = Math.max(pitch[p.item.shelf] ?? MIN_PITCH, needed);
+		if (p.item.shelf === WALL) continue;
+		// Something mounted in the rack fills its bay.
+		const needed = (p.item.flush ?? p.height + HEADROOM) + BOARD;
+		pitch[p.item.shelf] = Math.max(pitch[p.item.shelf] ?? 0, needed);
 	}
+	const lit = new Set(items.filter((item) => !item.fixed && item.shelf !== WALL).map((item) => item.shelf));
 	const drop = (count: number) => pitch.slice(0, count).reduce((sum, h) => sum + h, 0);
-	const unitHeight = (count = shelves) => drop(count) + BOARD;
+	// From y = 0 down to the floor.
+	const unitHeight = (count = shelves) => drop(count) + BOARD + LEGS;
 	const shelfY = (index: number) => -drop(index + 1);
+
+	// The walls, the floor the legs stand on, and what is outside (see room.ts).
+	const room = buildRoom(unitHeight(FIT_SHELVES));
+	scene.add(room.group);
 
 	function buildUnit() {
 		scene.remove(unit);
-		for (const light of shelfLights) light.dispose();
+		for (const light of shelfLights.values()) light.dispose();
 		unit.traverse((o) => o instanceof Mesh && o.geometry.dispose());
 		unit = new Group();
-		shelfLights = [];
+		shelfLights = new Map();
 
 		const height = unitHeight();
 		const add = (w: number, h: number, d: number, x: number, y: number, z: number) => {
-			const m = new Mesh(new BoxGeometry(w, h, d), wood);
+			const m = new Mesh(new BoxGeometry(w, h, d), steel);
 			m.position.set(x, y, z);
 			m.castShadow = true;
 			m.receiveShadow = true;
 			unit.add(m);
 		};
 		// Open shelving: no back or sides, just a post at each corner. The posts stop at the top
-		// shelf, which has nothing over it, and the wall shows through behind.
+		// shelf, which has nothing over it, and carry on below the bottom one as legs. The wall
+		// shows through behind.
 		const posts = height + shelfY(0);
 		for (const side of [-1, 1]) {
 			for (const z of [POST / 2 - 0.005, DEPTH - POST / 2 + 0.005]) {
@@ -220,8 +226,10 @@ function createShelf() {
 		for (let i = 0; i < shelves; i++) {
 			add(FULL_WIDTH, BOARD, DEPTH, 0, shelfY(i) - BOARD / 2, DEPTH / 2);
 
-			// One light per shelf at the front, pointing down and back: tucked under the shelf above,
-			// or for the top shelf hanging in the air over it.
+			// A shelf with something on it to pick up has a light at the front, pointing down and
+			// back: tucked under the shelf above, or for the top shelf hanging in the air over it.
+			// The rest of the rack has only the light that falls on the wall.
+			if (!lit.has(i)) continue;
 			const light = new SpotLight(0xffdfb8, SHELF_LIGHT, 5, 1.2, 0.85, 1.4);
 			const over = i === 0 ? pitch[0] + 0.25 : pitch[i] - BOARD - 0.03;
 			light.position.set(0, shelfY(i) + over, DEPTH * 0.98);
@@ -236,18 +244,28 @@ function createShelf() {
 			light.shadow.autoUpdate = false;
 			light.shadow.needsUpdate = true;
 			unit.add(light, light.target);
-			shelfLights.push(light);
+			shelfLights.set(i, light);
 		}
 		scene.add(unit);
+
+		room.group.position.y = -height;
 
 		wash.position.set(0, 2.2, 4.5);
 		wash.target.position.set(0, -height * 0.35, 0);
 
 		for (const p of placed) {
-			const present = p.item.shelf < shelves;
-			p.group.visible = present;
-			p.label.hidden = !present;
-			p.shelfPosition.set(p.item.x, shelfY(p.item.shelf), DEPTH * (1 - (p.item.back ?? 0.5)));
+			p.group.visible = p.item.shelf < shelves;
+			if (p.item.shelf === WALL) {
+				// Just off the wall: against the board, or hanging from a hook.
+				p.shelfPosition.set(p.item.x, (p.item.up ?? 0) - height, 0.034);
+				continue;
+			}
+			p.shelfPosition.set(
+				p.item.x,
+				shelfY(p.item.shelf) + p.sunk,
+				// A mounted panel lies against the fronts of the posts.
+				p.item.flush ? DEPTH + 0.008 : DEPTH * (1 - (p.item.back ?? 0.5))
+			);
 		}
 	}
 
@@ -377,7 +395,6 @@ function createShelf() {
 	let frame = 0;
 	let last = 0;
 	let hovered: Placed | undefined;
-	const projected = new Vector3();
 
 	function request() {
 		if (host && !frame) frame = requestAnimationFrame(draw);
@@ -407,7 +424,7 @@ function createShelf() {
 				moving = true;
 			}
 			if (p.t !== was || p.nudge !== leant) {
-				const light = shelfLights[p.item.shelf];
+				const light = shelfLights.get(p.item.shelf);
 				if (light) light.shadow.needsUpdate = true;
 			}
 			const e = ease(p.t);
@@ -417,20 +434,12 @@ function createShelf() {
 			lift = Math.max(lift, e);
 		}
 
-		for (const light of shelfLights) light.intensity = SHELF_LIGHT * (1 - DIM * lift);
+		for (const light of shelfLights.values()) light.intensity = SHELF_LIGHT * (1 - DIM * lift);
 		wash.intensity = 60 * (1 - DIM * lift);
 		heldLight.intensity = 9 * lift;
+		room.dim(DIM * lift);
 
 		renderer.render(scene, camera);
-
-		// Captions sit just under each object's spot on the front edge of its shelf.
-		for (const p of placed) {
-			if (p.label.hidden) continue;
-			projected.set(p.shelfPosition.x, p.shelfPosition.y - BOARD, DEPTH).project(camera);
-			const x = ((projected.x + 1) / 2) * width;
-			const y = ((1 - projected.y) / 2) * height;
-			p.label.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, 3px)`;
-		}
 
 		if (moving) request();
 		else last = 0;
@@ -449,9 +458,17 @@ function createShelf() {
 			-((event.clientY - rect.top) / rect.height) * 2 + 1
 		);
 		raycaster.setFromCamera(pointer, camera);
+		// The rack and the board are not objects, but they hide what is behind them.
 		const targets: Object3D[] = placed.filter((p) => p.group.visible).map((p) => p.group);
-		const hit = raycaster.intersectObjects(targets, true)[0];
-		return hit && placed.find((p) => p.item.id === hit.object.userData.item);
+		const hit = raycaster.intersectObjects([...targets, unit, room.board], true)[0];
+		// A press on the board itself is for the flier nearest to it.
+		if (hit?.object === room.board) {
+			const from = (p: Placed) => Math.hypot(p.shelfPosition.x - hit.point.x, p.shelfPosition.y - hit.point.y);
+			const fliers = placed.filter((p) => p.item.id.startsWith('flier-') && p !== held);
+			return fliers.sort((a, b) => from(a) - from(b))[0];
+		}
+		// Something that stays on the shelf is not a hit, but it does hide what is behind it.
+		return hit && placed.find((p) => p.item.id === hit.object.userData.item && !p.item.fixed);
 	}
 
 	function onPointerDown(event: PointerEvent) {
@@ -502,8 +519,7 @@ function createShelf() {
 	return {
 		/** Bring an object forward (by id), or put whatever is held back (null). */
 		pick(id: string | null) {
-			held = placed.find((p) => p.item.id === id && p.group.visible);
-			labels.classList.toggle('held', !!held);
+			held = placed.find((p) => p.item.id === id && p.group.visible && !p.item.fixed);
 			if (held) hold(held);
 			request();
 		},
@@ -538,7 +554,7 @@ function createShelf() {
 		/** Put the scene on a page, inside `element`, drawn before this returns. */
 		attach(element: HTMLElement, page: Host) {
 			host = page;
-			element.append(canvas, labels);
+			element.append(canvas);
 			window.addEventListener('scroll', follow, { passive: true });
 			window.addEventListener('resize', layout);
 			layout();
@@ -555,11 +571,9 @@ function createShelf() {
 			window.removeEventListener('scroll', follow);
 			window.removeEventListener('resize', layout);
 			canvas.remove();
-			labels.remove();
 			held = hovered = undefined;
-			labels.classList.remove('held');
 			for (const p of placed) p.t = p.nudge = 0;
-			for (const light of shelfLights) light.shadow.needsUpdate = true;
+			for (const light of shelfLights.values()) light.shadow.needsUpdate = true;
 		}
 	};
 }

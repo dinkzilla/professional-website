@@ -55,8 +55,8 @@
 		return () => document.documentElement.classList.remove('shelf-held');
 	});
 
-	// The hard hat's link paints the work site over this page with a roller (see #lib/roller.ts).
-	// The module is loaded when the hat is picked up, ahead of the click.
+	// The tie's link paints the work site over this page with a roller (see #lib/roller.ts).
+	// The module is loaded when the tie is picked up, ahead of the click.
 	let rolling = false;
 
 	function warmRoller() {
@@ -64,7 +64,7 @@
 	}
 
 	$effect(() => {
-		if (picked?.id === 'work') warmRoller();
+		if (picked?.id === 'tie') warmRoller();
 	});
 
 	async function rollPaint(event: MouseEvent) {
@@ -106,7 +106,7 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="probe" bind:this={probe}></div>
-<!-- The scene puts its canvas and captions in here. -->
+<!-- The scene puts its canvas in here. -->
 <div class="stage" bind:this={stage}></div>
 
 <!-- Gives the document its height, so the unit scrolls like ordinary page content. -->
@@ -117,7 +117,7 @@
 		<button class="close" onclick={() => tap(null)} aria-label="Put it back">×</button>
 		<h2>{picked.label}</h2>
 		<p>{picked.blurb}</p>
-		{#if picked.id === 'work'}
+		{#if picked.id === 'tie'}
 			<p><a href={href('work', '/')} onclick={rollPaint}>Go to the work site →</a></p>
 		{/if}
 	</aside>
@@ -139,39 +139,15 @@
 		visibility: hidden;
 	}
 
-	/* The canvas and the captions are the scene's own elements, so these rules reach them as
-	   globals inside the stage. */
-	.stage :global(canvas),
-	.stage :global(.labels) {
+	/* The canvas is the scene's own element, so this rule reaches it as a global inside the
+	   stage. */
+	.stage :global(canvas) {
+		display: block;
 		position: fixed;
 		top: 0;
 		left: 0;
 		width: 100%;
 		height: 100lvh;
-	}
-
-	.stage :global(canvas) {
-		display: block;
-	}
-
-	.stage :global(.labels) {
-		overflow: hidden;
-		pointer-events: none;
-		transition: opacity 0.3s;
-	}
-
-	.stage :global(.labels.held) {
-		opacity: 0;
-	}
-
-	.stage :global(.labels span) {
-		position: absolute;
-		top: 0;
-		left: 0;
-		color: #8f8a82;
-		font: 10px/1 'Martian Mono Variable', ui-monospace, monospace;
-		letter-spacing: 0.04em;
-		white-space: nowrap;
 	}
 
 	.spacer {
