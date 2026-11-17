@@ -47,6 +47,8 @@ interface Placement {
 	 * the panel at z = 0 and its bottom edge at y = 0, and `back` is ignored.
 	 */
 	flush?: number;
+	/** On the wall, pinned to the board: it is moved with the board (see PINBOARD). */
+	pinned?: boolean;
 	/** Stays on the shelf: it cannot be picked up. */
 	fixed?: boolean;
 	/** Its attitude once picked up: pitch (tipped toward the viewer) and yaw, in radians. */
@@ -63,8 +65,10 @@ export type Item = Entry & Placement;
 export const WALL = -1;
 // The board on the wall that the fliers are pinned to: its edges along the wall, and above the
 // floor. Its right end is behind the rack, so that some of it shows where the window is only as
-// wide as the rack.
-export const PINBOARD = { left: -2.1, right: -0.3, bottom: 1.15, top: 2.55 };
+// wide as the rack. The heights are as it was laid out: it is hung with its top level with the top
+// of the door's opening, which is as high as the rack and what stands on it, so the board and
+// everything pinned to it are moved up or down together by the difference (`lift` in room.ts).
+export const PINBOARD = { left: -2, right: -0.3, bottom: 1.21, top: 2.4 };
 
 // The middle one of the three hooks by the door, which the tie hangs on (they are built in
 // room.ts): where along the wall, and how far above the floor.
@@ -87,6 +91,11 @@ export const AMP_JACK = { x: AMP.x + 0.42, y: 0.89, z: AMP.gap + AMP.d };
 const light = new MeshStandardMaterial({ color: 0xbdbcb6, roughness: 0.85 });
 const mid = new MeshStandardMaterial({ color: 0x77767a, roughness: 0.8 });
 const dark = new MeshStandardMaterial({ color: 0x232326, roughness: 0.6 });
+// A monitor's case and stand: a deeper black than the rack's, and polished, so that it catches
+// the room's lights where the rack's powder coat does not. It is not given the room to reflect:
+// seen edge on, as the sides of the panel are, a polished thing reflects nearly everything, and
+// the wall showed in them as a pale border all the way round it.
+const gloss = new MeshStandardMaterial({ color: 0x050506, roughness: 0.22 });
 const accent = new MeshStandardMaterial({ color: 0xd9a400, roughness: 0.55 });
 const page = new MeshStandardMaterial({ color: 0xe6e1d4, roughness: 0.95 });
 // Bright enough to show in the dim of the room.
@@ -180,11 +189,14 @@ export function screw() {
 const PANEL = RACK_WIDTH + 2 * BOARD + 0.01;
 const EAR = 0.08; // the strip at each end of a panel that is bolted to the posts
 const PANEL_HEIGHT = 0.3; // both rack-mounted pieces are the same height
-// Where the tv stands on top of the rack: how far back (see Placement), and its size.
-const TV_BACK = 0.45;
-const TV_DEPTH = 0.6;
-const TV_YAW = -0.22; // turned a little to its right, toward where it is seen from
-const TV_HEIGHT = 0.67; // to its flat top, which the cat's bed is on
+// Where the tv stands on top of the rack: how far back (see Placement), and its size. The cat's
+// bed is on the rack's top at the front left, in front of the near end of the panel.
+const TV_BACK = 0.63; // toward the back, leaving the front left of the rack's top for the cat
+const TV_X = 0.27; // and to the right
+const TV_DEPTH = 0.36; // of its foot
+const TV_FOOT = 0.045; // and the foot's thickness
+const TV_YAW = -0.3; // turned to its right, away from the door and toward where it is seen from
+const TV_RAISED = 0.14; // how far the bottom of the panel is above what it stands on
 
 /** A rack-mounted panel of this height with its front at z = 0, and the case behind it. */
 function panel(h: number, depth: number, material: Material) {
@@ -204,44 +216,42 @@ function panel(h: number, depth: number, material: Material) {
 }
 
 function tv() {
-	// A CRT monitor on a swivel foot: a shallow housing round the tube, whose whole front is glass
-	// bulging well out, and behind it a case that narrows toward the back, as the tube inside
-	// does. The top stays flat; the underside rises.
+	// A flat monitor on a stand, everything about the stand made bigger than life so that it shows:
+	// one thick slab of a foot; toward the back of it the arm, which is two uprights with a slot
+	// right through between them for cables, joined across the bottom by a bar (and across the
+	// top too, but that is behind the panel); and on the arm's front the panel itself, thin, with
+	// a shallow hump on its back and almost no border round the picture except along the bottom.
 	const g = new Group();
-	const w = 0.84;
-	const foot = 0.05;
-	const h = TV_HEIGHT - foot;
-	const d = TV_DEPTH;
-	const housing = 0.16; // depth of the part round the tube's face
-	const rim = 0.04; // of housing showing around the glass
-	const bulge = 0.09;
-	g.add(mesh(new CylinderGeometry(0.2, 0.24, foot, 40), dark, 0, foot / 2, 0.04));
-	g.add(box(w, h, housing, mid, 0, foot, d / 2 - housing / 2));
+	const foot = { w: 0.58, h: TV_FOOT, d: TV_DEPTH };
+	const arm = { w: 0.21, d: 0.05, z: -foot.d / 2 + 0.07, upright: 0.06, bar: 0.04 };
+	const w = 1.08;
+	const edge = 0.012; // the border round the picture
+	const chin = 0.036; // and along the bottom
+	const pictureH = ((w - 2 * edge) * 9) / 16;
+	const h = pictureH + edge + chin;
+	const thin = 0.03;
+	// The middle of the panel's thickness. Its back is flat against the arm's front, with no gap
+	// between them for the wall to show through.
+	const z = arm.z + arm.d / 2 + thin / 2;
+	const top = TV_RAISED + h;
 
-	const back = new BoxGeometry(w - 0.04, h, d - housing);
-	const corner = back.attributes.position;
-	for (let i = 0; i < corner.count; i++) {
-		if (corner.getZ(i) > 0) continue; // only the far end is drawn in
-		corner.setX(i, corner.getX(i) * 0.55);
-		if (corner.getY(i) < 0) corner.setY(i, corner.getY(i) + h * 0.45);
+	g.add(box(foot.w, foot.h, foot.d, gloss));
+	for (const side of [-1, 1]) {
+		g.add(box(arm.upright, top - 0.12 - foot.h, arm.d, gloss, (side * (arm.w - arm.upright)) / 2, foot.h, arm.z));
 	}
-	back.computeVertexNormals();
-	g.add(mesh(back, mid, 0, foot + h / 2, -housing / 2));
+	g.add(box(arm.w, arm.bar, arm.d, gloss, 0, foot.h, arm.z));
+	// The slot is closed off above, out of sight, where the panel is fixed to the arm.
+	g.add(box(arm.w, top - 0.12 - (TV_RAISED + 0.06), arm.d, gloss, 0, TV_RAISED + 0.06, arm.z));
+	// The hump on the panel's back, which the arm is let into.
+	g.add(box(w * 0.55, h * 0.55, 0.02, gloss, 0, TV_RAISED + h * 0.2, z - thin / 2 - 0.01));
 
-	const chin = 0.09; // the deeper strip of housing under the glass
-	const glassH = h - rim - chin;
-	const glass = new PlaneGeometry(w - 2 * rim, glassH, 32, 32);
-	const at = glass.attributes.position;
-	for (let i = 0; i < at.count; i++) {
-		// Highest in the middle, falling away to nothing at the edges.
-		const u = at.getX(i) / ((w - 2 * rim) / 2);
-		const v = at.getY(i) / (glassH / 2);
-		at.setZ(i, bulge * (1 - u * u) * (1 - v * v));
+	g.add(box(w, h, thin, gloss, 0, TV_RAISED, z));
+	g.add(box(w - 2 * edge, pictureH, 0.002, screen, 0, TV_RAISED + chin, z + thin / 2));
+	// Along the bottom at the right, its buttons and the power light.
+	for (let i = 0; i < 4; i++) {
+		g.add(box(0.012, 0.006, 0.003, mid, w / 2 - 0.17 + i * 0.026, TV_RAISED + chin / 2 - 0.003, z + thin / 2));
 	}
-	glass.computeVertexNormals();
-	g.add(mesh(glass, screen, 0, foot + chin + glassH / 2, d / 2 + 0.001));
-	// The power light.
-	g.add(box(0.025, 0.012, 0.004, accent, w / 2 - 0.08, foot + chin / 2 - 0.006, d / 2));
+	g.add(box(0.012, 0.006, 0.003, accent, w / 2 - 0.05, TV_RAISED + chin / 2 - 0.003, z + thin / 2));
 	return g;
 }
 
@@ -304,8 +314,10 @@ function videoModule() {
 	g.add(lever);
 
 	// The HDMI socket at the left, upright, and the cable plugged into it, its plug far bigger
-	// than life. The cable hangs in a long loop in front of the rack, goes round the left-hand
-	// post, climbs the rack's side to its top, and ends out of sight behind the tv.
+	// than life. The cable drops from the plug and hangs in one long sag across the front of the
+	// rack, up to the right-hand end of its top, where it goes over the lip and back along the
+	// top, over the end of the tv's foot and under the tv itself, then up behind it to the socket
+	// on its back.
 	const port = new Vector3(-0.42, 0.15, 0);
 	const plug = { w: 0.065, h: 0.13, d: 0.13 };
 	g.add(box(plug.w + 0.02, plug.h + 0.02, 0.004, dark, port.x, port.y - plug.h / 2 - 0.01, 0));
@@ -313,24 +325,31 @@ function videoModule() {
 	g.add(box(plug.w - 0.02, plug.h - 0.03, 0.02, light, port.x, port.y - plug.h / 2 + 0.015, 0.012)); // its metal end
 	g.add(round(0.024, 0.05, plugRed, port.x, port.y, plug.d)); // where the cable leaves it
 	const out = plug.d + 0.05;
-	const side = -(PANEL / 2 + 0.035); // just clear of the rack's left side
-	const top = h + BOARD + 0.017; // lying on the rack's top
-	const wall = -(RACK_DEPTH + 0.008); // the back of the rack, from the front of the panel
-	const behind = wall + (RACK_DEPTH * (1 - TV_BACK) - TV_DEPTH / 2) / 2; // between the tv and the rack's back
+	const R = 0.014; // the cable's radius
+	const up = 0.45; // where along the rack it goes over the lip: just right of the toggle
+	const top = h + BOARD + R; // lying on the rack's top
+	const foot = top + TV_FOOT; // lying on the tv's foot, which it crosses
 	const path = new CatmullRomCurve3([
 		new Vector3(port.x, port.y, out),
-		new Vector3(port.x, port.y - 0.02, out + 0.08),
-		new Vector3(port.x - 0.03, port.y - 0.22, out + 0.12),
-		new Vector3(port.x - 0.1, -0.26, out + 0.06),
-		new Vector3(side + 0.03, -0.32, 0.12),
-		new Vector3(side, -0.22, -0.05),
-		new Vector3(side, 0.02, -0.2),
-		new Vector3(side, 0.22, -0.4),
-		new Vector3(side + 0.02, top, -0.55),
-		new Vector3(side + 0.12, top, behind - 0.02),
-		new Vector3(-0.3, top, behind),
-		new Vector3(-0.15, top + 0.06, behind),
-		new Vector3(-0.1, top + 0.3, behind)
+		new Vector3(port.x, port.y - 0.01, out + 0.06),
+		new Vector3(port.x + 0.005, port.y - 0.06, out + 0.1),
+		new Vector3(port.x + 0.03, port.y - 0.14, out + 0.09),
+		new Vector3(port.x + 0.12, port.y - 0.2, out + 0.05),
+		new Vector3(port.x + 0.3, port.y - 0.225, 0.17),
+		new Vector3(port.x + 0.5, port.y - 0.2, 0.12),
+		new Vector3(port.x + 0.68, port.y - 0.13, 0.085),
+		new Vector3(up - 0.05, port.y - 0.06, 0.07),
+		new Vector3(up - 0.01, port.y + 0.03, 0.055),
+		new Vector3(up, h - 0.04, 0.04),
+		new Vector3(up, top - 0.01, 0.015),
+		new Vector3(up, top + 0.002, -0.04),
+		new Vector3(up, top, -0.12),
+		new Vector3(up, top + 0.025, -0.185),
+		new Vector3(up, foot, -0.24),
+		new Vector3(up, foot, -0.4),
+		new Vector3(up - 0.005, foot + 0.05, -0.52),
+		new Vector3(up - 0.02, top + 0.22, -0.55),
+		new Vector3(up - 0.06, top + 0.34, -0.53)
 	]);
 	g.add(braided(path, '#131313', '#c22424', 4)); // black, flecked with red
 	return g;
@@ -556,11 +575,11 @@ function flier(index: number, w: number, h: number) {
 
 // Pinned up none too carefully: where along the wall, how high, how crooked, and its size.
 const pinned: [number, number, number, number, number][] = [
-	[-1.82, 2.14, 0.05, 0.4, 0.56],
-	[-1.3, 2.2, -0.04, 0.42, 0.58],
-	[-0.72, 2.16, 0.03, 0.4, 0.56],
-	[-1.56, 1.52, -0.06, 0.4, 0.54],
-	[-0.9, 1.5, 0.07, 0.42, 0.58]
+	[-1.73, 2.05, 0.05, 0.34, 0.48],
+	[-1.24, 2.1, -0.04, 0.36, 0.49],
+	[-0.7, 2.07, 0.03, 0.34, 0.48],
+	[-1.49, 1.52, -0.06, 0.34, 0.46],
+	[-0.87, 1.51, 0.07, 0.36, 0.49]
 ];
 const fliers: Placement[] = pinned.map(([x, up, lean, w, h], i) => ({
 	id: `flier-${i + 1}`,
@@ -568,6 +587,7 @@ const fliers: Placement[] = pinned.map(([x, up, lean, w, h], i) => ({
 	x,
 	up,
 	lean,
+	pinned: true,
 	build: () => flier(i, w, h)
 }));
 
@@ -609,8 +629,8 @@ function tie() {
 }
 
 const placements: Placement[] = [
-	{ id: 'tv', shelf: 0, x: 0, back: TV_BACK, yaw: TV_YAW, fixed: true, build: tv },
-	{ id: 'cat', shelf: 0, x: 0.04, back: TV_BACK, up: TV_HEIGHT, yaw: TV_YAW + 0.5, fixed: true, build: catBed },
+	{ id: 'tv', shelf: 0, x: TV_X, back: TV_BACK, yaw: TV_YAW, fixed: true, build: tv },
+	{ id: 'cat', shelf: 0, x: -0.36, back: 0.26, yaw: 0.2, fixed: true, build: catBed },
 	{ id: 'video-module', shelf: 1, x: 0, flush: PANEL_HEIGHT, fixed: true, build: videoModule },
 	{
 		id: 'skull',

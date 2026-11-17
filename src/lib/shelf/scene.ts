@@ -400,7 +400,7 @@ function createShelf() {
 			p.group.visible = p.item.shelf < shelves;
 			if (p.item.shelf === WALL) {
 				// Just off the wall: against the board, or hanging from a hook.
-				p.shelfPosition.set(p.item.x, (p.item.up ?? 0) - height, 0.034);
+				p.shelfPosition.set(p.item.x, (p.item.up ?? 0) + (p.item.pinned ? room.lift : 0) - height, 0.034);
 				continue;
 			}
 			p.shelfPosition.set(

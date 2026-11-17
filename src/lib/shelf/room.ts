@@ -180,11 +180,13 @@ export function buildRoom(rackHeight: number) {
 	const boardW = PINBOARD.right - PINBOARD.left;
 	const boardH = PINBOARD.top - PINBOARD.bottom;
 	const boardX = (PINBOARD.left + PINBOARD.right) / 2;
-	const boardY = (PINBOARD.top + PINBOARD.bottom) / 2;
+	// Hung with its top level with the top of the door's opening.
+	const lift = doorHeight - PINBOARD.top;
+	const boardY = (PINBOARD.top + PINBOARD.bottom) / 2 + lift;
 	const board = box(boardW, boardH, 0.03, cork, boardX, boardY, 0.015);
 	board.receiveShadow = true;
 	for (const x of [PINBOARD.left, PINBOARD.right]) box(0.05, boardH + 0.05, 0.05, trim, x, boardY, 0.025);
-	for (const y of [PINBOARD.bottom, PINBOARD.top]) box(boardW + 0.05, 0.05, 0.05, trim, boardX, y, 0.025);
+	for (const y of [PINBOARD.bottom, PINBOARD.top]) box(boardW + 0.05, 0.05, 0.05, trim, boardX, y + lift, 0.025);
 
 	// The hooks by the door: three pegs with lips, on a rail. The tie hangs on the middle one (the
 	// tie is in items.ts); the other two are empty.
@@ -531,6 +533,8 @@ export function buildRoom(rackHeight: number) {
 		group,
 		/** The board the fliers are on: a press on it takes one of them down. */
 		board,
+		/** How far the board was moved up from where PINBOARD has it, and so what is pinned to it. */
+		lift,
 		/** Darken the daylight outside by this share, as the room's lights are when something is held. */
 		dim(share: number) {
 			for (const { material, colour } of outdoors) material.color.copy(colour).multiplyScalar(1 - share);
