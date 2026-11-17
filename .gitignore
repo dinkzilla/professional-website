@@ -5,6 +5,10 @@ node_modules
 /build
 /build-personal
 
+# The video module's clips at full size: far too big to commit or to serve. The versions made
+# from them for the site are in src/lib/assets/loops and src/lib/assets/triggers.
+/video-originals
+
 # OS
 .DS_Store
 Thumbs.db

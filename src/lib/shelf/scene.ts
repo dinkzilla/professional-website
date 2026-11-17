@@ -8,7 +8,11 @@
 // from its left at about eye level. One world unit is `ppu` pixels where the middle of the unit's
 // front edge is drawn.
 //
-// Nothing is drawn unless something changed: scroll, resize, hover, or an object in flight.
+// Nothing is drawn unless something changed: scroll, resize, hover, an object in flight, or one
+// that works by itself showing something new (the tv does, with every frame of video).
+//
+// Most objects are picked up to be looked at. Some have parts that work where they are (the video
+// module's knob and switch): those are pressed in place, with nothing picked up.
 //
 // The scene outlives the page that shows it. It owns its canvas, so it can be built and drawn
 // once before the personal page is ever visited (see ready.ts), then put on that page the moment
@@ -22,9 +26,11 @@ import {
 	Color,
 	CubeCamera,
 	ExtrudeGeometry,
+	Frustum,
 	Group,
 	HalfFloatType,
 	HemisphereLight,
+	Matrix4,
 	Mesh,
 	MeshStandardMaterial,
 	Object3D,
@@ -41,10 +47,23 @@ import {
 	Vector2,
 	Vector3,
 	WebGLCubeRenderTarget,
-	WebGLRenderer
+	WebGLRenderer,
+	type Intersection
 } from 'three';
 import { buildRoom } from './room.ts';
-import { BOARD, screw, items, LEGS, RACK_DEPTH, RACK_WIDTH, STANDOFF, WALL, type Item } from './items.ts';
+import {
+	BOARD,
+	screw,
+	items,
+	LEGS,
+	RACK_DEPTH,
+	RACK_WIDTH,
+	STANDOFF,
+	WALL,
+	type Control,
+	type Item,
+	type Works
+} from './items.ts';
 
 // The unit, in world units (one is about half a metre). The wall is the plane z = 0, the unit
 // stands a little off it (STANDOFF), and y = 0 is
@@ -125,6 +144,7 @@ interface Placed {
 	heldRotation: Quaternion;
 	t: number; // 0 on the shelf, 1 held
 	nudge: number; // 0 to 1: leaning out under the cursor
+	works?: Works; // what it does by itself, if anything
 }
 
 const X_AXIS = new Vector3(1, 0, 0);
@@ -236,9 +256,11 @@ function createShelf() {
 			heldPosition: new Vector3(),
 			heldRotation: new Quaternion(),
 			t: 0,
-			nudge: 0
+			nudge: 0,
+			works: group.userData.works
 		};
 	});
+	const working = placed.flatMap((p) => p.works ?? []);
 
 	// Each shelf is only as tall as its tallest object needs. `pitch` is the distance from the
 	// surface above (the underside of the unit's top, for the first) to the shelf's own surface.
@@ -435,6 +457,8 @@ function createShelf() {
 	let top = 0; // px from the top of the document to the top of the unit
 	let mode: LayoutMode = 'tall';
 	let held: Placed | undefined;
+	const view = new Frustum(); // what the window takes in, from where the camera is
+	const through = new Matrix4();
 
 	function layout() {
 		// Off the page, lay out for the window as a whole, which is what the canvas will cover.
@@ -500,6 +524,7 @@ function createShelf() {
 			.negate()
 			.add(new Vector3(middle, centre, DEPTH + STANDOFF));
 		camera.updateMatrixWorld();
+		view.setFromProjectionMatrix(through.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
 		for (const p of placed) hold(p);
 		request();
 	}
@@ -553,6 +578,15 @@ function createShelf() {
 		if (host && !frame) frame = requestAnimationFrame(draw);
 	}
 
+	/**
+	 * Draw again because an object that works by itself has changed. Told which part of it shows
+	 * the change, only if some of that part is in the window: a frame of video is not worth
+	 * drawing for a tv that has been scrolled out of sight.
+	 */
+	function redraw(showing?: Object3D) {
+		if (!showing || view.intersectsObject(showing)) request();
+	}
+
 	function draw(now: number) {
 		frame = 0;
 		// Real elapsed time, so that a slow device drops frames instead of slowing the motion down.
@@ -580,10 +614,12 @@ function createShelf() {
 			p.group.quaternion.slerpQuaternions(p.shelfRotation, p.heldRotation, e);
 			lift = Math.max(lift, e);
 		}
+		for (const works of working) if (works.tick(dt)) moving = true;
 
 		wash.intensity = 60 * (1 - DIM * lift);
 		heldLight.intensity = 9 * lift;
 		room.dim(DIM * lift);
+		for (const works of working) works.dim(DIM * lift);
 
 		renderer.render(scene, camera);
 
@@ -597,7 +633,8 @@ function createShelf() {
 	const pointer = new Vector2();
 	let down: { x: number; y: number; scroll: number } | undefined;
 
-	function itemAt(event: PointerEvent): Placed | undefined {
+	/** The first thing under the pointer, whatever it is. */
+	function under(event: { clientX: number; clientY: number }): Intersection | undefined {
 		const rect = canvas.getBoundingClientRect();
 		pointer.set(
 			((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -606,15 +643,25 @@ function createShelf() {
 		raycaster.setFromCamera(pointer, camera);
 		// The rack and the board are not objects, but they hide what is behind them.
 		const targets: Object3D[] = placed.filter((p) => p.group.visible).map((p) => p.group);
-		const hit = raycaster.intersectObjects([...targets, unit, room.board], true)[0];
+		return raycaster.intersectObjects([...targets, unit, room.board], true)[0];
+	}
+
+	/** The object that a press on this would pick up. */
+	function itemAt(hit: Intersection | undefined): Placed | undefined {
+		if (!hit) return;
 		// A press on the board itself is for the flier nearest to it.
-		if (hit?.object === room.board) {
+		if (hit.object === room.board) {
 			const from = (p: Placed) => Math.hypot(p.shelfPosition.x - hit.point.x, p.shelfPosition.y - hit.point.y);
 			const fliers = placed.filter((p) => p.item.id.startsWith('flier-') && p !== held);
 			return fliers.sort((a, b) => from(a) - from(b))[0];
 		}
 		// Something that stays on the shelf is not a hit, but it does hide what is behind it.
-		return hit && placed.find((p) => p.item.id === hit.object.userData.item && !p.item.fixed);
+		return placed.find((p) => p.item.id === hit.object.userData.item && !p.item.fixed);
+	}
+
+	/** The working part that a press on this would work. Nothing works while something is held. */
+	function controlAt(hit: Intersection | undefined): Control | undefined {
+		return held ? undefined : hit?.object.userData.control;
 	}
 
 	function onPointerDown(event: PointerEvent) {
@@ -629,17 +676,24 @@ function createShelf() {
 		// A press that moved, or that scrolled the page, was not a tap.
 		const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
 		if (moved > 10 || Math.abs(window.scrollY - start.scroll) > 4) return;
-		const hit = itemAt(event);
+		const hit = under(event);
+		const control = controlAt(hit);
+		const item = itemAt(hit);
 		// With something held, a tap anywhere (the object included) puts it back.
 		if (held) host?.onTap(null);
-		else if (hit) host?.onTap(hit.item.id);
+		else if (control) {
+			// A tap on a working part works it, where it is.
+			control.tap();
+			request();
+		} else if (item) host?.onTap(item.item.id);
 	}
 
 	function onPointerMove(event: PointerEvent) {
 		if (event.pointerType !== 'mouse') return;
-		const hit = itemAt(event);
-		const over = held ? (hit === held ? hit : undefined) : hit;
-		canvas.style.cursor = held || hit ? 'pointer' : '';
+		const hit = under(event);
+		const item = itemAt(hit);
+		const over = held ? (item === held ? item : undefined) : item;
+		canvas.style.cursor = held || item || controlAt(hit) ? 'pointer' : '';
 		if (over !== hovered) {
 			hovered = over;
 			request();
@@ -704,6 +758,7 @@ function createShelf() {
 			element.append(canvas);
 			window.addEventListener('scroll', follow, { passive: true });
 			window.addEventListener('resize', layout);
+			for (const works of working) works.start(redraw);
 			layout();
 			cancelAnimationFrame(frame);
 			frame = 0;
@@ -717,6 +772,7 @@ function createShelf() {
 			last = 0;
 			window.removeEventListener('scroll', follow);
 			window.removeEventListener('resize', layout);
+			for (const works of working) works.stop();
 			canvas.remove();
 			held = hovered = undefined;
 			for (const p of placed) p.t = p.nudge = 0;

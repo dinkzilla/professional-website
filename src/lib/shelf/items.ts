@@ -6,10 +6,12 @@ import {
 	BoxGeometry,
 	CanvasTexture,
 	CatmullRomCurve3,
+	CircleGeometry,
 	CylinderGeometry,
 	ExtrudeGeometry,
 	Group,
 	Mesh,
+	MeshBasicMaterial,
 	MeshStandardMaterial,
 	PlaneGeometry,
 	RepeatWrapping,
@@ -20,8 +22,12 @@ import {
 	TubeGeometry,
 	Vector3,
 	type BufferGeometry,
-	type Material
+	type Material,
+	type Object3D
 } from 'three';
+import { createFirmware } from '#lib/video-module/firmware.ts';
+import { createMpv } from '#lib/video-module/mpv.ts';
+import { createOled } from '#lib/video-module/oled.ts';
 import { catalogue, type Entry } from './catalogue.ts';
 
 interface Placement {
@@ -57,6 +63,33 @@ interface Placement {
 }
 
 export type Item = Entry & Placement;
+
+/**
+ * A part of an object that works where it is, without the object being picked up: a knob, a
+ * switch. It is kept in the part's userData.control, where the scene finds it under the pointer.
+ */
+export interface Control {
+	/** It was pressed and let go. */
+	tap: () => void;
+}
+
+/**
+ * What an object that does something by itself asks of the scene. It is kept in the userData.works
+ * of the group its builder returns.
+ */
+export interface Works {
+	/**
+	 * The scene has been put on a page. `redraw` has it drawn again, because the object has
+	 * changed; told which part of the object shows the change, only if that part is in view.
+	 */
+	start: (redraw: (showing?: Object3D) => void) => void;
+	/** The scene has been taken off its page. */
+	stop: () => void;
+	/** Move its parts on by `dt` seconds: true if they have further to go. */
+	tick: (dt: number) => boolean;
+	/** The room's lights are down by this share. */
+	dim: (share: number) => void;
+}
 
 // The rack the objects go in, in world units (one is about half a metre): its width inside, between
 // the posts; its depth, front to back; and the thickness of its shelves. They are here because
@@ -112,6 +145,9 @@ const screen = new MeshStandardMaterial({
 	emissive: 0x2a3d4a,
 	emissiveIntensity: 0.6
 });
+// The glass of a display where it has no pixels: as black as pixels that are off, whatever light
+// the room is in.
+const unlit = new MeshBasicMaterial({ color: 0x000000 });
 
 function mesh(geometry: BufferGeometry, material: Material, x = 0, y = 0, z = 0) {
 	const m = new Mesh(geometry, material);
@@ -130,6 +166,25 @@ function round(r: number, depth: number, material: Material, x: number, y: numbe
 	const m = mesh(new CylinderGeometry(r, r, depth, 32), material, x, y, z + depth / 2);
 	m.rotation.x = Math.PI / 2;
 	return m;
+}
+
+/**
+ * A knob made to be gripped: a cylinder with shallow flutes all the way round it, each taking
+ * `cut` of the radius where it is deepest. It stands on its end until the caller turns it.
+ */
+function fluted(r: number, depth: number, flutes: number, cut: number) {
+	const geometry = new CylinderGeometry(r, r, depth, flutes * 8);
+	const at = geometry.attributes.position;
+	for (let i = 0; i < at.count; i++) {
+		const x = at.getX(i);
+		const z = at.getZ(i);
+		if (!x && !z) continue; // the middles of its two ends
+		const k = 1 - cut * (0.5 - 0.5 * Math.cos(Math.atan2(z, x) * flutes));
+		at.setX(i, x * k);
+		at.setZ(i, z * k);
+	}
+	geometry.computeVertexNormals();
+	return geometry;
 }
 
 /** A cone from the origin of its own group, which the caller places and turns. */
@@ -185,6 +240,31 @@ export function screw() {
 	return g;
 }
 
+/**
+ * The line of a cable of this length hanging freely between two points: a catenary, in the
+ * upright plane through them. `n` points, both ends included.
+ */
+function hang(from: Vector3, to: Vector3, length: number, n = 24) {
+	const across = Math.hypot(to.x - from.x, to.z - from.z);
+	const rise = to.y - from.y;
+	// The catenary's scale `c` is whatever makes a curve of this length span this far.
+	const span = Math.sqrt(length * length - rise * rise);
+	let low = 1e-3;
+	let high = 1e3;
+	for (let i = 0; i < 80; i++) {
+		const c = Math.sqrt(low * high);
+		if (2 * c * Math.sinh(across / (2 * c)) > span) low = c;
+		else high = c;
+	}
+	const c = Math.sqrt(low * high);
+	const lowest = across / 2 - c * Math.atanh(rise / length); // how far across its lowest point is
+	return Array.from({ length: n }, (_, i) => {
+		const t = i / (n - 1);
+		const y = from.y + c * (Math.cosh((t * across - lowest) / c) - Math.cosh(lowest / c));
+		return new Vector3(from.x + (to.x - from.x) * t, y, from.z + (to.z - from.z) * t);
+	});
+}
+
 // The width of a rack-mounted panel: right across the rack, over the fronts of its posts.
 const PANEL = RACK_WIDTH + 2 * BOARD + 0.01;
 const EAR = 0.08; // the strip at each end of a panel that is bolted to the posts
@@ -214,6 +294,76 @@ function panel(h: number, depth: number, material: Material) {
 	}
 	return g;
 }
+
+/**
+ * The video module's workings (see #lib/video-module): its program, the player the program
+ * drives, and its display. They make two pictures, and each is a texture here: the display's,
+ * which is on the module's own panel, and the player's, which is on the tv the module is plugged
+ * into. Nothing is fetched or played until the scene is first put on a page.
+ */
+function videoWorkings() {
+	// While the scene is on a page: has it drawn again.
+	let redraw: ((showing?: Object3D) => void) | undefined;
+	let tvPicture: Object3D | undefined;
+	let switchedOn = false;
+	// The toggle switch. Up is high, which the program takes to mean at random.
+	let high = true;
+
+	const oled = createOled(() => {
+		readout.needsUpdate = true;
+		redraw?.();
+	});
+	const mpv = createMpv(() => {
+		picture.needsUpdate = true;
+		redraw?.(tvPicture);
+	});
+	const firmware = createFirmware(mpv, oled, () => high);
+	const readout = new CanvasTexture(oled.canvas);
+	const picture = new CanvasTexture(mpv.picture);
+	for (const map of [readout, picture]) {
+		map.colorSpace = SRGBColorSpace;
+		map.anisotropy = 8;
+	}
+	// Both give out light of their own, so neither is lit by the room.
+	const glow = new MeshBasicMaterial({ map: readout, toneMapped: false });
+	const lcd = new MeshBasicMaterial({ map: picture, toneMapped: false });
+
+	return {
+		firmware,
+		/** What the module's display is made of, and the tv's picture. */
+		glow,
+		lcd,
+		/** The part of the tv the picture is on: a new frame is only worth drawing if it is in view. */
+		shownOn(part: Object3D) {
+			tvPicture = part;
+		},
+		get high() {
+			return high;
+		},
+		flip() {
+			high = !high;
+		},
+		start(ask: (showing?: Object3D) => void) {
+			redraw = ask;
+			mpv.run(true);
+			if (switchedOn) return;
+			switchedOn = true;
+			firmware.main();
+		},
+		stop() {
+			redraw = undefined;
+			mpv.run(false);
+		},
+		dim(share: number) {
+			glow.color.setScalar(1 - share);
+			lcd.color.setScalar(1 - share);
+		}
+	};
+}
+
+// Made when the first of the tv and the module is built, and shared by the two.
+let workings: ReturnType<typeof videoWorkings> | undefined;
+const video = () => (workings ??= videoWorkings());
 
 function tv() {
 	// A flat monitor on a stand, everything about the stand made bigger than life so that it shows:
@@ -246,7 +396,16 @@ function tv() {
 	g.add(box(w * 0.55, h * 0.55, 0.02, gloss, 0, TV_RAISED + h * 0.2, z - thin / 2 - 0.01));
 
 	g.add(box(w, h, thin, gloss, 0, TV_RAISED, z));
-	g.add(box(w - 2 * edge, pictureH, 0.002, screen, 0, TV_RAISED + chin, z + thin / 2));
+	// The picture is whatever the video module is sending it.
+	const picture = mesh(
+		new PlaneGeometry(w - 2 * edge, pictureH),
+		video().lcd,
+		0,
+		TV_RAISED + chin + pictureH / 2,
+		z + thin / 2 + 0.001
+	);
+	video().shownOn(picture);
+	g.add(picture);
 	// Along the bottom at the right, its buttons and the power light.
 	for (let i = 0; i < 4; i++) {
 		g.add(box(0.012, 0.006, 0.003, mid, w / 2 - 0.17 + i * 0.026, TV_RAISED + chin / 2 - 0.003, z + thin / 2));
@@ -302,54 +461,136 @@ function catBed() {
 function videoModule() {
 	const h = PANEL_HEIGHT;
 	const g = panel(h, 0.3, mid);
-	// A small display, one knob and a toggle switch.
-	g.add(box(0.26, 0.17, 0.006, dark, -0.1, 0.065, 0));
-	g.add(box(0.22, 0.13, 0.006, screen, -0.1, 0.085, 0.003));
-	g.add(round(0.055, 0.045, dark, 0.22, h / 2, 0));
-	g.add(round(0.024, 0.01, dark, 0.4, h / 2, 0));
+	const inside = video();
+	// A display, one knob and a toggle switch, all of which work (see #lib/video-module). Along
+	// the panel from the left: the plug, the display, the knob and the toggle, the first and last
+	// as far from the panel's ends as each other, and the display filling what is left between
+	// the plug and the knob. The gaps allow for the plug and the knob standing out from the panel,
+	// which from where they are seen puts their faces to the right of their feet.
+	//
+	// The display is 128 pixels by 32, so four times as wide as it is tall. The pixels do not go
+	// to the edge of its glass: there is a margin of glass that never lights, and round that a
+	// dark surround.
+	const lit = { w: 0.51, h: 0.1275, x: -0.0575 };
+	const margin = 0.012;
+	const surround = 0.02;
+	const glass = { w: lit.w + 2 * margin, h: lit.h + 2 * margin };
+	g.add(box(glass.w + 2 * surround, glass.h + 2 * surround, 0.006, dark, lit.x, (h - glass.h) / 2 - surround, 0));
+	g.add(mesh(new PlaneGeometry(glass.w, glass.h), unlit, lit.x, h / 2, 0.0035));
+	g.add(mesh(new PlaneGeometry(lit.w, lit.h), inside.glow, lit.x, h / 2, 0.004));
+
+	// The knob turns without end, a click at a time, and is pushed in to press it. The flutes
+	// round its edge are what show it turning, and the white circle in the middle of its face is
+	// where it is pushed.
+	const KNOB = 0.336; // where along the panel it is
+	const CLICKS = 24; // to a full turn
+	const FACE = 0.045; // how far its face stands off the panel
+	const MIDDLE = 0.028; // the radius of the white circle
+	const knob = new Group();
+	const grip = mesh(fluted(0.055, FACE, 16, 0.09), dark, 0, 0, FACE / 2);
+	grip.rotation.x = Math.PI / 2;
+	knob.add(grip, round(MIDDLE, 0.003, white, 0, 0, FACE));
+	knob.position.set(KNOB, h / 2, 0);
+	g.add(knob);
+
+	const TOGGLE = 0.475;
+	g.add(round(0.024, 0.01, dark, TOGGLE, h / 2, 0));
 	const lever = new Group();
 	lever.add(mesh(new CylinderGeometry(0.008, 0.008, 0.06, 12), light, 0, 0.03, 0));
-	lever.position.set(0.4, h / 2, 0.008);
-	lever.rotation.x = Math.PI / 2 - 0.5; // sticking out, thrown upward
+	lever.position.set(TOGGLE, h / 2, 0.008);
 	g.add(lever);
 
+	let clicks = 0; // how many the knob has been turned through, clockwise, and
+	let turned = 0; // how many of them it has got round so far
+	let pushed = 0; // 1 when it is pushed right in, and falling back to 0
+	let thrown = 1; // the lever: 1 is up, 0 down
+	const pose = () => {
+		knob.rotation.z = (-turned * 2 * Math.PI) / CLICKS;
+		knob.position.z = -0.012 * pushed;
+		knob.scale.setScalar(1 - 0.06 * pushed);
+		lever.rotation.x = Math.PI / 2 + 0.5 - thrown; // sticking out, thrown upward or downward
+	};
+	pose();
+
+	// Both are worked by pressing them, through unseen shapes that are easier to hit than the
+	// things themselves. The knob has three, flat against its face. The white circle pushes it
+	// in. The rest of it, and a little way out beyond its edge, is divided in two by a line at 45
+	// degrees through its middle, which is not marked: a press above and to the left of the line
+	// turns the knob one click anticlockwise, which is up the list, and a press below and to the
+	// right of it turns it one click clockwise, which is down.
+	const press = (shape: BufferGeometry, x: number, z: number, tap: () => void) => {
+		const m = new Mesh(shape, dark);
+		m.position.set(x, h / 2, z);
+		m.visible = false;
+		m.userData.control = { tap } satisfies Control;
+		g.add(m);
+	};
+	const turn = (by: 1 | -1) => () => {
+		clicks += by;
+		inside.firmware.rotary(by > 0 ? 'down' : 'up');
+	};
+	const REACH = 0.08; // how far from the knob's middle a press still turns it
+	press(new CircleGeometry(REACH, 24, Math.PI / 4, Math.PI), KNOB, FACE + 0.005, turn(-1));
+	press(new CircleGeometry(REACH, 24, (-3 * Math.PI) / 4, Math.PI), KNOB, FACE + 0.005, turn(1));
+	// The circle's own shape is in front of the other two, so that it is the one a press on it finds.
+	press(new CircleGeometry(MIDDLE + 0.004, 24), KNOB, FACE + 0.009, () => {
+		pushed = 1;
+		inside.firmware.button();
+	});
+	press(new BoxGeometry(0.07, 0.2, 0.08), TOGGLE, 0.04, inside.flip);
+
+	/** A step from `now` toward `goal`, most of the way there in `time` seconds. */
+	const toward = (now: number, goal: number, dt: number, time: number) =>
+		Math.abs(goal - now) < 0.004 ? goal : now + (goal - now) * (1 - Math.exp(-dt / time));
+	g.userData.works = {
+		start: inside.start,
+		stop: inside.stop,
+		dim: inside.dim,
+		tick(dt) {
+			const up = inside.high ? 1 : 0;
+			turned = toward(turned, clicks, dt, 0.04);
+			pushed = toward(pushed, 0, dt, 0.06);
+			thrown = toward(thrown, up, dt, 0.03);
+			pose();
+			return turned !== clicks || pushed !== 0 || thrown !== up;
+		}
+	} satisfies Works;
+
 	// The HDMI socket at the left, upright, and the cable plugged into it, its plug far bigger
-	// than life. The cable drops from the plug and hangs in one long sag across the front of the
-	// rack, up to the right-hand end of its top, where it goes over the lip and back along the
+	// than life. The cable drops from the plug and hangs freely across the front of the rack, up
+	// to the right-hand end of its top, where it goes over the lip and back along the
 	// top, over the end of the tv's foot and under the tv itself, then up behind it to the socket
 	// on its back.
-	const port = new Vector3(-0.42, 0.15, 0);
+	const port = new Vector3(-0.46, 0.15, 0);
 	const plug = { w: 0.065, h: 0.13, d: 0.13 };
 	g.add(box(plug.w + 0.02, plug.h + 0.02, 0.004, dark, port.x, port.y - plug.h / 2 - 0.01, 0));
 	g.add(box(plug.w, plug.h, plug.d, plugRed, port.x, port.y - plug.h / 2, plug.d / 2));
 	g.add(box(plug.w - 0.02, plug.h - 0.03, 0.02, light, port.x, port.y - plug.h / 2 + 0.015, 0.012)); // its metal end
 	g.add(round(0.024, 0.05, plugRed, port.x, port.y, plug.d)); // where the cable leaves it
-	const out = plug.d + 0.05;
 	const R = 0.014; // the cable's radius
-	const up = 0.45; // where along the rack it goes over the lip: just right of the toggle
+	// Where along the rack it goes over the lip: as near the panel's screws as it can be without
+	// lying on them.
+	const up = PANEL / 2 - EAR / 2 - SCREW - R - 0.012;
 	const top = h + BOARD + R; // lying on the rack's top
 	const foot = top + TV_FOOT; // lying on the tv's foot, which it crosses
+	// It leaves the plug pointing out of it and turns down under its own weight; from there to
+	// the lip nothing holds it, so that length is worked out as a hanging cable (see hang), with
+	// enough slack that it passes under the knob and the toggle and not across them.
+	const free = new Vector3(port.x + 0.004, port.y - 0.06, plug.d + 0.13);
+	const lip = new Vector3(up, top - 0.01, 0.02);
 	const path = new CatmullRomCurve3([
-		new Vector3(port.x, port.y, out),
-		new Vector3(port.x, port.y - 0.01, out + 0.06),
-		new Vector3(port.x + 0.005, port.y - 0.06, out + 0.1),
-		new Vector3(port.x + 0.03, port.y - 0.14, out + 0.09),
-		new Vector3(port.x + 0.12, port.y - 0.2, out + 0.05),
-		new Vector3(port.x + 0.3, port.y - 0.225, 0.17),
-		new Vector3(port.x + 0.5, port.y - 0.2, 0.12),
-		new Vector3(port.x + 0.68, port.y - 0.13, 0.085),
-		new Vector3(up - 0.05, port.y - 0.06, 0.07),
-		new Vector3(up - 0.01, port.y + 0.03, 0.055),
-		new Vector3(up, h - 0.04, 0.04),
-		new Vector3(up, top - 0.01, 0.015),
-		new Vector3(up, top + 0.002, -0.04),
+		new Vector3(port.x, port.y, plug.d + 0.05),
+		new Vector3(port.x, port.y - 0.012, plug.d + 0.1),
+		...hang(free, lip, free.distanceTo(lip) * 1.3),
+		new Vector3(up, top + 0.003, -0.035),
 		new Vector3(up, top, -0.12),
-		new Vector3(up, top + 0.025, -0.185),
-		new Vector3(up, foot, -0.24),
+		new Vector3(up, top, -0.22),
+		new Vector3(up, top + 0.03, -0.275),
+		new Vector3(up, foot, -0.32),
 		new Vector3(up, foot, -0.4),
-		new Vector3(up - 0.005, foot + 0.05, -0.52),
-		new Vector3(up - 0.02, top + 0.22, -0.55),
-		new Vector3(up - 0.06, top + 0.34, -0.53)
+		new Vector3(up - 0.005, foot + 0.05, -0.5),
+		new Vector3(up - 0.02, top + 0.22, -0.53),
+		new Vector3(up - 0.06, top + 0.34, -0.51)
 	]);
 	g.add(braided(path, '#131313', '#c22424', 4)); // black, flecked with red
 	return g;
