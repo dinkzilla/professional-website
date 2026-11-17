@@ -156,6 +156,26 @@ export function braided(path: CatmullRomCurve3, base: string, fleck: string, eve
 	return mesh(new TubeGeometry(path, 160, R, 10), new MeshStandardMaterial({ map, roughness: 0.8 }));
 }
 
+const silver = new MeshStandardMaterial({ color: 0xd4d4d8, roughness: 0.35 });
+const SCREW = 0.019; // the radius of a screw's head, which has to cover a hole in a post
+
+/**
+ * The head of a rack screw, standing on the surface z = 0 and facing out of it: silver, with a
+ * cross cut in it, turned whichever way it happened to stop.
+ */
+export function screw() {
+	const g = new Group();
+	g.add(round(SCREW, 0.008, silver, 0, 0, 0));
+	for (const turn of [0, Math.PI / 2]) {
+		const slot = mesh(new BoxGeometry(SCREW * 1.2, SCREW * 0.24, 0.002), dark, 0, 0, 0.008);
+		slot.rotation.z = turn;
+		slot.castShadow = false;
+		g.add(slot);
+	}
+	g.rotation.z = Math.random() * Math.PI;
+	return g;
+}
+
 // The width of a rack-mounted panel: right across the rack, over the fronts of its posts.
 const PANEL = RACK_WIDTH + 2 * BOARD + 0.01;
 const EAR = 0.08; // the strip at each end of a panel that is bolted to the posts
@@ -175,7 +195,9 @@ function panel(h: number, depth: number, material: Material) {
 	const inset = Math.min(0.04, h / 4);
 	for (const side of [-1, 1]) {
 		for (const y of [inset, h - inset]) {
-			g.add(round(0.012, 0.006, dark, side * (PANEL / 2 - EAR / 2), y, 0));
+			const head = screw();
+			head.position.set(side * (PANEL / 2 - EAR / 2), y, 0);
+			g.add(head);
 		}
 	}
 	return g;

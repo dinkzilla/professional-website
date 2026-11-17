@@ -1,5 +1,5 @@
-// The rack (grey-box prototype): a tall, narrow equipment rack on legs against a dark wall, with a
-// light over its one open shelf, and block-out objects (see items.ts). Some are mounted in it, their
+// The rack (grey-box prototype): a tall, narrow equipment rack on legs against a dark wall, with
+// block-out objects (see items.ts). Some are mounted in it, their
 // panels flush with its front; the others stand on its shelves, and some of those come forward
 // when picked.
 //
@@ -18,24 +18,33 @@ import {
 	ACESFilmicToneMapping,
 	Box3,
 	BoxGeometry,
+	CanvasTexture,
 	Color,
+	CubeCamera,
+	ExtrudeGeometry,
 	Group,
+	HalfFloatType,
 	HemisphereLight,
 	Mesh,
 	MeshStandardMaterial,
 	Object3D,
+	Path,
 	PCFSoftShadowMap,
 	PerspectiveCamera,
 	Quaternion,
 	Raycaster,
+	RepeatWrapping,
 	Scene,
+	Shape,
 	SpotLight,
+	SRGBColorSpace,
 	Vector2,
 	Vector3,
+	WebGLCubeRenderTarget,
 	WebGLRenderer
 } from 'three';
 import { buildRoom } from './room.ts';
-import { BOARD, items, LEGS, RACK_DEPTH, RACK_WIDTH, STANDOFF, WALL, type Item } from './items.ts';
+import { BOARD, screw, items, LEGS, RACK_DEPTH, RACK_WIDTH, STANDOFF, WALL, type Item } from './items.ts';
 
 // The unit, in world units (one is about half a metre). The wall is the plane z = 0, the unit
 // stands a little off it (STANDOFF), and y = 0 is
@@ -45,6 +54,15 @@ const DEPTH = RACK_DEPTH;
 const HEADROOM = 0.2; // clear space left above the tallest object on a shelf
 const POST = 0.06; // the posts are square, and stand a touch proud of the shelves
 const FULL_WIDTH = WIDTH + 2 * BOARD;
+const UNIT = 0.1; // one rack unit: the posts' mounting holes come three to every two
+const SHEET = 0.012; // the thickness of a tray bolted into the rack, which is folded sheet metal
+// Where the three holes are in each two units of a post, as a share of the way down it.
+const HOLES = [1 / 7, 1 / 2, 6 / 7];
+const HOLE = 0.36 * POST; // they are square, and this wide
+// The slots cut in a tray: their length between the centres of their round ends, the radius of
+// those, and how far apart they are across the tray and along it.
+const SLOT = { length: 0.11, r: 0.02, across: 0.15, along: 0.15 };
+const BLACK = '#17171a'; // the rack's powder coat
 
 const rad = (degrees: number) => (degrees * Math.PI) / 180;
 
@@ -67,8 +85,7 @@ const MIN_PPU = 150; // ...unless that would make it narrower than this many px 
 const OFF_CENTRE = 0.12; // in wide windows the unit sits this share of the width left of centre
 const PANEL_MIN = 280; // px of wall needed right of the unit for the panel to go there
 const PICK_S = 0.55; // seconds for an object to come forward or go back
-const SHELF_LIGHT = 3.2;
-const DIM = 0.65; // how much of the shelf lighting is lost while an object is held
+const DIM = 0.65; // how much of the room's lighting is lost while an object is held
 
 export type LayoutMode = 'tall' | 'side';
 
@@ -123,6 +140,34 @@ export async function prepare(): Promise<Shelf> {
 	return shelf;
 }
 
+/**
+ * The face of a rack post, two units of it: black, with three square holes cut right through it,
+ * spaced as they are on a real one (closer across the joins between tiles than within them).
+ * The posts are drawn as boxes, but with the holes cut in both drilled faces and nothing drawn
+ * of the insides, what is behind a post shows through them.
+ */
+function mountingHoles() {
+	const W = 96;
+	const H = Math.round((W * 2 * UNIT) / POST);
+	const canvas = document.createElement('canvas');
+	canvas.width = W;
+	canvas.height = H;
+	const c = canvas.getContext('2d')!;
+	c.fillStyle = BLACK;
+	c.fillRect(0, 0, W, H);
+	const size = (W * HOLE) / POST;
+	for (const at of HOLES) {
+		const x = (W - size) / 2;
+		const y = at * H - size / 2;
+		c.clearRect(x, y, size, size);
+	}
+	const texture = new CanvasTexture(canvas);
+	texture.colorSpace = SRGBColorSpace;
+	texture.wrapT = RepeatWrapping;
+	texture.anisotropy = 8;
+	return texture;
+}
+
 function createShelf() {
 	const canvas = document.createElement('canvas');
 	// The page showing the scene, if one is.
@@ -137,7 +182,22 @@ function createShelf() {
 	scene.background = new Color(0x000000);
 	const camera = new PerspectiveCamera();
 
-	const steel = new MeshStandardMaterial({ color: 0x3b3b40, roughness: 0.7 });
+	const steel = new MeshStandardMaterial({ color: BLACK, roughness: 0.55 });
+	// The faces of the posts that things are bolted to, front and back, with their square holes.
+	const holes = mountingHoles();
+	const rail = new MeshStandardMaterial({ map: holes, roughness: 0.55, alphaTest: 0.5 });
+	// The tray: red anodised sheet. Metal is only what it reflects, so it is given a picture of
+	// the room as it is, taken from inside the rack (see reflect). Nothing is lit that is not
+	// lit in the room.
+	const surroundings = new WebGLCubeRenderTarget(128, { type: HalfFloatType });
+	const probe = new CubeCamera(0.05, 60, surroundings);
+	const red = new MeshStandardMaterial({
+		color: 0xd81a22,
+		roughness: 0.3,
+		metalness: 0.9,
+		envMap: surroundings.texture
+	});
+	const drilled = [steel, steel, steel, steel, rail, rail];
 	scene.add(new HemisphereLight(0xcfd8ff, 0x1a1410, 0.22));
 
 	// Lights the wall around the unit, brightest at the top and falling off to the sides.
@@ -148,9 +208,8 @@ function createShelf() {
 	const heldLight = new SpotLight(0xfff1dc, 0, 0, 0.6, 0.9, 1.2);
 	scene.add(heldLight, heldLight.target);
 
-	// The unit and its lights are rebuilt whenever the number of shelves changes.
+	// The unit is rebuilt whenever the number of shelves changes.
 	let unit = new Group();
-	let shelfLights = new Map<number, SpotLight>(); // by shelf
 	let shelves = FIT_SHELVES;
 
 	const placed: Placed[] = items.map((item) => {
@@ -183,14 +242,23 @@ function createShelf() {
 
 	// Each shelf is only as tall as its tallest object needs. `pitch` is the distance from the
 	// surface above (the underside of the unit's top, for the first) to the shelf's own surface.
+	// What is under each bay. The unit's top and bottom are thick boards. Between them, a bay of
+	// mounted gear has nothing under it, since the gear hangs from the posts by its panel, and a
+	// bay of loose things has a sheet-metal tray, bolted to the posts like anything else.
+	const mounted = new Set<number>();
+	for (const item of items) if (item.flush) mounted.add(item.shelf);
+	const thickness = (index: number, count = shelves) =>
+		index === 0 || index === count - 1 ? BOARD : mounted.has(index) ? 0 : SHEET;
+	// What is over a bay is never the unit's bottom.
+	const above = (index: number) => thickness(index - 1, Infinity);
+
 	const pitch: number[] = [];
 	for (const p of placed) {
 		if (p.item.shelf === WALL) continue;
 		// Something mounted in the rack fills its bay.
-		const needed = (p.item.flush ?? p.height + HEADROOM) + BOARD;
+		const needed = (p.item.flush ?? p.height + HEADROOM) + above(p.item.shelf);
 		pitch[p.item.shelf] = Math.max(pitch[p.item.shelf] ?? 0, needed);
 	}
-	const lit = new Set(items.filter((item) => !item.fixed && item.shelf !== WALL).map((item) => item.shelf));
 	const drop = (count: number) => pitch.slice(0, count).reduce((sum, h) => sum + h, 0);
 	// From y = 0 down to the floor.
 	const unitHeight = (count = shelves) => drop(count) + BOARD + LEGS;
@@ -202,14 +270,20 @@ function createShelf() {
 
 	function buildUnit() {
 		scene.remove(unit);
-		for (const light of shelfLights.values()) light.dispose();
 		unit.traverse((o) => o instanceof Mesh && o.geometry.dispose());
 		unit = new Group();
-		shelfLights = new Map();
 
 		const height = unitHeight();
-		const add = (w: number, h: number, d: number, x: number, y: number, z: number) => {
-			const m = new Mesh(new BoxGeometry(w, h, d), steel);
+		const add = (
+			w: number,
+			h: number,
+			d: number,
+			x: number,
+			y: number,
+			z: number,
+			material: MeshStandardMaterial | MeshStandardMaterial[] = steel
+		) => {
+			const m = new Mesh(new BoxGeometry(w, h, d), material);
 			m.position.set(x, y, z);
 			m.castShadow = true;
 			m.receiveShadow = true;
@@ -219,33 +293,100 @@ function createShelf() {
 		// shelf, which has nothing over it, and carry on below the bottom one as legs. The wall
 		// shows through behind.
 		const posts = height + shelfY(0);
+		const postX = FULL_WIDTH / 2 - POST / 2 + 0.005;
+		/** The height of the nth hole down a post. */
+		const holeY = (n: number) => shelfY(0) - (Math.floor(n / 3) + HOLES[n % 3]) * 2 * UNIT;
+		// The holes are counted down from the top of the posts.
+		// They stop at the underside of the unit's bottom: the legs below it are plain.
+		const drilledLength = posts - LEGS;
+		holes.repeat.set(1, drilledLength / (2 * UNIT));
+		holes.offset.y = Math.ceil(holes.repeat.y) - holes.repeat.y;
 		for (const side of [-1, 1]) {
 			for (const z of [POST / 2 - 0.005, DEPTH - POST / 2 + 0.005]) {
-				add(POST, posts, POST, side * (FULL_WIDTH / 2 - POST / 2 + 0.005), shelfY(0) - posts / 2, z);
+				add(POST, drilledLength, POST, side * postX, shelfY(0) - drilledLength / 2, z, drilled);
+				add(POST, LEGS, POST, side * postX, shelfY(0) - drilledLength - LEGS / 2, z);
 			}
 		}
 		for (let i = 0; i < shelves; i++) {
-			add(FULL_WIDTH, BOARD, DEPTH, 0, shelfY(i) - BOARD / 2, DEPTH / 2);
-
-			// A shelf with something on it to pick up has a light at the front, pointing down and
-			// back: tucked under the shelf above, or for the top shelf hanging in the air over it.
-			// The rest of the rack has only the light that falls on the wall.
-			if (!lit.has(i)) continue;
-			const light = new SpotLight(0xffdfb8, SHELF_LIGHT, 5, 1.2, 0.85, 1.4);
-			const over = i === 0 ? pitch[0] + 0.25 : pitch[i] - BOARD - 0.03;
-			light.position.set(0, shelfY(i) + over, DEPTH * 0.98);
-			light.target.position.set(0, shelfY(i), DEPTH * 0.3);
-			light.castShadow = true;
-			light.shadow.mapSize.set(1024, 1024);
-			light.shadow.camera.near = 0.05;
-			light.shadow.camera.far = 4;
-			light.shadow.bias = -0.0015;
-			light.shadow.radius = 4;
-			// Its shadows are only redrawn when something on its shelf moves (see draw).
-			light.shadow.autoUpdate = false;
-			light.shadow.needsUpdate = true;
-			unit.add(light, light.target);
-			shelfLights.set(i, light);
+			const thick = thickness(i);
+			if (thick === BOARD) add(FULL_WIDTH, BOARD, DEPTH, 0, shelfY(i) - BOARD / 2, DEPTH / 2);
+			else if (thick) {
+				// A tray, as a rack shelf is made: a sheet between the posts with a wall up each side,
+				// tall at the front, where it ends in an ear lying on the post's face, and sloping
+				// down to almost nothing at the back. The ear covers four of the post's holes and
+				// is bolted through the top and bottom ones.
+				const inside = 2 * postX - POST;
+				const base = shelfY(i) - SHEET;
+				// The sheet is drawn from above (width across, depth up from the front edge) with
+				// rows of slanted, round-ended slots cut through it for air, then laid flat.
+				const sheet = new Shape()
+					.moveTo(-inside / 2, 0)
+					.lineTo(inside / 2, 0)
+					.lineTo(inside / 2, DEPTH)
+					.lineTo(-inside / 2, DEPTH)
+					.closePath();
+				const EDGE = 0.1; // left solid round the slots
+				const columns = Math.floor((inside - 2 * EDGE) / SLOT.across);
+				const rows = Math.floor((DEPTH - 2 * EDGE) / SLOT.along);
+				for (let column = 0; column <= columns; column++) {
+					for (let row = 0; row <= rows; row++) {
+						const x = (column - columns / 2) * SLOT.across;
+						const y = DEPTH / 2 + (row - rows / 2) * SLOT.along;
+						const dx = (SLOT.length / 2) * Math.SQRT1_2;
+						const slot = new Path();
+						slot.absarc(x + dx, y + dx, SLOT.r, -Math.PI / 4, (3 * Math.PI) / 4, false);
+						slot.absarc(x - dx, y - dx, SLOT.r, (3 * Math.PI) / 4, (7 * Math.PI) / 4, false);
+						slot.closePath();
+						sheet.holes.push(slot);
+					}
+				}
+				const plate = new Mesh(
+					new ExtrudeGeometry(sheet, { depth: SHEET, bevelEnabled: false, curveSegments: 6 }),
+					red
+				);
+				plate.rotation.x = -Math.PI / 2;
+				plate.position.set(0, base, DEPTH);
+				plate.castShadow = true;
+				plate.receiveShadow = true;
+				unit.add(plate);
+				// A low lip along the back, to stop things being pushed off it. It runs between the
+				// side walls, which come down to its height where they meet it.
+				const LIP = 0.06; // above the underside of the tray
+				add(inside - 2 * SHEET, LIP, SHEET, 0, base + LIP / 2, SHEET / 2, red);
+				// The lowest hole clear of the tray, and the third above it.
+				let low = 0;
+				while (holeY(low + 1) >= base + 0.025) low++;
+				const bolts = [holeY(low), holeY(low - 3)];
+				const earTop = bolts[1] + 0.03;
+				// The ear lies on the front of the post, and the wall comes forward past the post to
+				// the ear's face, so that the two meet in a corner with no gap between them.
+				const EAR = 0.008; // its thickness
+				const front = DEPTH + 0.005 + EAR;
+				const wall = new Shape()
+					.moveTo(0, base)
+					.lineTo(front, base)
+					.lineTo(front, earTop)
+					.lineTo(DEPTH - 0.04, earTop)
+					.lineTo(0, base + LIP)
+					.closePath();
+				for (const side of [-1, 1]) {
+					// Drawn in the plane of the rack's side (depth across, height up), then turned into it.
+					const m = new Mesh(new ExtrudeGeometry(wall, { depth: SHEET, bevelEnabled: false }), red);
+					m.rotation.y = -Math.PI / 2;
+					m.position.x = side * (inside / 2 - SHEET / 2) + SHEET / 2;
+					m.castShadow = true;
+					m.receiveShadow = true;
+					unit.add(m);
+					const earWidth = POST + 0.006; // from the wall's outer face to just past the post
+					const earX = side * (inside / 2 + earWidth / 2);
+					add(earWidth, earTop - base, EAR, earX, (earTop + base) / 2, front - EAR / 2, red);
+					for (const y of bolts) {
+						const head = screw();
+						head.position.set(side * postX, y, front);
+						unit.add(head);
+					}
+				}
+			}
 		}
 		unit.position.z = STANDOFF;
 		scene.add(unit);
@@ -269,6 +410,16 @@ function createShelf() {
 				STANDOFF + (p.item.flush ? DEPTH + 0.008 : DEPTH * (1 - (p.item.back ?? 0.5)))
 			);
 		}
+	}
+
+	/** Take the picture of the room that the tray reflects: from the middle of the rack, without it. */
+	function reflect() {
+		const hidden = [unit, ...placed.filter((p) => p.item.shelf !== WALL).map((p) => p.group)];
+		const shown = hidden.map((o) => o.visible);
+		for (const o of hidden) o.visible = false;
+		probe.position.set(0, -unitHeight() / 2, STANDOFF + DEPTH / 2);
+		probe.update(renderer, scene);
+		hidden.forEach((o, i) => (o.visible = shown[i]));
 	}
 
 	// --- Layout: window size and scroll position to camera -----------------------------------
@@ -411,8 +562,6 @@ function createShelf() {
 		let lift = 0;
 
 		for (const p of placed) {
-			const was = p.t;
-			const leant = p.nudge;
 			const goal = p === held ? 1 : 0;
 			if (p.t !== goal) {
 				const step = dt / PICK_S;
@@ -425,10 +574,6 @@ function createShelf() {
 				p.nudge = lean > p.nudge ? Math.min(lean, p.nudge + step) : Math.max(lean, p.nudge - step);
 				moving = true;
 			}
-			if (p.t !== was || p.nudge !== leant) {
-				const light = shelfLights.get(p.item.shelf);
-				if (light) light.shadow.needsUpdate = true;
-			}
 			const e = ease(p.t);
 			p.group.position.lerpVectors(p.shelfPosition, p.heldPosition, e);
 			p.group.position.z += 0.06 * p.nudge * (1 - e);
@@ -436,7 +581,6 @@ function createShelf() {
 			lift = Math.max(lift, e);
 		}
 
-		for (const light of shelfLights.values()) light.intensity = SHELF_LIGHT * (1 - DIM * lift);
 		wash.intensity = 60 * (1 - DIM * lift);
 		heldLight.intensity = 9 * lift;
 		room.dim(DIM * lift);
@@ -549,8 +693,9 @@ function createShelf() {
 		async warm() {
 			layout();
 			await renderer.compileAsync(scene, camera);
-			// A full draw, which is what stands the objects on their shelves; the shadows drawn here
-			// are kept until something moves.
+			// A full draw, which is what stands the objects on their shelves.
+			draw(performance.now());
+			reflect();
 			draw(performance.now());
 		},
 		/** Put the scene on a page, inside `element`, drawn before this returns. */
@@ -575,7 +720,6 @@ function createShelf() {
 			canvas.remove();
 			held = hovered = undefined;
 			for (const p of placed) p.t = p.nudge = 0;
-			for (const light of shelfLights.values()) light.shadow.needsUpdate = true;
 		}
 	};
 }
