@@ -10,6 +10,7 @@ import {
 	CylinderGeometry,
 	ExtrudeGeometry,
 	Group,
+	LatheGeometry,
 	Mesh,
 	MeshBasicMaterial,
 	MeshStandardMaterial,
@@ -20,6 +21,7 @@ import {
 	SRGBColorSpace,
 	TorusGeometry,
 	TubeGeometry,
+	Vector2,
 	Vector3,
 	type BufferGeometry,
 	type Material,
@@ -129,6 +131,8 @@ const dark = new MeshStandardMaterial({ color: 0x232326, roughness: 0.6 });
 // seen edge on, as the sides of the panel are, a polished thing reflects nearly everything, and
 // the wall showed in them as a pale border all the way round it.
 const gloss = new MeshStandardMaterial({ color: 0x050506, roughness: 0.22 });
+// A monitor's power light: lit, so that it shows against the black round it.
+const powerBlue = new MeshStandardMaterial({ color: 0x2f7dff, roughness: 0.5, emissive: 0x2f7dff, emissiveIntensity: 0.9 });
 const accent = new MeshStandardMaterial({ color: 0xd9a400, roughness: 0.55 });
 const page = new MeshStandardMaterial({ color: 0xe6e1d4, roughness: 0.95 });
 // Bright enough to show in the dim of the room.
@@ -170,15 +174,27 @@ function round(r: number, depth: number, material: Material, x: number, y: numbe
 
 /**
  * A knob made to be gripped: a cylinder with shallow flutes all the way round it, each taking
- * `cut` of the radius where it is deepest. It stands on its end until the caller turns it.
+ * `cut` of the radius where it is deepest, and in the middle of its top a round hollow, `hollow`
+ * in radius and `sunk` deep. The hollow has no floor: the caller puts something in it. The knob
+ * stands on its foot, its top `depth` above that, until the caller turns it.
  */
-function fluted(r: number, depth: number, flutes: number, cut: number) {
-	const geometry = new CylinderGeometry(r, r, depth, flutes * 8);
+function fluted(r: number, depth: number, flutes: number, cut: number, hollow: number, sunk: number) {
+	// Turned on a lathe from its outline: up the outside, in across the top, and down into the
+	// hollow. Each corner is given twice, which keeps it sharp.
+	const outline = [
+		[r, 0],
+		[r, depth],
+		[r, depth],
+		[hollow, depth],
+		[hollow, depth],
+		[hollow, depth - sunk]
+	].map(([x, y]) => new Vector2(x, y));
+	const geometry = new LatheGeometry(outline, flutes * 8);
 	const at = geometry.attributes.position;
 	for (let i = 0; i < at.count; i++) {
 		const x = at.getX(i);
 		const z = at.getZ(i);
-		if (!x && !z) continue; // the middles of its two ends
+		if (Math.hypot(x, z) < (r + hollow) / 2) continue; // the hollow is plain
 		const k = 1 - cut * (0.5 - 0.5 * Math.cos(Math.atan2(z, x) * flutes));
 		at.setX(i, x * k);
 		at.setZ(i, z * k);
@@ -275,6 +291,10 @@ const TV_BACK = 0.63; // toward the back, leaving the front left of the rack's t
 const TV_X = 0.27; // and to the right
 const TV_DEPTH = 0.36; // of its foot
 const TV_FOOT = 0.045; // and the foot's thickness
+const TV_WIDE = 0.58; // and how far across it is
+// Its arm: across, front to back, where on the foot (from the foot's middle), the width of each
+// upright and the height of the bar across the bottom of the slot between them.
+const TV_ARM = { w: 0.21, d: 0.05, z: -TV_DEPTH / 2 + 0.07, upright: 0.06, bar: 0.04 };
 const TV_YAW = -0.3; // turned to its right, away from the door and toward where it is seen from
 const TV_RAISED = 0.14; // how far the bottom of the panel is above what it stands on
 
@@ -370,15 +390,14 @@ function tv() {
 	// one thick slab of a foot; toward the back of it the arm, which is two uprights with a slot
 	// right through between them for cables, joined across the bottom by a bar (and across the
 	// top too, but that is behind the panel); and on the arm's front the panel itself, thin, with
-	// a shallow hump on its back and almost no border round the picture except along the bottom.
+	// a shallow hump on its back and an even border round the picture.
 	const g = new Group();
-	const foot = { w: 0.58, h: TV_FOOT, d: TV_DEPTH };
-	const arm = { w: 0.21, d: 0.05, z: -foot.d / 2 + 0.07, upright: 0.06, bar: 0.04 };
+	const foot = { w: TV_WIDE, h: TV_FOOT, d: TV_DEPTH };
+	const arm = TV_ARM;
 	const w = 1.08;
-	const edge = 0.012; // the border round the picture
-	const chin = 0.036; // and along the bottom
+	const edge = 0.036; // the border round the picture, the same on all four sides
 	const pictureH = ((w - 2 * edge) * 9) / 16;
-	const h = pictureH + edge + chin;
+	const h = pictureH + 2 * edge;
 	const thin = 0.03;
 	// The middle of the panel's thickness. Its back is flat against the arm's front, with no gap
 	// between them for the wall to show through.
@@ -401,16 +420,13 @@ function tv() {
 		new PlaneGeometry(w - 2 * edge, pictureH),
 		video().lcd,
 		0,
-		TV_RAISED + chin + pictureH / 2,
+		TV_RAISED + edge + pictureH / 2,
 		z + thin / 2 + 0.001
 	);
 	video().shownOn(picture);
 	g.add(picture);
-	// Along the bottom at the right, its buttons and the power light.
-	for (let i = 0; i < 4; i++) {
-		g.add(box(0.012, 0.006, 0.003, mid, w / 2 - 0.17 + i * 0.026, TV_RAISED + chin / 2 - 0.003, z + thin / 2));
-	}
-	g.add(box(0.012, 0.006, 0.003, accent, w / 2 - 0.05, TV_RAISED + chin / 2 - 0.003, z + thin / 2));
+	// The power light, at the right of the border along the bottom.
+	g.add(box(0.012, 0.006, 0.003, powerBlue, w / 2 - 0.062, TV_RAISED + edge / 2 - 0.003, z + thin / 2));
 	return g;
 }
 
@@ -471,8 +487,8 @@ function videoModule() {
 	// The display is 128 pixels by 32, so four times as wide as it is tall. The pixels do not go
 	// to the edge of its glass: there is a margin of glass that never lights, and round that a
 	// dark surround.
-	const lit = { w: 0.51, h: 0.1275, x: -0.0575 };
-	const margin = 0.012;
+	const lit = { w: 0.486, h: 0.1215, x: -0.0575 };
+	const margin = 0.024;
 	const surround = 0.02;
 	const glass = { w: lit.w + 2 * margin, h: lit.h + 2 * margin };
 	g.add(box(glass.w + 2 * surround, glass.h + 2 * surround, 0.006, dark, lit.x, (h - glass.h) / 2 - surround, 0));
@@ -480,16 +496,21 @@ function videoModule() {
 	g.add(mesh(new PlaneGeometry(lit.w, lit.h), inside.glow, lit.x, h / 2, 0.004));
 
 	// The knob turns without end, a click at a time, and is pushed in to press it. The flutes
-	// round its edge are what show it turning, and the white circle in the middle of its face is
-	// where it is pushed.
+	// round its edge are what show it turning, and the white circle in the middle of its face,
+	// sunk a little way into it, is where it is pushed.
 	const KNOB = 0.336; // where along the panel it is
 	const CLICKS = 24; // to a full turn
 	const FACE = 0.045; // how far its face stands off the panel
-	const MIDDLE = 0.028; // the radius of the white circle
+	// Its radius, and that of the white circle: the rim between them is wide enough that a press
+	// meant for one does not land on the other.
+	const RIM = 0.065;
+	const MIDDLE = 0.032;
+	const SUNK = 0.01; // how far below the knob's face the circle is
 	const knob = new Group();
-	const grip = mesh(fluted(0.055, FACE, 16, 0.09), dark, 0, 0, FACE / 2);
+	const grip = mesh(fluted(RIM, FACE, 18, 0.09, MIDDLE, SUNK), dark);
 	grip.rotation.x = Math.PI / 2;
-	knob.add(grip, round(MIDDLE, 0.003, white, 0, 0, FACE));
+	// The circle is the floor of the hollow in the knob's face, and a little wider than it.
+	knob.add(grip, round(MIDDLE + 0.002, 0.003, white, 0, 0, FACE - SUNK - 0.003));
 	knob.position.set(KNOB, h / 2, 0);
 	g.add(knob);
 
@@ -529,11 +550,13 @@ function videoModule() {
 		clicks += by;
 		inside.firmware.rotary(by > 0 ? 'down' : 'up');
 	};
-	const REACH = 0.08; // how far from the knob's middle a press still turns it
-	press(new CircleGeometry(REACH, 24, Math.PI / 4, Math.PI), KNOB, FACE + 0.005, turn(-1));
-	press(new CircleGeometry(REACH, 24, (-3 * Math.PI) / 4, Math.PI), KNOB, FACE + 0.005, turn(1));
-	// The circle's own shape is in front of the other two, so that it is the one a press on it finds.
-	press(new CircleGeometry(MIDDLE + 0.004, 24), KNOB, FACE + 0.009, () => {
+	const REACH = RIM + 0.025; // how far from the knob's middle a press still turns it
+	press(new CircleGeometry(REACH, 24, Math.PI / 4, Math.PI), KNOB, FACE + 0.001, turn(-1));
+	press(new CircleGeometry(REACH, 24, (-3 * Math.PI) / 4, Math.PI), KNOB, FACE + 0.001, turn(1));
+	// The circle's own shape covers the mouth of the hollow, so that a press on anything seen
+	// through it is a press on the circle. It is just in front of the other two, which makes it
+	// the one such a press finds.
+	press(new CircleGeometry(MIDDLE, 24), KNOB, FACE + 0.002, () => {
 		pushed = 1;
 		inside.firmware.button();
 	});
@@ -557,10 +580,12 @@ function videoModule() {
 	} satisfies Works;
 
 	// The HDMI socket at the left, upright, and the cable plugged into it, its plug far bigger
-	// than life. The cable drops from the plug and hangs freely across the front of the rack, up
-	// to the right-hand end of its top, where it goes over the lip and back along the
-	// top, over the end of the tv's foot and under the tv itself, then up behind it to the socket
-	// on its back.
+	// than life. The cable leaves the plug, hangs freely across the front of the panel, and goes
+	// up over the lip of the rack's top between the display and the knob, in front of the
+	// display's right-hand end and clear of the knob and the toggle and of where they are
+	// pressed. On the top it swings out to the right, comes back onto the tv's foot from that
+	// side, goes under the tv and round the right-hand side of its arm, and up behind it to the
+	// socket on its back.
 	const port = new Vector3(-0.46, 0.15, 0);
 	const plug = { w: 0.065, h: 0.13, d: 0.13 };
 	g.add(box(plug.w + 0.02, plug.h + 0.02, 0.004, dark, port.x, port.y - plug.h / 2 - 0.01, 0));
@@ -568,29 +593,42 @@ function videoModule() {
 	g.add(box(plug.w - 0.02, plug.h - 0.03, 0.02, light, port.x, port.y - plug.h / 2 + 0.015, 0.012)); // its metal end
 	g.add(round(0.024, 0.05, plugRed, port.x, port.y, plug.d)); // where the cable leaves it
 	const R = 0.014; // the cable's radius
-	// Where along the rack it goes over the lip: as near the panel's screws as it can be without
-	// lying on them.
-	const up = PANEL / 2 - EAR / 2 - SCREW - R - 0.012;
-	const top = h + BOARD + R; // lying on the rack's top
-	const foot = top + TV_FOOT; // lying on the tv's foot, which it crosses
-	// It leaves the plug pointing out of it and turns down under its own weight; from there to
-	// the lip nothing holds it, so that length is worked out as a hanging cable (see hang), with
-	// enough slack that it passes under the knob and the toggle and not across them.
-	const free = new Vector3(port.x + 0.004, port.y - 0.06, plug.d + 0.13);
-	const lip = new Vector3(up, top - 0.01, 0.02);
+	// Where along the rack it goes over the lip. That is above the knob's left-hand edge, but by
+	// the height of the knob the cable has fallen away to the left of where the knob is pressed.
+	const up = KNOB - REACH + 0.015;
+	const top = h + BOARD; // the rack's top
+	// A point on the tv, given as the tv is built (across, up from the rack's top, toward its front).
+	const tvBack = -(RACK_DEPTH + 0.008) + RACK_DEPTH * (1 - TV_BACK); // of its foot's middle, from the panel
+	const onTv = (x: number, y: number, z: number) =>
+		new Vector3(
+			TV_X + x * Math.cos(TV_YAW) + z * Math.sin(TV_YAW),
+			top + y,
+			tvBack - x * Math.sin(TV_YAW) + z * Math.cos(TV_YAW)
+		);
+	const beside = TV_ARM.w / 2 + R + 0.03; // just clear of the arm's right-hand side
+	// It leaves the plug pointing out of it and comes round in an easy bend, down and toward the
+	// lip, as a stiff cable does. From the end of the bend to the lip nothing holds it, so that
+	// length is worked out as a hanging cable (see hang).
+	const free = new Vector3(port.x + 0.09, port.y - 0.1, plug.d + 0.165);
+	const lip = new Vector3(up, top + R - 0.01, 0.02);
 	const path = new CatmullRomCurve3([
 		new Vector3(port.x, port.y, plug.d + 0.05),
-		new Vector3(port.x, port.y - 0.012, plug.d + 0.1),
-		...hang(free, lip, free.distanceTo(lip) * 1.3),
-		new Vector3(up, top + 0.003, -0.035),
-		new Vector3(up, top, -0.12),
-		new Vector3(up, top, -0.22),
-		new Vector3(up, top + 0.03, -0.275),
-		new Vector3(up, foot, -0.32),
-		new Vector3(up, foot, -0.4),
-		new Vector3(up - 0.005, foot + 0.05, -0.5),
-		new Vector3(up - 0.02, top + 0.22, -0.53),
-		new Vector3(up - 0.06, top + 0.34, -0.51)
+		new Vector3(port.x + 0.012, port.y - 0.015, plug.d + 0.115),
+		new Vector3(port.x + 0.045, port.y - 0.055, plug.d + 0.155),
+		...hang(free, lip, free.distanceTo(lip) * 1.2),
+		new Vector3(up, top + R + 0.003, -0.035),
+		// Across the top it swings out to the right first, away from the tv, round the front
+		// corner of the tv's foot, and comes back in over the foot's right-hand edge.
+		new Vector3(up + 0.06, top + R, -0.09),
+		new Vector3(0.4, top + R, -0.14),
+		new Vector3(0.5, top + R, -0.2),
+		new Vector3(0.555, top + R, -0.3),
+		onTv(TV_WIDE / 2 + 0.005, R + 0.03, -0.02), // riding up over the edge
+		onTv(TV_WIDE / 2 - 0.04, TV_FOOT + R, -0.07),
+		onTv(beside + 0.05, TV_FOOT + R, TV_ARM.z + 0.01),
+		onTv(beside, TV_FOOT + R + 0.015, TV_ARM.z - 0.045),
+		onTv(beside - 0.015, 0.25, TV_ARM.z - 0.06),
+		onTv(beside - 0.03, 0.4, TV_ARM.z - 0.02)
 	]);
 	g.add(braided(path, '#131313', '#c22424', 4)); // black, flecked with red
 	return g;
