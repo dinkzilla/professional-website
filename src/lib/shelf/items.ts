@@ -414,7 +414,27 @@ function tv() {
 	// The hump on the panel's back, which the arm is let into.
 	g.add(box(w * 0.55, h * 0.55, 0.02, gloss, 0, TV_RAISED + h * 0.2, z - thin / 2 - 0.01));
 
-	g.add(box(w, h, thin, gloss, 0, TV_RAISED, z));
+	// The panel, its corners rounded a little.
+	const corner = 0.022;
+	const face = new Shape()
+		.moveTo(-w / 2 + corner, 0)
+		.lineTo(w / 2 - corner, 0)
+		.absarc(w / 2 - corner, corner, corner, -Math.PI / 2, 0, false)
+		.lineTo(w / 2, h - corner)
+		.absarc(w / 2 - corner, h - corner, corner, 0, Math.PI / 2, false)
+		.lineTo(-w / 2 + corner, h)
+		.absarc(-w / 2 + corner, h - corner, corner, Math.PI / 2, Math.PI, false)
+		.lineTo(-w / 2, corner)
+		.absarc(-w / 2 + corner, corner, corner, Math.PI, (3 * Math.PI) / 2, false);
+	g.add(
+		mesh(
+			new ExtrudeGeometry(face, { depth: thin, bevelEnabled: false, curveSegments: 8 }),
+			gloss,
+			0,
+			TV_RAISED,
+			z - thin / 2
+		)
+	);
 	// The picture is whatever the video module is sending it.
 	const picture = mesh(
 		new PlaneGeometry(w - 2 * edge, pictureH),
