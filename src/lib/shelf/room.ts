@@ -108,8 +108,10 @@ export function buildRoom(rackHeight: number) {
 	floor.receiveShadow = true;
 
 	// A mat just inside the door.
-	const mat = new MeshStandardMaterial({ color: 0x4b2b7d, roughness: 1 });
-	box(DOOR.right - DOOR.left - 0.1, 0.03, 0.85, mat, (DOOR.left + DOOR.right) / 2, 0.015, 0.58);
+	const mat = doormat(DOOR.right - DOOR.left - 0.1, 0.85);
+	mat.position.set((DOOR.left + DOOR.right) / 2, 0, 0.58);
+	mat.rotation.y = 0.03; // nobody lays one dead square
+	group.add(mat);
 
 	// The back wall, with the doorway cut out of its bottom edge.
 	const back = new Shape()
@@ -593,6 +595,14 @@ export function buildRoom(rackHeight: number) {
 	const daylight = new PointLight(0xe4ecf2, DAYLIGHT, 4.5, 1.6);
 	daylight.position.set(CORNER - 0.7, 2.2, 1.3);
 	group.add(daylight);
+	// And a little from the door, spilling onto the mat and the boards just inside: brightest at the
+	// threshold and fading into the room with no edge to it, as the sky's light does, so a bare point
+	// of light with no cone. It hangs just outside the doorway, where the back wall, facing away from
+	// it, takes none. It dims with the room too.
+	const SPILL = 1;
+	const spill = new PointLight(0xe4ecf2, SPILL, 5, 1.6);
+	spill.position.set((DOOR.left + DOOR.right) / 2, 1.2, -0.4);
+	group.add(spill);
 
 	// The amp under the board: a combo, with its controls along the top of its front and the
 	// speaker cloth below them. The cable in its input is the cassette player's (see items.ts).
@@ -809,6 +819,7 @@ export function buildRoom(rackHeight: number) {
 		dim(share: number) {
 			for (const { material, colour } of outdoors) material.color.copy(colour).multiplyScalar(1 - share);
 			daylight.intensity = DAYLIGHT * (1 - share);
+			spill.intensity = SPILL * (1 - share);
 		}
 	};
 }
@@ -876,6 +887,200 @@ function cinderBlocks() {
 		const t = new CanvasTexture(from);
 		t.wrapS = t.wrapT = RepeatWrapping;
 		t.repeat.set(1 / (ACROSS * 0.8), 1 / (ROWS * 0.4));
+		t.anisotropy = 8;
+		if (colour) t.colorSpace = SRGBColorSpace;
+		return t;
+	};
+	return { map: texture(canvas, true), bump: texture(relief, false) };
+}
+
+/**
+ * The mat inside the door, lying about its own origin on the floor: a thin rubber backing whose
+ * lip shows all round, and on it a slab of tufted pile with its top edge rolled over. Under it
+ * all, a soft dark patch on the floor, since the mat is too low for the lamp's shadows to show.
+ */
+function doormat(width: number, depth: number) {
+	const LIP = 0.02; // how far the backing shows beyond the pile
+	const BACKING = 0.005; // how thick the backing is
+	const TOP = 0.018; // the top of the pile, above the floor
+	const ROLL = 0.005; // how far the pile's edge is rolled over
+	const SUNK = 0.002; // how far into the backing the pile's slab starts
+	const group = new Group();
+	/** A rectangle with rounded corners about the origin. */
+	const outline = (w: number, h: number, r: number) =>
+		new Shape()
+			.moveTo(-w / 2 + r, -h / 2)
+			.absarc(w / 2 - r, -h / 2 + r, r, -Math.PI / 2, 0, false)
+			.absarc(w / 2 - r, h / 2 - r, r, 0, Math.PI / 2, false)
+			.absarc(-w / 2 + r, h / 2 - r, r, Math.PI / 2, Math.PI, false)
+			.absarc(-w / 2 + r, -h / 2 + r, r, Math.PI, Math.PI * 1.5, false);
+	/** Lay something drawn in x and y down on the floor, its bottom at `y`. */
+	const lay = (mesh: Mesh, y: number) => {
+		mesh.rotation.x = -Math.PI / 2;
+		mesh.position.y = y;
+		group.add(mesh);
+		return mesh;
+	};
+
+	const rubber = new MeshStandardMaterial({ color: 0x1c1524, roughness: 0.85 });
+	lay(new Mesh(new ExtrudeGeometry(outline(width, depth, 0.03), { depth: BACKING, bevelEnabled: false, curveSegments: 8 }), rubber), 0);
+
+	// The pile. An extruded shape's faces take its own x and y as their texture coordinates, so the
+	// textures are placed by those: one copy over the slab, centred. The rolled edge and the sides
+	// fall outside it and take the colour of the textures' edges.
+	const w = width - 2 * LIP;
+	const d = depth - 2 * LIP;
+	const pile = matPile(w, d);
+	for (const t of [pile.map, pile.bump]) {
+		t.repeat.set(1 / w, 1 / d);
+		t.offset.set(0.5, 0.5);
+	}
+	const tufted = new MeshStandardMaterial({ roughness: 1, map: pile.map, bumpMap: pile.bump, bumpScale: 2 });
+	const slab = new ExtrudeGeometry(outline(w - 2 * ROLL, d - 2 * ROLL, 0.015 - ROLL), {
+		depth: TOP - SUNK - 2 * ROLL,
+		curveSegments: 8,
+		bevelEnabled: true,
+		bevelSize: ROLL,
+		bevelThickness: ROLL,
+		bevelSegments: 4
+	});
+	lay(new Mesh(slab, tufted), SUNK + ROLL);
+
+	// The patch on the floor: the mat's outline, blurred, showing as a dark fringe round the backing.
+	const FRINGE = 0.05;
+	const PX = 200;
+	const canvas = document.createElement('canvas');
+	canvas.width = Math.round((width + 2 * FRINGE) * PX);
+	canvas.height = Math.round((depth + 2 * FRINGE) * PX);
+	const c = canvas.getContext('2d')!;
+	c.shadowColor = '#000';
+	c.shadowBlur = FRINGE * PX * 0.8;
+	c.shadowOffsetX = canvas.width * 2; // the rectangle itself is drawn off the picture; only what it casts is on it
+	c.fillRect(FRINGE * PX - canvas.width * 2, FRINGE * PX, width * PX, depth * PX);
+	const shadow = new MeshBasicMaterial({
+		color: 0x000000,
+		map: new CanvasTexture(canvas),
+		transparent: true,
+		opacity: 0.55,
+		depthWrite: false,
+		polygonOffset: true, // it lies all but on the floor
+		polygonOffsetFactor: -1,
+		polygonOffsetUnits: -1
+	});
+	lay(new Mesh(new PlaneGeometry(width + 2 * FRINGE, depth + 2 * FRINGE), shadow), 0.001);
+
+	return group;
+}
+
+/**
+ * The mat's surface: tufted pile in purple, which is a crowd of short fibres lying every way, each
+ * a little lighter or darker than the next, over the shadow between them. Over that, at the mat's
+ * own size, what use has done to it: uneven tone, a paler and flatter patch in the middle where
+ * feet land, dirt gathered toward the edges, and a little lint. The second texture is the relief:
+ * the fibres at their different heights, pressed flatter where the mat is worn. `width` and
+ * `depth` are the pile's, and one copy covers it.
+ */
+function matPile(width: number, depth: number) {
+	const PX = 800; // px per unit of mat, so a fibre 3 to 8 px long is 4 to 10 mm
+	const W = Math.round(width * PX);
+	const H = Math.round(depth * PX);
+	// A fixed scatter, so that the mat is the same on every visit.
+	let seed = 31;
+	const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+	const sheet = (fill: string) => {
+		const canvas = document.createElement('canvas');
+		canvas.width = W;
+		canvas.height = H;
+		const c = canvas.getContext('2d')!;
+		c.fillStyle = fill;
+		c.fillRect(0, 0, W, H);
+		c.lineCap = 'round';
+		return { canvas, c };
+	};
+	const { canvas, c } = sheet('#3a2060'); // down between the fibres
+	const { canvas: relief, c: r } = sheet('rgb(80,80,80)');
+	/** One fibre, in the paint and (if `height` is given) in the relief. */
+	const fibre = (colour: string, thick: number, height?: number) => {
+		const x = random() * W;
+		const y = random() * H;
+		const length = 3 + random() * 5;
+		const turn = random() * Math.PI * 2;
+		const dx = (Math.cos(turn) * length) / 2;
+		const dy = (Math.sin(turn) * length) / 2;
+		for (const { ctx, stroke } of [
+			{ ctx: c, stroke: colour },
+			...(height === undefined ? [] : [{ ctx: r, stroke: `rgb(${height},${height},${height})` }])
+		]) {
+			ctx.strokeStyle = stroke;
+			ctx.lineWidth = thick;
+			ctx.beginPath();
+			ctx.moveTo(x - dx, y - dy);
+			ctx.lineTo(x + dx, y + dy);
+			ctx.stroke();
+		}
+	};
+	// The pile: about the mat's colour, 0x4b2b7d, and varied in lightness more than in hue.
+	for (let i = 0; i < 36000; i++) {
+		const light = 0.78 + random() * 0.5;
+		const red = random(); // a few lean toward plum, a few toward blue
+		const rgb = [70 + 12 * red, 43, 128 - 10 * red].map((v) => Math.round(v * light));
+		fibre(`rgb(${rgb})`, 1.2 + random() * 1.2, Math.round(90 + random() * 150));
+	}
+	// A few pale fibres, faded or catching the light.
+	for (let i = 0; i < 900; i++) fibre(`rgba(150,122,196,${0.25 + random() * 0.3})`, 1, Math.round(190 + random() * 50));
+
+	// Uneven tone: wide, faint patches, some darker and some paler.
+	for (let i = 0; i < 14; i++) {
+		const x = random() * W;
+		const y = random() * H;
+		const radius = 80 + random() * 180;
+		const strength = 0.05 + random() * 0.07;
+		const patch = c.createRadialGradient(x, y, 0, x, y, radius);
+		const tone = random() < 0.6 ? '22,10,44' : '168,148,204';
+		patch.addColorStop(0, `rgba(${tone},${strength})`);
+		patch.addColorStop(1, `rgba(${tone},0)`);
+		c.fillStyle = patch;
+		c.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+	}
+	// Where feet land: an oval in the middle, greyed and paler in the paint and pressed flat in the relief.
+	for (const [ctx, tone, strength] of [
+		[c, '150,134,170', 0.2],
+		[r, '125,125,125', 0.55]
+	] as const) {
+		ctx.save();
+		ctx.translate(W / 2, H / 2);
+		ctx.scale(W * 0.4, H * 0.38);
+		const worn = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+		worn.addColorStop(0, `rgba(${tone},${strength})`);
+		worn.addColorStop(0.5, `rgba(${tone},${strength * 0.7})`);
+		worn.addColorStop(1, `rgba(${tone},0)`);
+		ctx.fillStyle = worn;
+		ctx.fillRect(-1, -1, 2, 2);
+		ctx.restore();
+	}
+	// Darker toward the edges, where the dirt is swept to and nothing treads it pale.
+	const EDGE = 70;
+	for (const [x0, y0, x1, y1] of [
+		[0, 0, EDGE, 0],
+		[W, 0, W - EDGE, 0],
+		[0, 0, 0, EDGE],
+		[0, H, 0, H - EDGE]
+	]) {
+		const shade = c.createLinearGradient(x0, y0, x1, y1);
+		shade.addColorStop(0, 'rgba(14,7,28,0.4)');
+		shade.addColorStop(1, 'rgba(14,7,28,0)');
+		c.fillStyle = shade;
+		c.fillRect(0, 0, W, H);
+	}
+	// Lint and grit, in the paint alone.
+	for (let i = 0; i < 260; i++) {
+		const size = 1 + random() * 2;
+		c.fillStyle = `rgba(${random() < 0.5 ? '205,196,178' : '30,24,20'},${0.2 + random() * 0.3})`;
+		c.fillRect(random() * W, random() * H, size, size);
+	}
+
+	const texture = (from: HTMLCanvasElement, colour: boolean) => {
+		const t = new CanvasTexture(from);
 		t.anisotropy = 8;
 		if (colour) t.colorSpace = SRGBColorSpace;
 		return t;
