@@ -68,11 +68,13 @@ export function buildRoom(rackHeight: number) {
 
 	const blocks = cinderBlocks();
 	const wall = new MeshStandardMaterial({
-		color: 0xa9acaf, // a touch cool, to come out off-white under the warm lamp
-		roughness: 1,
+		color: 0xe2e0d8, // off-white paint, barely warm, since the lamp warms it further
+		roughness: 0.8, // paint has a little sheen, which lets the relief catch the lamp
 		map: blocks.map,
 		bumpMap: blocks.bump,
-		bumpScale: 0.04
+		// three takes the relief's slope per screen pixel, not per unit of wall, so this is of order 1:
+		// a joint's full step between neighbouring pixels then tips the surface about 40 degrees.
+		bumpScale: 3
 	});
 	const boards = new MeshStandardMaterial({ color: 0x5a3f2b, roughness: 0.8, map: floorboards(FAR + CORNER, FAR) });
 	// All the woodwork: the door and window frames, the skirting, and the frame of the pinboard.
@@ -812,7 +814,7 @@ export function buildRoom(rackHeight: number) {
  * The walls' surface: painted cinder blocks, 0.8 by 0.4 (40 cm by 20), each row half a block along
  * from the one below. One tile is four blocks by four rows, each block its own shade, and it
  * repeats by the walls' own coordinates, which are their texture coordinates. The second texture
- * is the same picture read as relief, which sinks the mortar.
+ * is the relief, drawn separately: the joints sunk between the blocks, and the faces pitted.
  */
 function cinderBlocks() {
 	const ACROSS = 4;
@@ -820,12 +822,21 @@ function cinderBlocks() {
 	const W = 256; // px per block
 	const H = 128;
 	const JOINT = 3;
-	const canvas = document.createElement('canvas');
-	canvas.width = ACROSS * W;
-	canvas.height = ROWS * H;
-	const c = canvas.getContext('2d')!;
-	c.fillStyle = '#e2e2e2'; // the mortar, barely darker than the blocks
-	c.fillRect(0, 0, canvas.width, canvas.height);
+	const BEVEL = 3; // px over which a block's edge rolls down into the joint
+	const MORTAR = 140; // the joint's height, where a block's face is FACE
+	const FACE = 220;
+	const sheet = (fill: string) => {
+		const canvas = document.createElement('canvas');
+		canvas.width = ACROSS * W;
+		canvas.height = ROWS * H;
+		const c = canvas.getContext('2d')!;
+		c.fillStyle = fill;
+		c.fillRect(0, 0, canvas.width, canvas.height);
+		return { canvas, c };
+	};
+	// The paint is one colour over blocks and mortar alike; it is the relief that tells them apart.
+	const { canvas, c } = sheet('#e6e6e6');
+	const { canvas: relief, c: r } = sheet(`rgb(${MORTAR},${MORTAR},${MORTAR})`);
 	// A fixed scatter, so that the wall is the same on every visit.
 	let seed = 7;
 	const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -836,23 +847,37 @@ function cinderBlocks() {
 			const y = row * H + JOINT / 2;
 			const shade = 232 + Math.round(random() * 6);
 			c.fillStyle = `rgb(${shade},${shade},${shade})`;
-			for (const at of [x, x + canvas.width]) c.fillRect(at, y, W - JOINT, H - JOINT);
+			for (const at of [x, x + canvas.width]) {
+				c.fillRect(at, y, W - JOINT, H - JOINT);
+				// The same block in relief, stepped up from the joint to its face.
+				for (let k = 0; k <= BEVEL; k++) {
+					const height = Math.round(MORTAR + ((FACE - MORTAR) * (k + 1)) / (BEVEL + 1));
+					r.fillStyle = `rgb(${height},${height},${height})`;
+					r.fillRect(at + k, y + k, W - JOINT - 2 * k, H - JOINT - 2 * k);
+				}
+			}
 		}
 	}
-	// The blocks' pitted faces.
-	for (let i = 0; i < 5000; i++) {
-		c.fillStyle = `rgba(0,0,0,${0.02 + random() * 0.04})`;
-		c.fillRect(random() * canvas.width, random() * canvas.height, 2 + random() * 3, 2 + random() * 3);
+	// The blocks' pitted faces: many small holes in the relief, and only a breath of them in the paint.
+	for (let i = 0; i < 14000; i++) {
+		const x = random() * canvas.width;
+		const y = random() * canvas.height;
+		const size = 1 + random() * 2.5;
+		const depth = 0.04 + random() * 0.1;
+		r.fillStyle = `rgba(0,0,0,${depth})`;
+		r.fillRect(x, y, size, size);
+		c.fillStyle = `rgba(0,0,0,${depth * 0.2})`;
+		c.fillRect(x, y, size, size);
 	}
-	const texture = (colour: boolean) => {
-		const t = new CanvasTexture(canvas);
+	const texture = (from: HTMLCanvasElement, colour: boolean) => {
+		const t = new CanvasTexture(from);
 		t.wrapS = t.wrapT = RepeatWrapping;
 		t.repeat.set(1 / (ACROSS * 0.8), 1 / (ROWS * 0.4));
 		t.anisotropy = 8;
 		if (colour) t.colorSpace = SRGBColorSpace;
 		return t;
 	};
-	return { map: texture(true), bump: texture(false) };
+	return { map: texture(canvas, true), bump: texture(relief, false) };
 }
 
 /**
