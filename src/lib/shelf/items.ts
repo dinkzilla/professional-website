@@ -66,9 +66,11 @@ interface Placement {
 	fixed?: boolean;
 	/**
 	 * Stays where it is too, but a tap on it is still passed to the page, which does something
-	 * else with it; and it does not lean out under the pointer.
+	 * else with it.
 	 */
 	link?: boolean;
+	/** How far it comes forward under the pointer, where that is not as far as most things do. */
+	out?: number;
 	/** Its attitude once picked up: pitch (tipped toward the viewer) and yaw, in radians. */
 	held?: { pitch?: number; yaw?: number };
 	build: () => Group;
@@ -1509,7 +1511,7 @@ const placements: Placement[] = [
 		build: gameBox
 	},
 	...fliers,
-	{ id: 'tie', shelf: WALL, x: HOOK.x, up: HOOK.y, lean: -0.03, link: true, build: tie },
+	{ id: 'tie', shelf: WALL, x: HOOK.x, up: HOOK.y, lean: -0.03, link: true, out: 0.03, build: tie },
 	{ id: 'cassette', shelf: 3, x: 0, flush: PANEL_HEIGHT, fixed: true, build: cassettePlayer }
 ];
 

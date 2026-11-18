@@ -625,7 +625,7 @@ function createShelf() {
 			}
 			const e = ease(p.t);
 			p.group.position.lerpVectors(p.shelfPosition, p.heldPosition, e);
-			p.group.position.z += 0.06 * p.nudge * (1 - e);
+			p.group.position.z += (p.item.out ?? 0.06) * p.nudge * (1 - e);
 			p.group.quaternion.slerpQuaternions(p.shelfRotation, p.heldRotation, e);
 			lift = Math.max(lift, e);
 			p.works?.lifted?.(e);
@@ -742,8 +742,8 @@ function createShelf() {
 		if (event.pointerType !== 'mouse') return;
 		const hit = under(event);
 		const item = itemAt(hit);
-		// Only what can be picked up leans out under the pointer.
-		const over = held ? (item === held ? item : undefined) : item?.item.link ? undefined : item;
+		// Whatever a tap would pick up, or do something else with, leans out under the pointer.
+		const over = held ? (item === held ? item : undefined) : item;
 		canvas.style.cursor = held || item || controlAt(hit) ? 'pointer' : '';
 		if (over !== hovered) {
 			hovered = over;
