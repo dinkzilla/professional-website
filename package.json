@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"dev:personal": "DEFAULT_SIDE=personal vite dev",
+		"dev:hosted": "vite dev --host",
 		"build": "vite build",
 		"build:personal": "DEFAULT_SIDE=personal vite build",
 		"preview": "vite build && vite preview",

@@ -4,6 +4,8 @@
    everything else nests inside the third. */
 :where(:root:has(.side-personal)) {
 	background: #000;
+	/* No pull-to-refresh or rubber-banding: the page is a fixed scene (see personal/+page.svelte). */
+	overscroll-behavior: none;
 }
 
 :where(:root:has(.side-personal)) body {

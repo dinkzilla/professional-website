@@ -27,6 +27,7 @@ import {
 	type Material,
 	type Object3D
 } from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { createFirmware } from '#lib/video-module/firmware.ts';
 import { createMpv } from '#lib/video-module/mpv.ts';
 import { createOled } from '#lib/video-module/oled.ts';
@@ -73,6 +74,16 @@ export type Item = Entry & Placement;
 export interface Control {
 	/** It was pressed and let go. */
 	tap: () => void;
+	/**
+	 * It was pressed and let go by a finger, where that does something else: a finger cannot pick
+	 * out parts of it that a mouse can.
+	 */
+	touch?: () => void;
+	/**
+	 * It was pressed and dragged far enough for one click: down the window (1) or up it (-1). A
+	 * press that turns it is not a tap, and a finger that starts on it does not scroll the page.
+	 */
+	turn?: (by: 1 | -1) => void;
 }
 
 /**
@@ -559,28 +570,49 @@ function videoModule() {
 	// degrees through its middle, which is not marked: a press above and to the left of the line
 	// turns the knob one click anticlockwise, which is up the list, and a press below and to the
 	// right of it turns it one click clockwise, which is down.
-	const press = (shape: BufferGeometry, x: number, z: number, tap: () => void) => {
+	//
+	// Those three are too small to tell apart under a finger. So a press anywhere on the knob
+	// that is dragged turns it, a click at a time, down the window being down the list. And a tap
+	// by a finger pushes it in wherever on it the tap lands.
+	const press = (shape: BufferGeometry, x: number, z: number, control: Control) => {
 		const m = new Mesh(shape, dark);
 		m.position.set(x, h / 2, z);
 		m.visible = false;
-		m.userData.control = { tap } satisfies Control;
+		m.userData.control = control;
 		g.add(m);
 	};
-	const turn = (by: 1 | -1) => () => {
+	const turn = (by: 1 | -1) => {
 		clicks += by;
 		inside.firmware.rotary(by > 0 ? 'down' : 'up');
 	};
+	// Dragged, it is seen to turn a click at a time as well, but it takes two of those the same
+	// way to move the list: one for one runs through the list faster than a finger can stop it.
+	let slack = 0;
+	const drag = (by: 1 | -1) => {
+		clicks += by;
+		slack += by;
+		if (Math.abs(slack) < 2) return;
+		slack = 0;
+		inside.firmware.rotary(by > 0 ? 'down' : 'up');
+	};
+	const push = () => {
+		pushed = 1;
+		inside.firmware.button();
+	};
 	const REACH = RIM + 0.025; // how far from the knob's middle a press still turns it
-	press(new CircleGeometry(REACH, 24, Math.PI / 4, Math.PI), KNOB, FACE + 0.001, turn(-1));
-	press(new CircleGeometry(REACH, 24, (-3 * Math.PI) / 4, Math.PI), KNOB, FACE + 0.001, turn(1));
+	const half = (from: number, by: 1 | -1) =>
+		press(new CircleGeometry(REACH, 24, from, Math.PI), KNOB, FACE + 0.001, {
+			tap: () => turn(by),
+			touch: push,
+			turn: drag
+		});
+	half(Math.PI / 4, -1);
+	half((-3 * Math.PI) / 4, 1);
 	// The circle's own shape covers the mouth of the hollow, so that a press on anything seen
 	// through it is a press on the circle. It is just in front of the other two, which makes it
 	// the one such a press finds.
-	press(new CircleGeometry(MIDDLE, 24), KNOB, FACE + 0.002, () => {
-		pushed = 1;
-		inside.firmware.button();
-	});
-	press(new BoxGeometry(0.07, 0.2, 0.08), TOGGLE, 0.04, inside.flip);
+	press(new CircleGeometry(MIDDLE, 24), KNOB, FACE + 0.002, { tap: push, turn: drag });
+	press(new BoxGeometry(0.07, 0.2, 0.08), TOGGLE, 0.04, { tap: inside.flip });
 
 	/** A step from `now` toward `goal`, most of the way there in `time` seconds. */
 	const toward = (now: number, goal: number, dt: number, time: number) =>
@@ -607,11 +639,22 @@ function videoModule() {
 	// side, goes under the tv and round the right-hand side of its arm, and up behind it to the
 	// socket on its back.
 	const port = new Vector3(-0.46, 0.15, 0);
-	const plug = { w: 0.065, h: 0.13, d: 0.13 };
+	const plug = { w: 0.056, h: 0.112, d: 0.112 };
 	g.add(box(plug.w + 0.02, plug.h + 0.02, 0.004, dark, port.x, port.y - plug.h / 2 - 0.01, 0));
-	g.add(box(plug.w, plug.h, plug.d, plugRed, port.x, port.y - plug.h / 2, plug.d / 2));
+	// Its body, the edges and corners rounded off. It goes into the panel by as much as they are
+	// rounded, so that it still meets the socket square.
+	const corner = 0.014;
+	g.add(
+		mesh(
+			new RoundedBoxGeometry(plug.w, plug.h, plug.d + corner, 4, corner),
+			plugRed,
+			port.x,
+			port.y,
+			(plug.d - corner) / 2
+		)
+	);
 	g.add(box(plug.w - 0.02, plug.h - 0.03, 0.02, light, port.x, port.y - plug.h / 2 + 0.015, 0.012)); // its metal end
-	g.add(round(0.024, 0.05, plugRed, port.x, port.y, plug.d)); // where the cable leaves it
+	g.add(round(0.021, 0.05 + corner, plugRed, port.x, port.y, plug.d - corner)); // where the cable leaves it
 	const R = 0.014; // the cable's radius
 	// Where along the rack it goes over the lip. That is above the knob's left-hand edge, but by
 	// the height of the knob the cable has fallen away to the left of where the knob is pressed.

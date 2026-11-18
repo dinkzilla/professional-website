@@ -3,8 +3,9 @@
 // panels flush with its front; the others stand on its shelves, and some of those come forward
 // when picked.
 //
-// The page scrolls natively; the canvas is fixed and the camera follows the scroll position, so
-// the unit behaves like a column of ordinary page content. The camera looks at the wall square-on
+// The page gives the scene an element that scrolls natively (see Host.scroller); the canvas stays
+// put in it and the camera follows the scroll position, so the unit behaves like a column of
+// ordinary page content. The camera looks at the wall square-on
 // from its left at about eye level. One world unit is `ppu` pixels where the middle of the unit's
 // front edge is drawn.
 //
@@ -98,7 +99,7 @@ const MARGIN = 44; // px kept clear above and below the unit
 // The unit sits this many px above centre: there is clear air over the things on its top shelf,
 // and its near bottom corner hangs low in perspective, so true centre looks too low.
 const RAISE = 32;
-const GUTTER = 16; // px kept clear either side
+const GUTTER = 28; // px kept clear either side
 const FIT_SHELVES = 4; // the unit is sized so this many shelves fit the window's height...
 const MIN_PPU = 150; // ...unless that would make it narrower than this many px per unit
 const OFF_CENTRE = 0.12; // in wide windows the unit sits this share of the width left of centre
@@ -116,12 +117,17 @@ export interface Layout {
 	mode: LayoutMode;
 	/** Where the unit's right edge is on screen. */
 	unitRight: number;
-	/** How tall the document has to be for the whole unit to scroll into view. */
+	/** How tall the scrolled content has to be for the whole unit to scroll into view. */
 	contentPx: number;
 }
 
 /** What the scene needs from the page it is shown on. */
 export interface Host {
+	/**
+	 * The element whose scrolling moves the camera. It is not the document, because a phone's
+	 * browser slides its bars in and out as the document scrolls.
+	 */
+	scroller: HTMLElement;
 	/** The height to lay out for: the viewport with the browser's bars showing. */
 	fitHeight: () => number;
 	onLayout: (layout: Layout) => void;
@@ -454,7 +460,7 @@ function createShelf() {
 	let shift = 0; // px: how far below the camera's axis the window's centre is
 	let aside = 0; // px: how far to the right of the camera's axis it is
 	let offset = 0; // px: how far right of the window's centre the unit is (negative: left)
-	let top = 0; // px from the top of the document to the top of the unit
+	let top = 0; // px from the top of the scrolled content to the top of the unit
 	let mode: LayoutMode = 'tall';
 	let held: Placed | undefined;
 	const view = new Frustum(); // what the window takes in, from where the camera is
@@ -509,10 +515,15 @@ function createShelf() {
 		follow();
 	}
 
+	/** How far the page's scroller has been scrolled. */
+	function scrolled(): number {
+		return host?.scroller.scrollTop ?? 0;
+	}
+
 	/** Put the camera where the scroll position says, and anything held in front of it. */
 	function follow() {
 		const distance = focal / ppu;
-		const scroll = host ? window.scrollY : 0;
+		const scroll = scrolled();
 		const centre = (top - scroll - height / 2) / ppu; // world y at the window's centre
 		// The window is centred on the unit's front and its visible side together.
 		const middle = (DEPTH * Math.sin(TURN)) / 2;
@@ -664,18 +675,41 @@ function createShelf() {
 		return held ? undefined : hit?.object.userData.control;
 	}
 
+	// A press that starts on a part that turns, and how far down the window it had got at the
+	// last click. From there it takes another CLICK_PX either way for the next one, so a finger
+	// resting where one click came does not rock between two.
+	const CLICK_PX = 12;
+	let turning: { control: Control; id: number; y: number; turned: boolean } | undefined;
+
+	function letGo() {
+		if (turning && canvas.hasPointerCapture(turning.id)) canvas.releasePointerCapture(turning.id);
+		turning = undefined;
+	}
+
 	function onPointerDown(event: PointerEvent) {
-		if (event.button !== 0) return;
-		down = { x: event.clientX, y: event.clientY, scroll: window.scrollY };
+		if (event.button !== 0 || !event.isPrimary) return;
+		down = { x: event.clientX, y: event.clientY, scroll: scrolled() };
+		const control = controlAt(under(event));
+		if (!control?.turn) return;
+		turning = { control, id: event.pointerId, y: event.clientY, turned: false };
+		// The press stays the knob's however far from it the drag goes.
+		canvas.setPointerCapture(event.pointerId);
+	}
+
+	/** A finger that came down on a part that turns is turning it, not scrolling the page. */
+	function onTouchStart(event: TouchEvent) {
+		if (turning && event.cancelable) event.preventDefault();
 	}
 
 	function onPointerUp(event: PointerEvent) {
 		const start = down;
+		const turned = turning?.turned;
 		down = undefined;
-		if (!start) return;
+		letGo();
+		if (!start || turned) return;
 		// A press that moved, or that scrolled the page, was not a tap.
 		const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-		if (moved > 10 || Math.abs(window.scrollY - start.scroll) > 4) return;
+		if (moved > 10 || Math.abs(scrolled() - start.scroll) > 4) return;
 		const hit = under(event);
 		const control = controlAt(hit);
 		const item = itemAt(hit);
@@ -683,12 +717,23 @@ function createShelf() {
 		if (held) host?.onTap(null);
 		else if (control) {
 			// A tap on a working part works it, where it is.
-			control.tap();
+			if (event.pointerType !== 'mouse' && control.touch) control.touch();
+			else control.tap();
 			request();
 		} else if (item) host?.onTap(item.item.id);
 	}
 
 	function onPointerMove(event: PointerEvent) {
+		if (turning?.id === event.pointerId) {
+			while (Math.abs(event.clientY - turning.y) >= CLICK_PX) {
+				const by = event.clientY > turning.y ? 1 : -1;
+				turning.y += by * CLICK_PX;
+				turning.turned = true;
+				turning.control.turn?.(by);
+			}
+			if (turning.turned) request();
+			return;
+		}
 		if (event.pointerType !== 'mouse') return;
 		const hit = under(event);
 		const item = itemAt(hit);
@@ -700,8 +745,33 @@ function createShelf() {
 		}
 	}
 
+	// The wheel, over a part that turns, turns it instead of scrolling the page: a click for every
+	// WHEEL_PX it would have scrolled, which is two to a notch of most wheels.
+	const WHEEL_PX = 50;
+	let wheeled: { control: Control; by: number } | undefined;
+
+	function onWheel(event: WheelEvent) {
+		const control = controlAt(under(event));
+		if (!control?.turn || event.ctrlKey) {
+			wheeled = undefined;
+			return;
+		}
+		event.preventDefault();
+		if (wheeled?.control !== control) wheeled = { control, by: 0 };
+		// Some browsers count in lines or pages instead of pixels.
+		const unit = event.deltaMode === 1 ? 100 / 3 : event.deltaMode === 2 ? height : 1;
+		wheeled.by += event.deltaY * unit;
+		while (Math.abs(wheeled.by) >= WHEEL_PX) {
+			const by = wheeled.by > 0 ? 1 : -1;
+			wheeled.by -= by * WHEEL_PX;
+			control.turn(by);
+		}
+		request();
+	}
+
 	function onPointerLeave() {
 		down = undefined;
+		letGo();
 		if (hovered) {
 			hovered = undefined;
 			request();
@@ -709,6 +779,8 @@ function createShelf() {
 	}
 
 	canvas.addEventListener('pointerdown', onPointerDown);
+	canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+	canvas.addEventListener('wheel', onWheel, { passive: false });
 	canvas.addEventListener('pointerup', onPointerUp);
 	canvas.addEventListener('pointercancel', onPointerLeave);
 	canvas.addEventListener('pointermove', onPointerMove);
@@ -756,7 +828,7 @@ function createShelf() {
 		attach(element: HTMLElement, page: Host) {
 			host = page;
 			element.append(canvas);
-			window.addEventListener('scroll', follow, { passive: true });
+			page.scroller.addEventListener('scroll', follow, { passive: true });
 			window.addEventListener('resize', layout);
 			for (const works of working) works.start(redraw);
 			layout();
@@ -766,11 +838,11 @@ function createShelf() {
 		},
 		/** Take the scene off its page, with everything back on the shelf, and keep it for later. */
 		detach() {
+			host?.scroller.removeEventListener('scroll', follow);
 			host = undefined;
 			cancelAnimationFrame(frame);
 			frame = 0;
 			last = 0;
-			window.removeEventListener('scroll', follow);
 			window.removeEventListener('resize', layout);
 			for (const works of working) works.stop();
 			canvas.remove();
