@@ -122,7 +122,10 @@ export interface Host {
 	/** The height to lay out for: the viewport with the browser's bars showing. */
 	fitHeight: () => number;
 	onLayout: (layout: Layout) => void;
-	/** An object was tapped (its id), or the space around a held object was (null). */
+	/**
+	 * An object was tapped (its id), or the space around a held object was (null). The page has
+	 * the object picked up, unless it is one that does something else (`link` in items.ts).
+	 */
 	onTap: (id: string | null) => void;
 }
 
@@ -611,7 +614,7 @@ function createShelf() {
 		}
 		for (const works of working) if (works.tick(dt)) moving = true;
 
-		wash.intensity = 60 * (1 - DIM * lift);
+		wash.intensity = 8 * (1 - DIM * lift);
 		heldLight.intensity = 9 * lift;
 		room.dim(DIM * lift);
 		for (const works of working) works.dim(DIM * lift);
@@ -721,7 +724,8 @@ function createShelf() {
 		if (event.pointerType !== 'mouse') return;
 		const hit = under(event);
 		const item = itemAt(hit);
-		const over = held ? (item === held ? item : undefined) : item;
+		// Only what can be picked up leans out under the pointer.
+		const over = held ? (item === held ? item : undefined) : item?.item.link ? undefined : item;
 		canvas.style.cursor = held || item || controlAt(hit) ? 'pointer' : '';
 		if (over !== hovered) {
 			hovered = over;
@@ -775,7 +779,7 @@ function createShelf() {
 	return {
 		/** Bring an object forward (by id), or put whatever is held back (null). */
 		pick(id: string | null) {
-			held = placed.find((p) => p.item.id === id && p.group.visible && !p.item.fixed);
+			held = placed.find((p) => p.item.id === id && p.group.visible && !p.item.fixed && !p.item.link);
 			if (held) hold(held);
 			request();
 		},

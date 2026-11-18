@@ -32,6 +32,7 @@ import { createFirmware } from '#lib/video-module/firmware.ts';
 import { createMpv } from '#lib/video-module/mpv.ts';
 import { createOled } from '#lib/video-module/oled.ts';
 import { catalogue, type Entry } from './catalogue.ts';
+import { tie } from './tie.ts';
 
 interface Placement {
 	id: string;
@@ -60,6 +61,11 @@ interface Placement {
 	pinned?: boolean;
 	/** Stays on the shelf: it cannot be picked up. */
 	fixed?: boolean;
+	/**
+	 * Stays where it is too, but a tap on it is still passed to the page, which does something
+	 * else with it; and it does not lean out under the pointer.
+	 */
+	link?: boolean;
 	/** Its attitude once picked up: pitch (tipped toward the viewer) and yaw, in radians. */
 	held?: { pitch?: number; yaw?: number };
 	build: () => Group;
@@ -114,7 +120,7 @@ export const WALL = -1;
 // wide as the rack. The heights are as it was laid out: it is hung with its top level with the top
 // of the door's opening, which is as high as the rack and what stands on it, so the board and
 // everything pinned to it are moved up or down together by the difference (`lift` in room.ts).
-export const PINBOARD = { left: -2, right: -0.3, bottom: 1.21, top: 2.4 };
+export const PINBOARD = { left: -1.7, right: 0, bottom: 1.21, top: 2.4 };
 
 // The middle one of the three hooks by the door, which the tie hangs on (they are built in
 // room.ts): where along the wall, and how far above the floor.
@@ -146,9 +152,6 @@ const gloss = new MeshStandardMaterial({ color: 0x050506, roughness: 0.22 });
 const powerBlue = new MeshStandardMaterial({ color: 0x2f7dff, roughness: 0.5, emissive: 0x2f7dff, emissiveIntensity: 0.9 });
 const accent = new MeshStandardMaterial({ color: 0xd9a400, roughness: 0.55 });
 const page = new MeshStandardMaterial({ color: 0xe6e1d4, roughness: 0.95 });
-// Bright enough to show in the dim of the room.
-const pink = new MeshStandardMaterial({ color: 0xff2e93, roughness: 0.6, emissive: 0xff2e93, emissiveIntensity: 0.25 });
-const pinkShade = new MeshStandardMaterial({ color: 0xc81f70, roughness: 0.6, emissive: 0xc81f70, emissiveIntensity: 0.2 });
 // The plugs on the two cables, matching the flecks in their braid.
 const plugRed = new MeshStandardMaterial({ color: 0xc22424, roughness: 0.6 });
 const plugGreen = new MeshStandardMaterial({ color: 0x52cf6c, roughness: 0.6 });
@@ -975,11 +978,11 @@ function flier(index: number, w: number, h: number) {
 
 // Pinned up none too carefully: where along the wall, how high, how crooked, and its size.
 const pinned: [number, number, number, number, number][] = [
-	[-1.73, 2.05, 0.05, 0.34, 0.48],
-	[-1.24, 2.1, -0.04, 0.36, 0.49],
-	[-0.7, 2.07, 0.03, 0.34, 0.48],
-	[-1.49, 1.52, -0.06, 0.34, 0.46],
-	[-0.87, 1.51, 0.07, 0.36, 0.49]
+	[-1.43, 2.05, 0.05, 0.34, 0.48],
+	[-0.94, 2.1, -0.04, 0.36, 0.49],
+	[-0.4, 2.07, 0.03, 0.34, 0.48],
+	[-1.19, 1.52, -0.06, 0.34, 0.46],
+	[-0.57, 1.51, 0.07, 0.36, 0.49]
 ];
 const fliers: Placement[] = pinned.map(([x, up, lean, w, h], i) => ({
 	id: `flier-${i + 1}`,
@@ -990,43 +993,6 @@ const fliers: Placement[] = pinned.map(([x, up, lean, w, h], i) => ({
 	pinned: true,
 	build: () => flier(i, w, h)
 }));
-
-/**
- * A tie taken off over the head and hung up still knotted: the loop that went round the neck, the
- * knot under it, and the two blades hanging from that. Its origin is the top of the loop, where
- * the hook is, and it hangs flat against the wall facing out.
- */
-function tie() {
-	const g = new Group();
-	const loopW = 0.1;
-	const loopH = 0.17; // half the loop's height
-	const loop = mesh(new TorusGeometry(loopW, 0.016, 8, 40), pink, 0, -loopH, 0);
-	loop.scale.set(1, loopH / loopW, 0.5);
-	g.add(loop);
-	const knotY = -2 * loopH - 0.03;
-	const knot = mesh(new CylinderGeometry(0.062, 0.038, 0.09, 4), pink, 0, knotY, 0.008);
-	knot.rotation.y = Math.PI / 4;
-	knot.scale.z = 0.45;
-	g.add(knot);
-	const blade = (half: number, length: number, material: Material) => {
-		const outline = new Shape()
-			.moveTo(-0.026, 0)
-			.lineTo(0.026, 0)
-			.lineTo(half, -length + half)
-			.lineTo(0, -length)
-			.lineTo(-half, -length + half)
-			.closePath();
-		return mesh(new ExtrudeGeometry(outline, { depth: 0.006, bevelEnabled: false }), material);
-	};
-	// The narrow blade behind, hanging a little askew, and the wide one in front.
-	const narrow = blade(0.035, 0.6, pinkShade);
-	narrow.position.set(0, knotY - 0.03, -0.006);
-	narrow.rotation.z = 0.07;
-	const wide = blade(0.085, 0.82, pink);
-	wide.position.set(0, knotY - 0.03, 0.002);
-	g.add(narrow, wide);
-	return g;
-}
 
 const placements: Placement[] = [
 	{ id: 'tv', shelf: 0, x: TV_X, back: TV_BACK, yaw: TV_YAW, fixed: true, build: tv },
@@ -1043,7 +1009,7 @@ const placements: Placement[] = [
 	},
 	...books,
 	...fliers,
-	{ id: 'tie', shelf: WALL, x: HOOK.x, up: HOOK.y, lean: -0.03, build: tie },
+	{ id: 'tie', shelf: WALL, x: HOOK.x, up: HOOK.y, lean: -0.03, link: true, build: tie },
 	{ id: 'cassette', shelf: 3, x: 0, flush: PANEL_HEIGHT, fixed: true, build: cassettePlayer }
 ];
 

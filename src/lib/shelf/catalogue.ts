@@ -40,7 +40,8 @@ export const catalogue: Entry[] = [
 		blurb: 'Placeholder: which show this was.'
 	})),
 	{
-		// The way back to the work side: the page adds the link under this (see routes/personal).
+		// The way back to the work side: a tap on it goes there (see routes/personal). It is never
+		// picked up, so its blurb is not shown.
 		id: 'tie',
 		label: 'tie',
 		blurb: 'Still tied, for getting back into quickly.'

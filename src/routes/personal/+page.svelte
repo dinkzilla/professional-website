@@ -21,7 +21,9 @@
 	const picked = $derived(catalogue.find((entry) => entry.id === page.state.picked));
 
 	function tap(id: string | null) {
-		if (id) pushState('', { picked: id });
+		// The tie is the way back to the work side: it is not picked up.
+		if (id === 'tie') rollToWork();
+		else if (id) pushState('', { picked: id });
 		else if (page.state.picked) history.back();
 	}
 
@@ -36,6 +38,8 @@
 					onTap: tap
 				});
 				shelf = prepared;
+				// The roller is loaded now, ahead of a tap on the tie.
+				import('#lib/roller.ts').then((roller) => roller.warm());
 			})
 			.catch(() => {
 				// No scene (it failed to load, or there is no WebGL): the page stays empty for now.
@@ -49,27 +53,13 @@
 
 	$effect(() => shelf?.pick(picked?.id ?? null));
 
-	// The tie's link paints the work site over this page with a roller (see #lib/roller.ts).
-	// The module is loaded when the tie is picked up, ahead of the click.
+	// A tap on the tie paints the work site over this page with a roller (see #lib/roller.ts).
 	let rolling = false;
+	const work = href('work', '/');
 
-	function warmRoller() {
-		import('#lib/roller.ts').then((roller) => roller.warm());
-	}
-
-	$effect(() => {
-		if (picked?.id === 'tie') warmRoller();
-	});
-
-	async function rollPaint(event: MouseEvent) {
-		// Leave new-tab clicks alone.
-		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-			return;
-		}
-		event.preventDefault();
+	async function rollToWork() {
 		if (rolling) return;
 		rolling = true;
-		const href = (event.currentTarget as HTMLAnchorElement).pathname;
 		let roll: (() => void) | undefined;
 		// The roller takes a picture of the page, in which the scene's own canvas would be blank,
 		// so a copy of it stands in while the picture is taken.
@@ -82,7 +72,7 @@
 			// No roller (capture or WebGL failed): just go.
 		}
 		copy?.remove();
-		await goto(href);
+		await goto(work);
 		roll?.();
 		rolling = false;
 	}
@@ -99,6 +89,18 @@
 
 <svelte:window onkeydown={onKeydown} />
 
+<!-- The tie is only in the picture: this is the same way out for a keyboard or a screen reader,
+     out of sight until it has the focus. -->
+<a
+	class="way-out"
+	href={work}
+	onclick={(event) => {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+		event.preventDefault();
+		rollToWork();
+	}}>Go to the work site →</a
+>
+
 <div class="probe" bind:this={probe}></div>
 <!-- The scene puts its canvas in here. -->
 <div class="stage" bind:this={stage}></div>
@@ -108,9 +110,6 @@
 		<button class="close" onclick={() => tap(null)} aria-label="Put it back">×</button>
 		<h2>{picked.label}</h2>
 		<p>{picked.blurb}</p>
-		{#if picked.id === 'tie'}
-			<p><a href={href('work', '/')} onclick={rollPaint}>Go to the work site →</a></p>
-		{/if}
 	</aside>
 {/if}
 
@@ -163,10 +162,6 @@
 			margin: 0 0 0.75rem;
 		}
 
-		a {
-			color: #f0c040;
-		}
-
 		/* Under the object, as a sheet rising from the bottom. */
 		&.tall {
 			inset: auto 0 0;
@@ -180,6 +175,28 @@
 			left: calc(var(--unit-right) + 2rem);
 			width: min(24rem, 100% - var(--unit-right) - 3rem);
 			transform: translateY(-50%);
+		}
+	}
+
+	.way-out {
+		position: fixed;
+		z-index: 2;
+		top: 0.75rem;
+		left: 0.75rem;
+		padding: 0.5rem 0.75rem;
+		color: #f0c040;
+		background: rgb(18 17 16 / 0.92);
+		border: 1px solid #3a352f;
+		font: 1rem/1.5 system-ui, sans-serif;
+
+		&:not(:focus-visible) {
+			width: 1px;
+			height: 1px;
+			padding: 0;
+			overflow: hidden;
+			clip-path: inset(50%);
+			border: 0;
+			white-space: nowrap;
 		}
 	}
 
