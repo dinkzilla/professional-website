@@ -142,8 +142,9 @@ export const LEGS = 0.24; // how far the posts carry on below the bottom shelf, 
 // The amp on the floor under the pinboard (built in room.ts): where along the wall its middle is,
 // its size, and how far it stands off the wall. Its input jack is on its front, given here from
 // the floor at the foot of the wall, because the cable plugged into the cassette player ends there.
-export const AMP = { x: -1.35, w: 1.2, h: 1, d: 0.5, gap: 0.06 };
-export const AMP_JACK = { x: AMP.x + 0.42, y: 0.89, z: AMP.gap + AMP.d };
+export const AMP = { x: -1.22, w: 1.2, h: 1, d: 0.5, gap: 0.06 };
+// It is level with the knobs: the middle of the strip they are on (see room.ts).
+export const AMP_JACK = { x: AMP.x + 0.42, y: AMP.h - 0.16, z: AMP.gap + AMP.d };
 
 const light = new MeshStandardMaterial({ color: 0xbdbcb6, roughness: 0.85 });
 const mid = new MeshStandardMaterial({ color: 0x77767a, roughness: 0.8 });
@@ -157,9 +158,11 @@ const gloss = new MeshStandardMaterial({ color: 0x050506, roughness: 0.22 });
 const powerBlue = new MeshStandardMaterial({ color: 0x2f7dff, roughness: 0.5, emissive: 0x2f7dff, emissiveIntensity: 0.9 });
 const accent = new MeshStandardMaterial({ color: 0xd9a400, roughness: 0.55 });
 const page = new MeshStandardMaterial({ color: 0xe6e1d4, roughness: 0.95 });
-// The plugs on the two cables, matching the flecks in their braid.
+// The plugs on the two cables: the HDMI one matches the flecks in its braid, the audio one its
+// rubber sleeve.
 const plugRed = new MeshStandardMaterial({ color: 0xc22424, roughness: 0.6 });
 const plugGreen = new MeshStandardMaterial({ color: 0x52cf6c, roughness: 0.6 });
+const rubberGreen = new MeshStandardMaterial({ color: 0x41ad5b, roughness: 0.9 }); // the audio cable's sleeve
 const ginger = new MeshStandardMaterial({ color: 0xd9782d, roughness: 0.9 });
 const white = new MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.9 });
 const screen = new MeshStandardMaterial({
@@ -187,6 +190,25 @@ function box(w: number, h: number, d: number, material: Material | Material[], x
 /** A cylinder lying on its side, its axis pointing out of the shelf: a knob, jack or reel. */
 function round(r: number, depth: number, material: Material, x: number, y: number, z: number) {
 	const m = mesh(new CylinderGeometry(r, r, depth, 32), material, x, y, z + depth / 2);
+	m.rotation.x = Math.PI / 2;
+	return m;
+}
+
+/**
+ * A plug on the end of a cable: a cylinder like `round`, its foot at `z`, but with the rim of its
+ * far end, where the cable leaves it, rounded off: it narrows by `inward` over the last `along`
+ * of its length.
+ */
+function plugged(r: number, depth: number, inward: number, along: number, material: Material, x: number, y: number, z: number) {
+	// Turned on a lathe from its outline: up the side, round the rim, and in across the end.
+	const STEPS = 10;
+	const outline = [new Vector2(r, 0)];
+	for (let i = 0; i <= STEPS; i++) {
+		const a = (i / STEPS) * (Math.PI / 2);
+		outline.push(new Vector2(r - inward + inward * Math.cos(a), depth - along + along * Math.sin(a)));
+	}
+	outline.push(new Vector2(0, depth));
+	const m = mesh(new LatheGeometry(outline, 32), material, x, y, z);
 	m.rotation.x = Math.PI / 2;
 	return m;
 }
@@ -781,13 +803,15 @@ function cassettePlayer() {
 	const floor = -(BOARD + LEGS);
 	const wall = -(RACK_DEPTH + 0.008 + STANDOFF);
 	const socket = new Vector3(SOCKET.x, ROW.low + ROW.h / 2, 0);
-	const amp = new Vector3(AMP_JACK.x, floor + AMP_JACK.y, wall + AMP_JACK.z);
+	// The amp's jack stands 0.018 proud of its front (see room.ts), and the plug starts at its face.
+	const amp = new Vector3(AMP_JACK.x, floor + AMP_JACK.y, wall + AMP_JACK.z + 0.018);
 	const lying = floor + 0.015;
 	g.add(round(SOCKET.r, 0.004, dark, socket.x, socket.y, 0));
-	g.add(round(0.027, 0.1, plugGreen, socket.x, socket.y, 0));
-	g.add(round(0.027, 0.1, plugGreen, amp.x, amp.y, amp.z));
+	const PLUG = 0.085; // how far a plug stands out of its socket
+	g.add(plugged(0.027, PLUG, 0.012, 0.035, plugGreen, socket.x, socket.y, 0));
+	g.add(plugged(0.027, PLUG, 0.012, 0.035, plugGreen, amp.x, amp.y, amp.z));
 	const path = new CatmullRomCurve3([
-		new Vector3(socket.x, socket.y, 0.1),
+		new Vector3(socket.x, socket.y, PLUG),
 		new Vector3(socket.x, socket.y - 0.035, 0.175),
 		new Vector3(socket.x - 0.01, socket.y - 0.12, 0.225),
 		new Vector3(socket.x - 0.03, lying + 0.04, 0.25),
@@ -795,15 +819,16 @@ function cassettePlayer() {
 		new Vector3(0.1, lying, 0.4),
 		new Vector3(-0.3, lying, 0.34),
 		new Vector3(-0.6, lying, 0.42),
-		new Vector3(-0.85, lying, 0.36),
-		new Vector3(-0.92, lying, 0.16),
-		new Vector3(-0.8, lying, 0.04),
+		new Vector3(amp.x + 0.08, lying, 0.36),
+		new Vector3(amp.x + 0.01, lying, 0.16),
+		new Vector3(amp.x + 0.13, lying, 0.04),
 		new Vector3(amp.x + 0.05, lying + 0.06, amp.z + 0.2),
 		new Vector3(amp.x + 0.01, floor + 0.4, amp.z + 0.17),
 		new Vector3(amp.x, amp.y - 0.08, amp.z + 0.17),
-		new Vector3(amp.x, amp.y, amp.z + 0.1)
+		new Vector3(amp.x, amp.y, amp.z + PLUG)
 	]);
-	g.add(braided(path, '#2c66d8', '#52cf6c', 4)); // blue, flecked with green
+	// The cable is plain rubber, a deeper green than its plugs, and as thick as the braided ones.
+	g.add(mesh(new TubeGeometry(path, 160, 0.014, 12), rubberGreen));
 	return g;
 }
 
