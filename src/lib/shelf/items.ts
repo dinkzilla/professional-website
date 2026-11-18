@@ -28,6 +28,8 @@ import {
 	type Object3D
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import monoton from '@fontsource/monoton/files/monoton-latin-400-normal.woff2?url';
+import mothershipLid from '#lib/assets/mothership-lid.jpg';
 import { createFirmware } from '#lib/video-module/firmware.ts';
 import { createMpv } from '#lib/video-module/mpv.ts';
 import { createOled } from '#lib/video-module/oled.ts';
@@ -39,7 +41,8 @@ interface Placement {
 	/**
 	 * Which shelf it sits on, counting from the top, and where along it (0 is the middle). Or
 	 * WALL: it is pinned to the wall behind, `x` is where along the wall, `up` is how far above the
-	 * floor its origin is, and `back` is ignored.
+	 * floor its origin is, and `back` is ignored. Or FLOOR: it is on the floor under the rack,
+	 * placed as it would be on a shelf.
 	 */
 	shelf: number;
 	x: number;
@@ -115,6 +118,8 @@ export interface Works {
 // some of the objects are made to fit it.
 /** In place of a shelf number: pinned to the wall (see Placement). */
 export const WALL = -1;
+/** In place of a shelf number: on the floor under the rack, between its legs. */
+export const FLOOR = -2;
 // The board on the wall that the fliers are pinned to: its edges along the wall, and above the
 // floor. Its right end is behind the rack, so that some of it shows where the window is only as
 // wide as the rack. The heights are as it was laid out: it is hung with its top level with the top
@@ -132,7 +137,7 @@ export const BOARD = 0.05;
 // How far the back of the rack stands off the wall: clear of the pinboard, which runs behind it,
 // with room for the cable that goes down behind the tv.
 export const STANDOFF = 0.1;
-export const LEGS = 0.14; // how far the posts carry on below the bottom shelf, down to the floor
+export const LEGS = 0.24; // how far the posts carry on below the bottom shelf, down to the floor
 
 // The amp on the floor under the pinboard (built in room.ts): where along the wall its middle is,
 // its size, and how far it stands off the wall. Its input jack is on its front, given here from
@@ -167,7 +172,7 @@ const screen = new MeshStandardMaterial({
 // the room is in.
 const unlit = new MeshBasicMaterial({ color: 0x000000 });
 
-function mesh(geometry: BufferGeometry, material: Material, x = 0, y = 0, z = 0) {
+function mesh(geometry: BufferGeometry, material: Material | Material[], x = 0, y = 0, z = 0) {
 	const m = new Mesh(geometry, material);
 	m.position.set(x, y, z);
 	m.castShadow = true;
@@ -175,7 +180,7 @@ function mesh(geometry: BufferGeometry, material: Material, x = 0, y = 0, z = 0)
 	return m;
 }
 
-function box(w: number, h: number, d: number, material: Material, x = 0, y = 0, z = 0) {
+function box(w: number, h: number, d: number, material: Material | Material[], x = 0, y = 0, z = 0) {
 	return mesh(new BoxGeometry(w, h, d), material, x, y + h / 2, z);
 }
 
@@ -917,6 +922,420 @@ const books: Placement[] = volumes.map(([thick, tall, deep, cover], i) => {
 	};
 });
 
+// The game's box: black, printed all over with a tangle of line art in dull gold, and lettered in
+// white. Long and short are its lid's sides, and it is this deep, lying flat.
+const GAME = { long: 0.72, short: 0.52, h: 0.16 };
+const GAME_PX = 1400; // of a printed face, per world unit
+const GAME_BLACK = '#070708';
+const GAME_GOLD = '#b8a273';
+const GAME_WHITE = '#f1efe9';
+
+/**
+ * One printed face of the game's box, `w` by `h` (world units), as a material: the line art (what
+ * `ground` lays down, if that is given, or something made up in the real box's manner), with
+ * whatever `print` draws over it. `print` is given the canvas's size and how many of its px
+ * make a printed line's width. The same `seed` gives the same art.
+ */
+function gameFace(
+	w: number,
+	h: number,
+	seed: number,
+	print: (c: CanvasRenderingContext2D, W: number, H: number, line: number) => void,
+	ground?: (c: CanvasRenderingContext2D) => void
+) {
+	const PX = GAME_PX;
+	const canvas = document.createElement('canvas');
+	const W = (canvas.width = Math.round(w * PX));
+	const H = (canvas.height = Math.round(h * PX));
+	const c = canvas.getContext('2d')!;
+	const random = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+	const between = (low: number, high: number) => low + (high - low) * random();
+	const line = PX * 0.0016;
+	c.fillStyle = GAME_BLACK;
+	c.fillRect(0, 0, W, H);
+	c.strokeStyle = GAME_GOLD;
+	c.lineWidth = line;
+	c.lineCap = c.lineJoin = 'round';
+
+	if (ground) ground(c);
+	else {
+		// The art is in the manner of the real box's, not a copy of it: solid gold shapes with black
+		// drawing inside them, one over another, with black left showing between. Each kind of shape
+		// is drawn with a black edge round it, so that it parts from whatever is under it.
+		type Point = [x: number, y: number];
+		type Spine = [x: number, y: number, heading: number][];
+		const TURN = Math.PI * 2;
+		const anywhere = (): Point => [random() * W, random() * H];
+		/** A path that wanders from a point: `steps` of `stride`, turning by no more than `turn` at each. */
+		const wander = ([x, y]: Point, steps: number, stride: number, turn: number) => {
+			const spine: Spine = [];
+			let heading = random() * TURN;
+			let curl = 0;
+			for (let n = 0; n <= steps; n++) {
+				spine.push([x, y, heading]);
+				curl = Math.max(-turn, Math.min(turn, curl + between(-turn, turn) * 0.35));
+				heading += curl;
+				x += Math.cos(heading) * stride;
+				y += Math.sin(heading) * stride;
+			}
+			return spine;
+		};
+		/** The line this far to one side of a path, all the way along it. */
+		const beside = (spine: Spine, offset: (n: number) => number): Point[] =>
+			spine.map(([x, y, a], n) => [x - Math.sin(a) * offset(n), y + Math.cos(a) * offset(n)]);
+		const trace = (points: Point[], closed = false) => {
+			c.beginPath();
+			points.forEach(([x, y], n) => (n ? c.lineTo(x, y) : c.moveTo(x, y)));
+			if (closed) c.closePath();
+		};
+		const ink = (style: string, width: number) => {
+			c.strokeStyle = style;
+			c.lineWidth = width;
+			c.stroke();
+		};
+		const flood = (style: string) => {
+			c.fillStyle = style;
+			c.fill();
+		};
+		const STRIDE = 0.006 * PX;
+
+		/** A tapering arm: solid, with a seam down it and creases across, or in outline with suckers. */
+		const arm = () => {
+			const r = between(0.008, 0.034) * PX;
+			const steps = Math.round(between(35, 85));
+			// Never curled tighter than it is thick.
+			const spine = wander(anywhere(), steps, STRIDE, STRIDE / (1.6 * r));
+			const girth = (n: number) => r * (1 - n / (steps + 1)) ** 0.8 + line;
+			const outline = [...beside(spine, girth), ...beside(spine, (n) => -girth(n)).reverse()];
+			const solid = random() < 0.62;
+			trace(outline, true);
+			ink(GAME_BLACK, line * 5);
+			flood(solid ? GAME_GOLD : GAME_BLACK);
+			if (!solid) ink(GAME_GOLD, line * 1.6);
+			const detail = solid ? GAME_BLACK : GAME_GOLD;
+			trace(beside(spine, (n) => girth(n) * 0.42));
+			ink(detail, line * 1.2);
+			c.beginPath();
+			for (let n = 2; n < steps - 4; n += solid ? 3 : 4) {
+				const [x, y, a] = spine[n];
+				const g = girth(n);
+				if (solid) {
+					// A crease from one edge to the seam.
+					c.moveTo(x + Math.sin(a) * g, y - Math.cos(a) * g);
+					c.lineTo(x - Math.sin(a) * g * 0.42, y + Math.cos(a) * g * 0.42);
+				} else {
+					const sx = x + Math.sin(a) * g * 0.35;
+					const sy = y - Math.cos(a) * g * 0.35;
+					c.moveTo(sx + g * 0.3, sy);
+					c.arc(sx, sy, g * 0.3, 0, TURN);
+				}
+			}
+			ink(detail, line * 1.1);
+		};
+
+		/** A lock of hair: strands that start together and spread, each with a wave of its own. */
+		const lock = () => {
+			const steps = Math.round(between(50, 115));
+			const spine = wander(anywhere(), steps, STRIDE, 0.09);
+			const spread = between(0.004, 0.009) * PX;
+			const count = Math.round(between(7, 15));
+			const strands = Array.from({ length: count }, (_, k) => {
+				const lane = k - (count - 1) / 2;
+				const fan = between(0.6, 1.5);
+				const phase = random() * TURN;
+				return {
+					points: beside(
+						spine,
+						(n) => lane * spread * (0.35 + (fan * n) / steps) + Math.sin(n * 0.15 + phase) * spread * 0.5
+					),
+					width: line * between(0.9, 2.4)
+				};
+			});
+			for (const strand of strands) {
+				trace(strand.points);
+				ink(GAME_BLACK, strand.width + line * 3);
+			}
+			for (const strand of strands) {
+				trace(strand.points);
+				ink(GAME_GOLD, strand.width);
+			}
+		};
+
+		/** A row of hooked teeth along a curve. */
+		const teeth = () => {
+			const size = between(0.014, 0.034) * PX;
+			const spine = wander(anywhere(), Math.round(between(4, 9)), size * 0.75, 0.25);
+			const side = random() < 0.5 ? -1 : 1;
+			for (let n = 0; n + 1 < spine.length; n++) {
+				const [ax, ay, a] = spine[n];
+				const [bx, by] = spine[n + 1];
+				const reach = size * between(1.1, 1.9) * side;
+				const tx = (ax + bx) / 2 - Math.sin(a) * reach + Math.cos(a) * size * 0.4;
+				const ty = (ay + by) / 2 + Math.cos(a) * reach + Math.sin(a) * size * 0.4;
+				c.beginPath();
+				c.moveTo(ax, ay);
+				c.quadraticCurveTo(ax - Math.sin(a) * reach * 0.5, ay + Math.cos(a) * reach * 0.5, tx, ty);
+				c.quadraticCurveTo((bx + tx) / 2, (by + ty) / 2, bx, by);
+				c.closePath();
+				ink(GAME_BLACK, line * 4);
+				flood(GAME_GOLD);
+			}
+		};
+
+		/** A lump of something, cracked. */
+		const lump = () => {
+			const [x, y] = anywhere();
+			const r = between(0.01, 0.036) * PX;
+			const turn = random() * TURN;
+			const rim: Point[] = Array.from({ length: 9 }, (_, n) => {
+				const reach = r * between(0.55, 1.25);
+				return [x + Math.cos(turn + (n / 9) * TURN) * reach, y + Math.sin(turn + (n / 9) * TURN) * reach];
+			});
+			// Rounded off: through the middle of each side, bending at each corner.
+			const mid = (n: number): Point => {
+				const [ax, ay] = rim[n % 9];
+				const [bx, by] = rim[(n + 1) % 9];
+				return [(ax + bx) / 2, (ay + by) / 2];
+			};
+			c.beginPath();
+			c.moveTo(...mid(0));
+			for (let n = 1; n <= 9; n++) c.quadraticCurveTo(...rim[n % 9], ...mid(n));
+			c.closePath();
+			ink(GAME_BLACK, line * 4);
+			flood(GAME_GOLD);
+			for (let n = Math.round(between(2, 4)); n > 0; n--) {
+				trace(beside(wander([x + between(-0.4, 0.4) * r, y + between(-0.4, 0.4) * r], 5, r * 0.2, 0.7), () => 0));
+				ink(GAME_BLACK, line * 1.1);
+			}
+		};
+
+		/** An eye, with its lid's crease over it. */
+		const eye = () => {
+			const [x, y] = anywhere();
+			const w = between(0.034, 0.06) * PX;
+			c.save();
+			c.translate(x, y);
+			c.rotate(between(-0.5, 0.5));
+			c.beginPath();
+			c.ellipse(0, -w * 0.15, w * 1.25, w * 0.9, 0, 0, TURN);
+			flood(GAME_BLACK);
+			c.beginPath();
+			c.moveTo(-w, 0);
+			c.quadraticCurveTo(0, -w * 0.9, w, 0);
+			c.quadraticCurveTo(0, w * 0.6, -w, 0);
+			c.closePath();
+			ink(GAME_GOLD, line * 2.4);
+			c.beginPath();
+			c.moveTo(-w * 1.05, -w * 0.3);
+			c.quadraticCurveTo(0, -w * 1.3, w * 1.1, -w * 0.25);
+			ink(GAME_GOLD, line * 1.3);
+			c.beginPath();
+			c.arc(0, -w * 0.06, w * 0.36, 0, TURN);
+			flood(GAME_GOLD);
+			c.beginPath();
+			c.arc(0, -w * 0.06, w * 0.26, 0, TURN);
+			ink(GAME_BLACK, line);
+			c.beginPath();
+			c.arc(0, -w * 0.06, w * 0.15, 0, TURN);
+			flood(GAME_BLACK);
+			c.restore();
+		};
+
+		// A little loose hatching under everything.
+		c.beginPath();
+		for (let i = Math.round(w * h * 250); i > 0; i--) {
+			const [x, y] = anywhere();
+			const a = random() * Math.PI;
+			const l = between(0.004, 0.014) * PX;
+			c.moveTo(x, y);
+			c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
+		}
+		ink(GAME_GOLD, line);
+
+		// So many of each to the square unit, in no order.
+		const kinds: [draw: () => void, density: number][] = [
+			[arm, 62],
+			[lump, 55],
+			[teeth, 20],
+			[lock, 20],
+			[eye, 6]
+		];
+		const jobs = kinds.flatMap(([draw, density]) => Array(Math.round(w * h * density)).fill(draw));
+		for (let n = jobs.length - 1; n > 0; n--) {
+			const k = Math.floor(random() * (n + 1));
+			[jobs[n], jobs[k]] = [jobs[k], jobs[n]];
+		}
+		for (const draw of jobs as (() => void)[]) draw();
+	}
+
+	print(c, W, H, line);
+	const map = new CanvasTexture(canvas);
+	map.colorSpace = SRGBColorSpace;
+	map.anisotropy = 8;
+	return new MeshStandardMaterial({ map, roughness: 0.55 });
+}
+
+// The face that mothersheet.com sets its name and its M in.
+const GAME_FACE = 'Monoton';
+// The drawing on the real box's lid, once fetched: flattened out of a photograph of the box, with
+// its long sides to the left and right, as the box is built.
+let gameLid: HTMLImageElement | undefined;
+
+/**
+ * Fetch what the objects are printed with: a typeface and a picture. They are drawn on canvases,
+ * which use whatever is to hand when they are drawn, so this is to be done before any object is
+ * built. Whatever cannot be had is done without.
+ */
+export async function loadPrinting() {
+	const face = new FontFace(GAME_FACE, `url(${monoton})`);
+	const lid = new Image();
+	lid.src = mothershipLid;
+	await Promise.allSettled([
+		face.load().then((loaded) => document.fonts.add(loaded)),
+		lid.decode().then(() => (gameLid = lid))
+	]);
+}
+
+/**
+ * `text` in the game's own face, in white: centred here, and as large as fits in `w` by `h`. The
+ * face is all fine stripes, so the art is blacked out behind it and a little way round.
+ */
+function gameLettering(c: CanvasRenderingContext2D, text: string, x: number, y: number, w: number, h: number) {
+	const font = (px: number) => `${px}px ${GAME_FACE}, system-ui, sans-serif`;
+	c.textAlign = 'center';
+	c.textBaseline = 'alphabetic';
+	c.font = font(100);
+	// Fitted and centred by the ink itself, not the space the face allows round it.
+	const m = c.measureText(text);
+	const wide = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
+	const tall = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+	const scale = Math.min(w / wide, h / tall);
+	c.font = font(100 * scale);
+	const left = x + ((m.actualBoundingBoxLeft - m.actualBoundingBoxRight) * scale) / 2;
+	const base = y + ((m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) * scale) / 2;
+	c.lineJoin = 'round';
+	c.strokeStyle = GAME_BLACK;
+	c.lineWidth = Math.min(tall * scale * 0.16, 22);
+	c.strokeText(text, left, base);
+	c.fillStyle = GAME_WHITE;
+	c.fillText(text, left, base);
+}
+
+// How far the frame on the lid is set in from its edges. The frames on the sides are set in as
+// far from the box's corners, so that their uprights meet the lid's lines at its edge.
+const GAME_INSET = 0.075 * GAME.short;
+
+/**
+ * The fine white frame that each face of the game's box has, set in GAME_INSET from its left and
+ * right edges, given as a share of its width, and `drop` px from its top and bottom.
+ */
+function gameFrame(c: CanvasRenderingContext2D, W: number, H: number, inset: number, drop: number, line: number) {
+	c.strokeStyle = GAME_WHITE;
+	c.lineWidth = line * 3; // heavier than it is printed, to show from across the room
+	c.lineJoin = 'miter';
+	c.strokeRect(W * inset, drop, W * (1 - 2 * inset), H - 2 * drop);
+}
+
+/**
+ * A board game in its box, lying flat with its long sides to the left and right: the game's name
+ * along each of those, the mark and the edition on each end, and the mark on the lid, which is
+ * the right way up seen from the left.
+ */
+function gameBox() {
+	const { long, short, h } = GAME;
+
+	// The real lid's drawing, as it is printed here: at the faces' own scale, and enlarged from its
+	// middle by enough to lose what is printed round its edge (a frame finer than the one drawn
+	// here, and the publisher's mark in one corner). Its own mark, a little off the middle, is
+	// blacked out, with the trade mark sign beside it, leaving a plate for this game's to go on.
+	const ZOOM = 1.19;
+	let drawing: HTMLCanvasElement | undefined;
+	if (gameLid) {
+		drawing = document.createElement('canvas');
+		const W = (drawing.width = Math.round(short * GAME_PX));
+		const H = (drawing.height = Math.round(long * GAME_PX));
+		const c = drawing.getContext('2d')!;
+		c.translate(W / 2, H / 2);
+		c.scale(ZOOM, ZOOM);
+		c.translate(-W / 2, -H / 2);
+		c.drawImage(gameLid, 0, 0, W, H);
+		c.fillStyle = GAME_BLACK;
+		c.fillRect(W * 0.236, H * 0.3, W * 0.53, H * 0.414);
+	}
+	/**
+	 * What lays a cutting of the drawing on a face: the drawing moved and turned by this
+	 * transform, but never scaled, so that every face is printed at the lid's size. With `fold`,
+	 * the cutting stops that many px down the face and is carried on by its own reflection: a
+	 * strip that is narrower than the face, doubled back to cover it.
+	 */
+	const cutting = ([a, b, c2, d, e, f]: [number, number, number, number, number, number], fold?: number) => {
+		const from = drawing;
+		if (!from) return undefined;
+		return (c: CanvasRenderingContext2D) => {
+			c.setTransform(a, b, c2, d, e, f);
+			c.drawImage(from, 0, 0);
+			c.resetTransform();
+			if (fold === undefined) return;
+			c.save();
+			c.beginPath();
+			c.rect(0, fold, c.canvas.width, c.canvas.height - fold);
+			c.clip();
+			c.setTransform(a, -b, c2, -d, e, 2 * fold - f);
+			c.drawImage(from, 0, 0);
+			c.restore();
+		};
+	};
+	const W = short * GAME_PX;
+	const H = long * GAME_PX;
+
+	const lid = gameFace(
+		short,
+		long,
+		11,
+		(c, W, H, line) => {
+			// The frame, and the mark in the middle of it, the right way up seen from the long side
+			// that is on the box's left: drawn as that view has it, `long` across, and turned to suit.
+			c.translate(W / 2, H / 2);
+			c.rotate(Math.PI / 2);
+			c.translate(-H / 2, -W / 2);
+			gameFrame(c, H, W, GAME_INSET / long, (W * GAME_INSET) / short, line);
+			// On the plate where the real box's mark was, if that is what it covers.
+			if (drawing) gameLettering(c, 'M', H * 0.508, W * 0.4986, W * 0.83, W * 0.55);
+			else gameLettering(c, 'M', H / 2, W / 2, W * 0.7, W * 0.46);
+		},
+		cutting([1, 0, 0, 1, 0, 0])
+	);
+
+	// Each long side is a strip from along that side of the lid, turned to lie along it with what
+	// was the lid's edge uppermost. The strip is as wide as there is drawing clear of the plate,
+	// which is less than the side is tall, so it is folded back to make up the rest.
+	const named = (c: CanvasRenderingContext2D, W: number, H: number, line: number) => {
+		gameFrame(c, W, H, GAME_INSET / long, H * 0.14, line);
+		gameLettering(c, 'MOTHERSHEET', W / 2, H / 2, W * 0.78, H * 0.4);
+	};
+	const left = gameFace(long, h, 7, named, cutting([0, 1, -1, 0, H, 0], W * 0.18));
+	const right = gameFace(long, h, 8, named, cutting([0, -1, 1, 0, 0, W], W * 0.18));
+
+	// Each end is a strip from across that end of the lid, clear of the mark.
+	const marked = (c: CanvasRenderingContext2D, W: number, H: number, line: number) => {
+		gameFrame(c, W, H, GAME_INSET / short, H * 0.14, line);
+		gameLettering(c, 'M', W * 0.22, H / 2, W * 0.3, H * 0.44);
+		c.font = `italic 800 ${H * 0.25}px system-ui, sans-serif`;
+		c.textAlign = 'center';
+		c.textBaseline = 'middle';
+		c.fillStyle = GAME_WHITE;
+		c.fillText('DELUXE SET', W * 0.62, H * 0.52);
+	};
+	const back = gameFace(short, h, 5, marked, cutting([1, 0, 0, 1, 0, -H * 0.02]));
+	const front = gameFace(short, h, 6, marked, cutting([1, 0, 0, 1, 0, -H * 0.765]));
+
+	const under = new MeshStandardMaterial({ color: GAME_BLACK, roughness: 0.8 });
+	const g = new Group();
+	// A box's faces in three.js's order: right, left, top, bottom, front, back.
+	g.add(box(short, h, long, [right, left, lid, under, front, back]));
+	return g;
+}
+
 // Placeholder art for the fliers: paper, ink, a second ink, and the name in the largest type.
 const FLIERS: [string, string, string, string][] = [
 	['#e9e2cf', '#151515', '#b3201c', 'BAND'],
@@ -1008,6 +1427,17 @@ const placements: Placement[] = [
 		build: skull
 	},
 	...books,
+	{
+		id: 'mothersheet',
+		shelf: FLOOR,
+		x: 0.06,
+		back: 0.5,
+		// Its left side to the front, and askew: pushed under there, not put.
+		yaw: Math.PI / 2 - 0.16,
+		// Lid to the viewer with the same side nearest, tipped and turned to show that and an end.
+		held: { pitch: 0.95, yaw: Math.PI / 2 - 0.4 },
+		build: gameBox
+	},
 	...fliers,
 	{ id: 'tie', shelf: WALL, x: HOOK.x, up: HOOK.y, lean: -0.03, link: true, build: tie },
 	{ id: 'cassette', shelf: 3, x: 0, flush: PANEL_HEIGHT, fixed: true, build: cassettePlayer }

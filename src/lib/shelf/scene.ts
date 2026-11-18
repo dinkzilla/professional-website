@@ -52,9 +52,11 @@ import {
 import { buildRoom } from './room.ts';
 import {
 	BOARD,
+	FLOOR,
 	screw,
 	items,
 	LEGS,
+	loadPrinting,
 	RACK_DEPTH,
 	RACK_WIDTH,
 	STANDOFF,
@@ -69,10 +71,11 @@ import {
 // a little above the tallest thing on the top shelf, with the shelves going down from there.
 const WIDTH = RACK_WIDTH; // inside, between the posts
 const DEPTH = RACK_DEPTH;
-const HEADROOM = 0.2; // clear space left above the tallest object on a shelf
+const HEADROOM = 0.2; // clear space left above the tallest object on the unit's top
 const POST = 0.06; // the posts are square, and stand a touch proud of the shelves
 const FULL_WIDTH = WIDTH + 2 * BOARD;
 const UNIT = 0.1; // one rack unit: the posts' mounting holes come three to every two
+const CLEARANCE = UNIT; // clear space left above the tallest object on a tray inside the rack
 const SHEET = 0.012; // the thickness of a tray bolted into the rack, which is folded sheet metal
 // Where the three holes are in each two units of a post, as a share of the way down it.
 const HOLES = [1 / 7, 1 / 2, 6 / 7];
@@ -155,6 +158,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 
 
 /** Build the scene and draw it once, off the page, so that it can be shown without delay. */
 export async function prepare(): Promise<Shelf> {
+	await loadPrinting();
 	const shelf = createShelf();
 	await shelf.warm();
 	return shelf;
@@ -276,9 +280,10 @@ function createShelf() {
 
 	const pitch: number[] = [];
 	for (const p of placed) {
-		if (p.item.shelf === WALL) continue;
+		if (p.item.shelf === WALL || p.item.shelf === FLOOR) continue;
 		// Something mounted in the rack fills its bay.
-		const needed = (p.item.flush ?? p.height + HEADROOM) + above(p.item.shelf);
+		const clear = p.item.shelf === 0 ? HEADROOM : CLEARANCE;
+		const needed = (p.item.flush ?? p.height + clear) + above(p.item.shelf);
 		pitch[p.item.shelf] = Math.max(pitch[p.item.shelf] ?? 0, needed);
 	}
 	const drop = (count: number) => pitch.slice(0, count).reduce((sum, h) => sum + h, 0);
@@ -427,7 +432,7 @@ function createShelf() {
 			}
 			p.shelfPosition.set(
 				p.item.x,
-				shelfY(p.item.shelf) + p.sunk,
+				(p.item.shelf === FLOOR ? -height : shelfY(p.item.shelf)) + p.sunk,
 				// A mounted panel lies against the fronts of the posts.
 				STANDOFF + (p.item.flush ? DEPTH + 0.008 : DEPTH * (1 - (p.item.back ?? 0.5)))
 			);
@@ -436,7 +441,7 @@ function createShelf() {
 
 	/** Take the picture of the room that the tray reflects: from the middle of the rack, without it. */
 	function reflect() {
-		const hidden = [unit, ...placed.filter((p) => p.item.shelf !== WALL).map((p) => p.group)];
+		const hidden = [unit, ...placed.filter((p) => p.item.shelf >= 0).map((p) => p.group)];
 		const shown = hidden.map((o) => o.visible);
 		for (const o of hidden) o.visible = false;
 		probe.position.set(0, -unitHeight() / 2, STANDOFF + DEPTH / 2);

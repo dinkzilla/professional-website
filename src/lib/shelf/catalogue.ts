@@ -34,6 +34,11 @@ export const catalogue: Entry[] = [
 		label: `book ${n}`,
 		blurb: 'Placeholder: what this book is about.'
 	})),
+	{
+		id: 'mothersheet',
+		label: 'mothersheet',
+		blurb: 'Placeholder: what this game is.'
+	},
 	...['one', 'two', 'three', 'four', 'five'].map((n, i) => ({
 		id: `flier-${i + 1}`,
 		label: `flier ${n}`,
