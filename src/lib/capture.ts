@@ -35,7 +35,9 @@ export async function capture(width: number, height: number, ratio: number) {
 		pixelRatio: ratio,
 		fontEmbedCSS: await fontCSS,
 		backgroundColor: getComputedStyle(root).backgroundColor,
-		filter: (node) => node.tagName !== 'SCRIPT',
+		// Text nodes come through here too. Anything marked data-capture-skip is on the page only
+		// for the length of a transition (see PersonalLink.svelte) and is no part of the picture.
+		filter: (node) => node.tagName !== 'SCRIPT' && !node.hasAttribute?.('data-capture-skip'),
 		// The clone is the whole body, shifted up so the scrolled-to part fills the image. The
 		// height override keeps the body's own background (the dot grid) behind all of it.
 		style: {

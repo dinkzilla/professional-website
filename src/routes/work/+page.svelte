@@ -224,7 +224,7 @@
 	</section>
 
 	<p class="personal">
-		<PersonalLink class="back">personal stuff →</PersonalLink>
+		<PersonalLink class="back">personal stuff</PersonalLink>
 	</p>
 </div>
 
