@@ -667,7 +667,7 @@ export function buildRoom(rackHeight: number) {
 	// dock runs mostly across the view, since one pointing at the viewer would be a pixel tall.
 	// The two together stand in the part of the doorway that the open door leaves clear, which
 	// is its right: at this distance, from about x = 77 to x = 95.
-	const DOME = { x: 89, z: HORIZON + 9, r: 3.5 };
+	const DOME = { x: 90.5, z: HORIZON + 9, r: 3.5 };
 	const facets = new IcosahedronGeometry(DOME.r, 1);
 	const shades: number[] = [];
 	for (let face = 0; face < facets.attributes.position.count / 3; face++) {
@@ -681,14 +681,15 @@ export function buildRoom(rackHeight: number) {
 	const farDock = new Group();
 	farDock.position.set(DOME.x - 2.5, 0, DOME.z + DOME.r);
 	farDock.rotation.y = -0.5;
-	const farDeck = new Mesh(new BoxGeometry(9, 0.22, 1.2), plank);
-	farDeck.position.set(-4.5, 0.25, 0);
+	const farLength = 7.5; // just past the fourth post
+	const farDeck = new Mesh(new BoxGeometry(farLength, 0.22, 1.2), plank);
+	farDeck.position.set(-farLength / 2, 0.25, 0);
 	farDock.add(farDeck);
 	// The dome's door, standing on the deck at the end of the dock, against the shell behind it.
 	const farDoor = new Mesh(new BoxGeometry(0.7, 1.2, 0.2), pile);
 	farDoor.position.set(-0.35, 0.36 + 0.6, -0.7);
 	farDock.add(farDoor);
-	for (let along = 1; along <= 9; along += 2) {
+	for (let along = 1; along <= farLength; along += 2) {
 		const post = new Mesh(new BoxGeometry(0.2, 1.1, 0.2), pile);
 		post.position.set(-along, 0.2, 0.6);
 		farDock.add(post);
