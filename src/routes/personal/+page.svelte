@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { catalogue } from '#lib/shelf/catalogue.ts';
 	import { prepareShelf } from '#lib/shelf/ready.ts';
-	import type { Layout, Shelf } from '#lib/shelf/scene.ts';
+	import type { Shelf } from '#lib/shelf/scene.ts';
 	import { canonical, href } from '#lib/sides.ts';
 	import { site } from '#lib/site.ts';
 
@@ -15,7 +15,6 @@
 	let stage: HTMLElement;
 	let probe: HTMLElement;
 	let shelf: Shelf | undefined = $state();
-	let layout: Layout = $state({ mode: 'tall', unitRight: 0 });
 
 	// Which object is picked up lives in the history entry, so Back puts it down.
 	const picked = $derived(catalogue.find((entry) => entry.id === page.state.picked));
@@ -34,7 +33,7 @@
 				if (gone) return;
 				prepared.attach(stage, {
 					fitHeight: () => probe.clientHeight,
-					onLayout: (next) => (layout = next),
+					onLayout: () => {},
 					onTap: tap
 				});
 				shelf = prepared;
@@ -105,13 +104,27 @@
 <!-- The scene puts its canvas in here. -->
 <div class="stage" bind:this={stage}></div>
 
-{#if picked}
-	<aside class="panel {layout.mode}" style:--unit-right="{layout.unitRight}px">
-		<button class="close" onclick={() => tap(null)} aria-label="Put it back">×</button>
-		<h2>{picked.label}</h2>
-		<p>{picked.blurb}</p>
-	</aside>
-{/if}
+<!-- Nothing in the scene is text. What is there to be read is here as well, for a screen reader,
+     and so is the way to the rest of it, out of sight until it has the focus. -->
+{#each catalogue as entry}
+	{#if entry.article}
+		{@const article = entry.article}
+		<article class="unseen">
+			<h2>{article.headline}</h2>
+			<p>{article.standfirst}</p>
+			{#each article.sections as section}
+				{#if section.heading}<h3>{section.heading}</h3>{/if}
+				{#each section.paragraphs as paragraph}
+					<p>{paragraph}</p>
+				{/each}
+			{/each}
+			<p>An excerpt from the {article.source.name}.</p>
+		</article>
+		<a class="way-out second" href={article.source.href} target="_blank" rel="noopener noreferrer"
+			>Read “{article.headline}” at the {article.source.name} →</a
+		>
+	{/if}
+{/each}
 
 <style>
 	/* Nothing here scrolls, and no touch is a scroll, pinch or pull-to-refresh: with nothing to
@@ -144,38 +157,13 @@
 		height: 100lvh;
 	}
 
-	.panel {
+	.unseen {
 		position: fixed;
-		z-index: 1;
-		padding: 1.25rem 1.5rem 1.5rem;
-		color: #e9e5dd;
-		background: rgb(18 17 16 / 0.92);
-		border: 1px solid #3a352f;
-		font: 1rem/1.5 system-ui, sans-serif;
-
-		h2 {
-			margin: 0 2rem 0.5rem 0;
-			font-size: 1.25rem;
-		}
-
-		p {
-			margin: 0 0 0.75rem;
-		}
-
-		/* Under the object, as a sheet rising from the bottom. */
-		&.tall {
-			inset: auto 0 0;
-			min-height: 46svh;
-			border-width: 1px 0 0;
-		}
-
-		/* On the wall to the right of the unit, the object being in front of the unit. */
-		&.side {
-			top: 50svh;
-			left: calc(var(--unit-right) + 2rem);
-			width: min(24rem, 100% - var(--unit-right) - 3rem);
-			transform: translateY(-50%);
-		}
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 
 	.way-out {
@@ -200,16 +188,8 @@
 		}
 	}
 
-	.close {
-		position: absolute;
-		top: 0.5rem;
-		right: 0.5rem;
-		width: 2.75rem;
-		height: 2.75rem;
-		color: inherit;
-		background: none;
-		border: 0;
-		font-size: 1.5rem;
-		cursor: pointer;
+	/* Under the first, when both could show. */
+	.second {
+		top: 3.75rem;
 	}
 </style>

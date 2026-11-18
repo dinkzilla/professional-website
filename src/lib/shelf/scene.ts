@@ -281,6 +281,12 @@ function createShelf() {
 		};
 	});
 	const working = placed.flatMap((p) => p.works ?? []);
+	// What is kept in or on another object, with the object that carries it.
+	const riders = placed.flatMap((p) => {
+		const on = placed.find((other) => other.item.id === p.item.rides);
+		return on ? [{ p, on }] : [];
+	});
+	const carried = { by: new Quaternion(), at: new Vector3(), turned: new Quaternion() };
 
 	// Each shelf is only as tall as its tallest object needs. `pitch` is the distance from the
 	// surface above (the underside of the unit's top, for the first) to the shelf's own surface.
@@ -548,19 +554,33 @@ function createShelf() {
 		request();
 	}
 
-	/** Where on screen (CSS px) a picked object is shown. */
+	/**
+	 * Where on screen (CSS px) a picked object is shown: in the middle of the window, wherever in
+	 * it the unit is, and with this much room.
+	 */
 	function stage() {
-		if (mode === 'tall') return { x: width / 2, y: fit * 0.27, w: width, h: fit * 0.5 };
-		// In front of the unit.
-		return { x: width / 2 + offset, y: fit / 2, w: SEEN_WIDTH * ppu, h: fit };
+		if (mode === 'tall') return { x: width / 2, y: fit / 2, w: width, h: fit * 0.5 };
+		return { x: width / 2, y: fit / 2, w: SEEN_WIDTH * ppu, h: fit };
+	}
+
+	/**
+	 * Where something to read is shown, having come out of a picked object: in the middle of the
+	 * window too, in front of the object, with the whole of the window to fill.
+	 */
+	function reading() {
+		return { x: width / 2, y: fit / 2, w: width - 2 * GUTTER, h: fit };
 	}
 
 	/** Work out an object's held position and attitude: centred on the stage, facing the camera. */
 	function hold(p: Placed) {
-		const s = stage();
+		const page = p.item.page;
+		const s = page ? reading() : stage();
 		const distance = focal / ppu;
 		const room = Math.min(s.w, s.h) * 0.72;
-		const dz = Math.min(Math.max((p.size * focal) / room, 1.2), distance * 0.8);
+		const dz = page
+			? // As near as fills its part of the window, all but a margin.
+				Math.max(0.4, focal * Math.max(page.w / (s.w * 0.88), page.h / (s.h * 0.88)))
+			: Math.min(Math.max((p.size * focal) / room, 1.2), distance * 0.8);
 		const down = s.y - height / 2 + shift; // px below the camera's axis
 		const right = s.x - width / 2 + aside; // px to the right of the camera's axis
 		// Placed in the camera's own frame, since the camera may be turned relative to the wall.
@@ -615,7 +635,12 @@ function createShelf() {
 		let lift = 0;
 
 		for (const p of placed) {
-			const goal = p === held ? 1 : 0;
+			let goal = p === held ? 1 : 0;
+			// What rides on another object comes out of it once that is nearly all the way up. And
+			// that is not put back until what came out of it is nearly all the way back in.
+			const on = riders.find((rider) => rider.p === p)?.on;
+			if (on) goal = on === held && on.t > 0.85 ? 1 : 0;
+			else if (!goal && riders.some((rider) => rider.on === p && rider.p.t > 0.15)) goal = p.t;
 			if (p.t !== goal) {
 				const step = dt / PICK_S;
 				p.t = goal > p.t ? Math.min(goal, p.t + step) : Math.max(goal, p.t - step);
@@ -633,6 +658,17 @@ function createShelf() {
 			p.group.quaternion.slerpQuaternions(p.shelfRotation, p.heldRotation, e);
 			lift = Math.max(lift, e);
 			p.works?.lifted?.(e);
+		}
+		// What rides on another object is kept wherever that object now is, not at its own place on
+		// the shelf: it goes where its carrier has been moved and turned to since it stood there.
+		for (const { p, on } of riders) {
+			carried.by.copy(on.shelfRotation).invert().premultiply(on.group.quaternion);
+			carried.at.copy(p.shelfPosition).sub(on.shelfPosition).applyQuaternion(carried.by).add(on.group.position);
+			carried.turned.copy(carried.by).multiply(p.shelfRotation);
+			const e = ease(p.t);
+			p.group.position.lerpVectors(carried.at, p.heldPosition, e);
+			p.group.position.z += (p.item.out ?? 0.06) * p.nudge * (1 - e);
+			p.group.quaternion.slerpQuaternions(carried.turned, p.heldRotation, e);
 		}
 		for (const works of working) if (works.tick(dt)) moving = true;
 
@@ -675,8 +711,11 @@ function createShelf() {
 			const fliers = placed.filter((p) => p.item.id.startsWith('flier-') && p !== held);
 			return fliers.sort((a, b) => from(a) - from(b))[0];
 		}
+		// A press on something that rides on another object is a press on that.
+		const id = hit.object.userData.item;
+		const on = riders.find((rider) => rider.p.item.id === id)?.on ?? placed.find((p) => p.item.id === id);
 		// Something that stays on the shelf is not a hit, but it does hide what is behind it.
-		return placed.find((p) => p.item.id === hit.object.userData.item && !p.item.fixed);
+		return on && !on.item.fixed ? on : undefined;
 	}
 
 	/** The working part that a press on this would work. Nothing works while something is held. */
@@ -801,7 +840,9 @@ function createShelf() {
 	return {
 		/** Bring an object forward (by id), or put whatever is held back (null). */
 		pick(id: string | null) {
-			held = placed.find((p) => p.item.id === id && p.group.visible && !p.item.fixed && !p.item.link);
+			held = placed.find(
+				(p) => p.item.id === id && p.group.visible && !p.item.fixed && !p.item.link && !p.item.rides
+			);
 			if (held) hold(held);
 			request();
 		},

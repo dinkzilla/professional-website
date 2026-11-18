@@ -4,17 +4,20 @@
 
 import {
 	BoxGeometry,
+	BufferGeometry,
 	CanvasTexture,
 	CatmullRomCurve3,
 	CircleGeometry,
 	CylinderGeometry,
 	ExtrudeGeometry,
+	Float32BufferAttribute,
 	Group,
 	LatheGeometry,
 	Mesh,
 	MeshBasicMaterial,
 	MeshStandardMaterial,
 	PlaneGeometry,
+	Quaternion,
 	RepeatWrapping,
 	Shape,
 	SphereGeometry,
@@ -24,7 +27,6 @@ import {
 	TubeGeometry,
 	Vector2,
 	Vector3,
-	type BufferGeometry,
 	type Material,
 	type Object3D
 } from 'three';
@@ -38,7 +40,7 @@ import mothershipLid from '#lib/assets/mothership-lid.jpg';
 import { createFirmware } from '#lib/video-module/firmware.ts';
 import { createMpv } from '#lib/video-module/mpv.ts';
 import { createOled } from '#lib/video-module/oled.ts';
-import { catalogue, type Entry } from './catalogue.ts';
+import { catalogue, type Article, type Entry } from './catalogue.ts';
 import { air, blown, tie } from './tie.ts';
 
 interface Placement {
@@ -76,6 +78,17 @@ interface Placement {
 	link?: boolean;
 	/** How far it comes forward under the pointer, where that is not as far as most things do. */
 	out?: number;
+	/**
+	 * Kept in or on this other object (its id), and carried along with it wherever that goes. It is
+	 * not picked up itself: a press on it is a press on what carries it. When that has been picked
+	 * up, this comes out of it and is held up beside it, and goes back in before that is put back.
+	 */
+	rides?: string;
+	/**
+	 * Held, it is a flat sheet of this size, to be read: it is brought as near as fills the part of
+	 * the window it is shown in.
+	 */
+	page?: { w: number; h: number };
 	/** Its attitude once picked up: pitch (tipped toward the viewer) and yaw, in radians. */
 	held?: { pitch?: number; yaw?: number };
 	build: () => Group;
@@ -889,6 +902,442 @@ export async function loadModels() {
 	}
 }
 
+// The newspaper clipping rolled up in the skull's left eye socket, which is the one that faces out
+// of the shelf. When the skull is picked up, it slides out of the socket and unrolls to be read.
+//
+// Where the roll goes is given in the scanned skull's own units: its axis passes through `at`, in
+// the middle of the socket, and points out, a little up and nearly as far forward, toward the
+// beak, as it does out. It goes `inside` into the skull from there and stands `outside` out of it.
+// `r` is all the socket has room for, so the roll is squeezed where it goes in and has sprung
+// open outside it: wider by `flare` at its outer end. `spin` turns it about its axis, which
+// decides where round it the loose edge of the sheet lies.
+const ROLL = {
+	at: new Vector3(0.1, 0.274, 0.046),
+	toward: new Vector3(1, 0.4, 0.9).normalize(),
+	inside: 0.08,
+	outside: 0.22,
+	r: 0.024,
+	core: 0.007,
+	turns: 5,
+	flare: 0.45,
+	spin: 2.4
+};
+
+const smooth = (from: number, to: number, x: number) => {
+	const t = Math.min(1, Math.max(0, (x - from) / (to - from)));
+	return t * t * (3 - 2 * t);
+};
+
+/**
+ * Where a point of the clipping is when the sheet is `k` of the way unrolled (0 rolled up, 1
+ * flat), in the sheet's own frame: flat, it faces +z with its middle on the origin, as wide as
+ * the roll is long. The point is `s` down the sheet from its top edge and `w` in from its left.
+ *
+ * It unrolls as a scroll does. The top of the sheet lies flat, as far down as has been let out,
+ * and the rest is still rolled, print inward, in a roll that sits on the face of the sheet at
+ * that line and gets thinner as it gives up paper. The sheet's foot is at the roll's core. What
+ * makes the roll less than perfect is all measured out from the paper's own surface, so that it
+ * carries over from the rolled part to the flat with no step, and fades as the sheet unrolls.
+ */
+function clippingPoint(s: number, w: number, k: number, to: Vector3) {
+	const { W, L, core, gap, inside, outside } = SHEET;
+	const out = k * L; // how far down the sheet is flat
+	const fade = 1 - k;
+	const a = L - s; // how far this is from the core, along the paper
+	// The winding is not even: the paper stands off its true line by a little, more so the further
+	// out it is. And the loose edge has lifted off the roll, most at its outer corner.
+	const uneven = (0.0003 + (0.0005 * a) / L) * (0.6 * Math.sin(a / 0.021 + 1) + 0.4 * Math.sin(a / 0.013 + 4));
+	const flap = 0.005 * Math.max(0, 1 - s / 0.035) ** 2 * (0.35 + (0.65 * w) / W);
+	const off = fade * (uneven + flap);
+	// Sprung open past the socket, by the same share at every turn.
+	const open = 1 + (ROLL.flare * fade * Math.max(0, w - inside)) / outside;
+	const x = w - W / 2;
+	if (s <= out) return to.set(x, L / 2 - s, -open * off);
+	// A spiral that takes up `gap` with every turn: how far out the paper is this far from the
+	// core, and how far round.
+	const radius = (arc: number) => Math.sqrt(core * core + (arc * gap) / Math.PI);
+	const round = (arc: number) => ((radius(arc) - core) * 2 * Math.PI) / gap;
+	const rolled = L - out; // how much paper is still in the roll
+	const turn = round(rolled) - round(a);
+	const r = radius(a) + off;
+	// The inner turns stand a little further out of the roll's end than the outer ones.
+	const proud = (0.012 * fade * (rolled - a)) / L;
+	return to.set(x + proud, L / 2 - out - open * r * Math.sin(turn), open * (radius(rolled) - r * Math.cos(turn)));
+}
+
+/**
+ * A blank sheet of newsprint to print the clipping on, one side of it: cut out of the paper with
+ * scissors, not quite square. The other side is the same shape seen from behind (`mirrored`).
+ * Nothing drawn after this goes outside the cut.
+ */
+function newsprint(mirrored: boolean) {
+	const canvas = document.createElement('canvas');
+	const W = (canvas.width = SHEET.PX);
+	const H = (canvas.height = Math.round((SHEET.PX * SHEET.L) / SHEET.W));
+	const c = canvas.getContext('2d')!;
+	const cut = [
+		[0.012, 0.004],
+		[0.996, 0],
+		[0.986, 0.52],
+		[0.997, 0.994],
+		[0.002, 1],
+		[0.009, 0.44]
+	];
+	c.beginPath();
+	for (const [x, y] of cut) c.lineTo((mirrored ? 1 - x : x) * W, y * H);
+	c.closePath();
+	c.clip();
+	c.fillStyle = '#dddcd6';
+	c.fillRect(0, 0, W, H);
+	return { canvas, c, W, H };
+}
+
+/**
+ * What being rolled up has left in the paper, drawn over the print: faint lines across it where
+ * it was pressed flat, closer together toward its foot, which was wound the tightest.
+ */
+function creased(c: CanvasRenderingContext2D, W: number, H: number) {
+	let seed = 11;
+	const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+	for (let y = H * 0.06; y < H; y += H * (0.02 + 0.07 * random()) * (1.25 - y / H)) {
+		const tilt = (random() - 0.5) * H * 0.006;
+		for (const [shade, dy] of [
+			['rgb(0 0 0 / 0.045)', 0],
+			['rgb(255 255 255 / 0.12)', 2.5]
+		] as const) {
+			c.strokeStyle = shade;
+			c.lineWidth = 2;
+			c.beginPath();
+			c.moveTo(0, y + dy - tilt);
+			c.lineTo(W, y + dy + tilt);
+			c.stroke();
+		}
+	}
+}
+
+function printed(canvas: HTMLCanvasElement) {
+	const map = new CanvasTexture(canvas);
+	map.colorSpace = SRGBColorSpace;
+	map.anisotropy = 8;
+	return map;
+}
+
+const INK = '#22211f';
+const SERIF = `Georgia, 'Times New Roman', serif`;
+
+/** `text` broken into lines of words no wider than `width`, in the font that is set. */
+function lines(c: CanvasRenderingContext2D, text: string, width: number, indent = 0) {
+	const out: string[][] = [[]];
+	let room = width - indent;
+	let used = 0;
+	const space = c.measureText(' ').width;
+	for (const word of text.split(' ')) {
+		const wide = c.measureText(word).width;
+		const line = out[out.length - 1];
+		if (line.length && used + space + wide > room) {
+			out.push([word]);
+			room = width;
+			used = wide;
+		} else {
+			used += (line.length ? space : 0) + wide;
+			line.push(word);
+		}
+	}
+	return out;
+}
+
+/**
+ * The side of the clipping that was cut out to be kept: the article's headline, its photograph
+ * and as much of its opening as there is paper for, in two columns.
+ */
+function clippingFront(article: Article) {
+	const { canvas, c, W, H } = newsprint(false);
+	const edge = W * 0.055;
+	const wide = W - 2 * edge;
+	c.fillStyle = INK;
+	c.textBaseline = 'alphabetic';
+
+	// The headline, as large as fits across.
+	c.font = `900 100px ${SERIF}`;
+	const head = Math.min((100 * wide) / c.measureText(article.headline).width, W * 0.12);
+	c.font = `900 ${head}px ${SERIF}`;
+	let y = edge * 0.7 + head * 0.8;
+	c.fillText(article.headline, edge, y);
+	y += head * 0.3;
+	c.fillRect(edge, y, wide, W * 0.006);
+	y += W * 0.006;
+
+	const stand = W * 0.036;
+	c.font = `italic 600 ${stand}px ${SERIF}`;
+	for (const line of lines(c, article.standfirst, wide)) {
+		y += stand * 1.25;
+		c.fillText(line.join(' '), edge, y);
+	}
+	y += stand * 0.55;
+	const credit = W * 0.019;
+	c.font = `700 ${credit}px system-ui, sans-serif`;
+	c.letterSpacing = `${credit * 0.12}px`;
+	y += credit;
+	c.fillText(article.source.name.toUpperCase(), edge, y);
+	c.letterSpacing = '0px';
+	y += credit * 0.8;
+
+	// The photograph, across both columns, in the one ink the paper is printed with.
+	const photo = { w: wide, h: (wide * 2) / 3 };
+	if (clippingPhoto) {
+		const from = clippingPhoto;
+		const scale = Math.max(photo.w / from.naturalWidth, photo.h / from.naturalHeight);
+		c.save();
+		c.beginPath();
+		c.rect(edge, y, photo.w, photo.h);
+		c.clip();
+		c.filter = 'grayscale(1) contrast(1.15)';
+		c.drawImage(
+			from,
+			edge + (photo.w - from.naturalWidth * scale) / 2,
+			y + (photo.h - from.naturalHeight * scale) / 2,
+			from.naturalWidth * scale,
+			from.naturalHeight * scale
+		);
+		c.restore();
+		// Newsprint has no white and no black.
+		c.fillStyle = 'rgb(221 220 214 / 0.18)';
+		c.fillRect(edge, y, photo.w, photo.h);
+	} else {
+		// Without it: a hillside, as near as a few shapes go.
+		c.fillStyle = '#8d8a82';
+		c.fillRect(edge, y, photo.w, photo.h);
+		c.fillStyle = '#5f5c56';
+		c.beginPath();
+		c.ellipse(edge + photo.w * 0.3, y + photo.h, photo.w * 0.45, photo.h * 0.7, 0, Math.PI, 0);
+		c.fill();
+	}
+	y += photo.h;
+	c.fillStyle = INK;
+	const small = W * 0.021;
+	c.font = `italic ${small}px ${SERIF}`;
+	y += small * 1.5;
+	c.fillText(article.caption, edge, y);
+	y += small * 1.1;
+
+	// The article, set as large as lets all of it on. If even the smallest type does not, it runs
+	// off the foot of the clipping, which was cut where it was cut.
+	const gutter = W * 0.04;
+	const column = (wide - gutter) / 2;
+	const foot = H - edge * 0.6;
+	type Line = { words: string[]; indent: number; full: boolean } | { heading: string };
+	const set = (size: number) => {
+		const leading = size * 1.28;
+		c.font = `${size}px ${SERIF}`;
+		const all: Line[] = [];
+		article.sections.forEach((section, at) => {
+			if (section.heading) all.push({ heading: section.heading });
+			section.paragraphs.forEach((paragraph, i) => {
+				// Every paragraph but the first under a heading is indented.
+				const indent = i || (at && !section.heading) ? size : 0;
+				const broken = lines(c, paragraph, column, indent);
+				broken.forEach((words, n) => all.push({ words, indent: n ? 0 : indent, full: n < broken.length - 1 }));
+			});
+		});
+		const height = all.reduce((sum, line) => sum + ('heading' in line ? leading * 1.9 : leading), 0);
+		return { size, leading, all, fits: height <= 2 * (foot - y) - leading * 4 };
+	};
+	let type = set(W * 0.03);
+	while (!type.fits && type.size > W * 0.022) type = set(type.size - 1);
+	const { size, leading, all } = type;
+	let at = 0;
+	let top = y + leading;
+	for (const line of all) {
+		const tall = 'heading' in line ? leading * 1.9 : leading;
+		// A heading is not left at the foot of a column with nothing under it.
+		const needs = 'heading' in line ? tall + leading : tall;
+		if (top + needs - leading > foot && at === 0) {
+			at = 1;
+			top = y + leading;
+		}
+		const x = edge + at * (column + gutter);
+		if ('heading' in line) {
+			c.font = `700 ${size * 0.92}px system-ui, sans-serif`;
+			c.fillText(line.heading.toUpperCase(), x, top + leading * 0.75);
+			c.font = `${size}px ${SERIF}`;
+		} else {
+			// Justified: the spare room in a line is shared out between its words.
+			const words = line.words;
+			const taken = words.reduce((sum, word) => sum + c.measureText(word).width, 0);
+			const between =
+				line.full && words.length > 1 ? (column - line.indent - taken) / (words.length - 1) : c.measureText(' ').width;
+			let wx = x + line.indent;
+			for (const word of words) {
+				c.fillText(word, wx, top);
+				wx += c.measureText(word).width + between;
+			}
+		}
+		top += tall;
+	}
+	// Along the foot, whose it is and where the rest of it is to be read.
+	const note = W * 0.017;
+	c.font = `600 ${note}px system-ui, sans-serif`;
+	const address = article.source.href.replace(/^https?:\/\/(www\.)?|\/$/g, '');
+	c.fillText(`An excerpt. The whole article is at ${address}`, edge, H - edge * 0.42);
+	creased(c, W, H);
+	return printed(canvas);
+}
+
+/**
+ * The other side of the clipping, which is whatever was printed on the back of the article: the
+ * columns of some other page, cut through wherever the scissors went. It is the side that shows
+ * while the clipping is rolled up.
+ */
+function clippingBack() {
+	const { canvas, c, W, H } = newsprint(true);
+	let seed = 7;
+	const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+	// Set a little off the cut, since nobody cut along these columns.
+	const COLUMNS = 3;
+	const gutter = W * 0.035;
+	const column = W * 0.36;
+	const line = H * 0.003;
+	c.fillStyle = INK;
+	for (let i = -1; i < COLUMNS; i++) {
+		const x = W * 0.07 + i * (column + gutter);
+		let y = -line * 3 * random();
+		while (y < H) {
+			// Now and then a headline, or a block that was a picture.
+			const kind = random();
+			if (kind < 0.005) {
+				c.globalAlpha = 0.3;
+				c.fillRect(x, y + line * 2, column, column * 0.6);
+				y += column * 0.6 + line * 5;
+			} else if (kind < 0.03) {
+				c.globalAlpha = 0.8;
+				for (let n = 0; n < 2; n++) c.fillRect(x, y + line * 2 + n * line * 5.5, column * (0.6 + 0.4 * random()), line * 3.2);
+				y += line * 14;
+			} else {
+				// A paragraph ends on a short line.
+				const ends = random() < 0.12;
+				c.globalAlpha = 0.4;
+				c.fillRect(x, y, column * (ends ? 0.3 + random() * 0.5 : 1), line);
+				y += line * (ends ? 4.6 : 2.9);
+			}
+		}
+	}
+	c.globalAlpha = 1;
+	creased(c, W, H);
+	const map = printed(canvas);
+	// Seen from behind, the sheet runs the other way across.
+	map.wrapS = RepeatWrapping;
+	map.repeat.x = -1;
+	map.offset.x = 1;
+	return map;
+}
+
+/**
+ * The clipping: rolled up where it is kept, which is in the skull's eye socket (see ROLL), and
+ * unrolled flat to be read when it is picked up. It is a sheet with no thickness and a side
+ * printed on each face.
+ */
+function clipping() {
+	const { W, L, ALONG, ACROSS } = SHEET;
+	const count = (ALONG + 1) * (ACROSS + 1);
+	const positions = new Float32BufferAttribute(new Float32Array(count * 3), 3);
+	const uvs: number[] = [];
+	const indices: number[] = [];
+	for (let j = 0; j <= ALONG; j++) {
+		for (let i = 0; i <= ACROSS; i++) uvs.push(i / ACROSS, 1 - j / ALONG);
+	}
+	for (let j = 0; j < ALONG; j++) {
+		for (let i = 0; i < ACROSS; i++) {
+			const p = j * (ACROSS + 1) + i;
+			const q = p + ACROSS + 1;
+			indices.push(p, q, p + 1, p + 1, q, q + 1);
+		}
+	}
+	// One grid of points, and a face of the sheet made on each side of it: the same triangles,
+	// wound the other way for the back, which gives each face normals of its own, pointing out of it.
+	const faces = [indices, indices.map((_, n) => indices[n - (n % 3) + [0, 2, 1][n % 3]])].map((wound) => {
+		const geometry = new BufferGeometry();
+		geometry.setIndex(wound);
+		geometry.setAttribute('position', positions);
+		geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+		return geometry;
+	});
+
+	const article = catalogue.find((entry) => entry.id === 'clipping')!.article!;
+	const paper = { roughness: 1, alphaTest: 0.5 };
+	const g = new Group();
+	// The paper gives off a little light of its own once it is out of the skull (see `lay`): it is
+	// held up nearer the camera than the light on what is held reaches, and it has to be legible.
+	const read = clippingFront(article);
+	const front = new MeshStandardMaterial({ ...paper, map: read, emissive: 0xffffff, emissiveMap: read, emissiveIntensity: 0 });
+	const inner = mesh(faces[0], front);
+	// Only the back casts a shadow. A shadow is cast by the faces turned away from the light, and
+	// rolled up those are the far side of the roll, as they would be of anything solid. The front's
+	// would be the near side, which is the very surface the light falls on.
+	inner.castShadow = false;
+	g.add(inner);
+	const other = clippingBack();
+	const back = new MeshStandardMaterial({ ...paper, map: other, emissive: 0xffffff, emissiveMap: other, emissiveIntensity: 0 });
+	g.add(mesh(faces[1], back));
+
+	// Held, it is flat and faces out of its group, its middle where the middle of the roll was,
+	// which is the point the scene brings in front of the camera.
+	const flat = { turned: new Quaternion(), at: new Vector3(0, REST.height / 2, 0) };
+	const turned = new Quaternion();
+	const at = new Vector3();
+	const point = new Vector3();
+	/**
+	 * Put the sheet where it is `u` of the way from kept to held. It comes straight out of the
+	 * socket first, the way it went in. Then it turns to face out, and while it does it starts to
+	 * unroll, which is the last thing to finish.
+	 */
+	const lay = (u: number) => {
+		const facing = smooth(0.1, 0.55, u);
+		turned.slerpQuaternions(REST.turned, flat.turned, facing);
+		at.lerpVectors(REST.at, flat.at, facing).addScaledVector(REST.out, REST.pull * smooth(0, 0.15, u) * (1 - facing));
+		const k = smooth(0.3, 1, u);
+		front.emissiveIntensity = back.emissiveIntensity = 0.4 * facing;
+		for (let j = 0; j <= ALONG; j++) {
+			for (let i = 0; i <= ACROSS; i++) {
+				clippingPoint((L * j) / ALONG, (W * i) / ACROSS, k, point).applyQuaternion(turned).add(at);
+				positions.setXYZ(j * (ACROSS + 1) + i, point.x, point.y, point.z);
+			}
+		}
+		positions.needsUpdate = true;
+		for (const geometry of faces) {
+			geometry.computeVertexNormals();
+			geometry.computeBoundingBox();
+			geometry.computeBoundingSphere();
+		}
+	};
+	lay(0);
+
+	// The scene says how far it has been lifted out of the skull, and takes about half a second
+	// over it, which is too quick to watch a sheet unroll in. So that is only taken as which way it is going: up, and
+	// it unrolls in its own time, or back, and it is rolled up again well before it gets there.
+	const UNROLL_S = 1.3;
+	const ROLL_UP_S = 0.35;
+	let u = 0;
+	let goal = 0;
+	let lifted = 0;
+	const works: Works = {
+		start: () => {},
+		stop: () => {},
+		dim: () => {},
+		lifted: (share) => {
+			if (share !== lifted) goal = share > lifted ? 1 : 0;
+			lifted = share;
+		},
+		tick: (dt) => {
+			if (u === goal) return false;
+			u = goal > u ? Math.min(1, u + dt / UNROLL_S) : Math.max(0, u - dt / ROLL_UP_S);
+			lay(u);
+			return u !== goal;
+		}
+	};
+	g.userData.works = works;
+	return g;
+}
+
 function skull() {
 	// Facing forward (+z), with the frill standing up behind.
 	const g = new Group();
@@ -996,6 +1445,7 @@ const volumes: [thick: number, tall: number, deep: number, cover: MeshStandardMa
 ];
 // The order they stand in, from the skull outward.
 const SHELVED = [3, 1, 4, 2, 0];
+const TUCKED = SHELVED[0];
 
 let edge = BOOKS_FROM;
 const books: Placement[] = SHELVED.map((i) => {
@@ -1012,11 +1462,66 @@ const books: Placement[] = SHELVED.map((i) => {
 		// Centred on the frill from front to back, whatever the book's depth.
 		back: 0.5,
 		lean: BOOK_LEAN,
+		// The one tucked in under the frill stays there: it could not come out past the skull.
+		fixed: i === TUCKED,
 		// Front cover to the viewer, turned enough to show the spine as well.
 		held: { pitch: 0.12, yaw: -Math.PI / 2 + 0.45 },
 		build: book(thick, tall, deep, cover, title)
 	};
 });
+
+// The clipping's sheet, in the room's units: as wide as the roll is long, and as long as it takes
+// to wind that many turns from the core out to the roll's radius, which leaves `gap` between one
+// turn and the next. It is this many px across when it is printed, and is drawn as a grid, ALONG
+// by ACROSS, fine enough along it to go round the core smoothly.
+const SHEET = {
+	W: (ROLL.inside + ROLL.outside) * SKULL_LENGTH,
+	L: Math.PI * (ROLL.r + ROLL.core) * ROLL.turns * SKULL_LENGTH,
+	core: ROLL.core * SKULL_LENGTH,
+	gap: ((ROLL.r - ROLL.core) / ROLL.turns) * SKULL_LENGTH,
+	inside: ROLL.inside * SKULL_LENGTH,
+	outside: ROLL.outside * SKULL_LENGTH,
+	PX: 1024,
+	ALONG: 260,
+	ACROSS: 10
+};
+
+// How the rolled-up clipping lies in the socket, worked out once: it is needed to place it on the
+// shelf as well as to build it. The sheet's own frame (see clippingPoint) is `turned` and put
+// `at` this, in a frame that stands as the room does with its origin under the middle of the
+// roll, at its lowest point, which is what the scene wants of an object (`base` is where that is
+// from the skull's own origin on the shelf). `out` is the way the roll points, which is the way
+// it is pulled out of the socket, by `pull`. `height` is how tall the roll stands.
+const REST = (() => {
+	const { W, L, ALONG, ACROSS, core, gap, inside } = SHEET;
+	const yaw = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), SKULL_YAW);
+	const turned = yaw
+		.clone()
+		.multiply(new Quaternion().setFromUnitVectors(new Vector3(1, 0, 0), ROLL.toward))
+		.multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), ROLL.spin));
+	// The point on the roll's axis that is level with the socket goes in the middle of the socket.
+	const axis = new Vector3(inside - W / 2, L / 2, Math.sqrt(core * core + (L * gap) / Math.PI));
+	const at = ROLL.at.clone().multiplyScalar(SKULL_LENGTH).applyQuaternion(yaw).sub(axis.applyQuaternion(turned));
+	const low = new Vector3(Infinity, Infinity, Infinity);
+	const high = low.clone().negate();
+	const point = new Vector3();
+	for (let j = 0; j <= ALONG; j++) {
+		for (let i = 0; i <= ACROSS; i++) {
+			clippingPoint((L * j) / ALONG, (W * i) / ACROSS, 0, point).applyQuaternion(turned).add(at);
+			low.min(point);
+			high.max(point);
+		}
+	}
+	const base = new Vector3((low.x + high.x) / 2, low.y, (low.z + high.z) / 2);
+	return {
+		turned,
+		at: at.sub(base),
+		base,
+		out: ROLL.toward.clone().applyQuaternion(yaw),
+		pull: inside + 0.03,
+		height: high.y - low.y
+	};
+})();
 
 // The game's box: black, printed all over with a tangle of line art in dull gold, and lettered in
 // white. Long and short are its lid's sides, and it is this deep, lying flat.
@@ -1277,6 +1782,17 @@ const GAME_FACE = 'Monoton';
 // its long sides to the left and right, as the box is built.
 let gameLid: HTMLImageElement | undefined;
 
+// The photograph that is printed on the clipping, if it has been saved in the assets as
+// clipping-dig-site: without it, a grey block stands in for it.
+const digSite = Object.values(
+	import.meta.glob<string>('../assets/clipping-dig-site.{jpg,jpeg,png,webp}', {
+		eager: true,
+		query: '?url',
+		import: 'default'
+	})
+)[0];
+let clippingPhoto: HTMLImageElement | undefined;
+
 /**
  * Fetch what the objects are printed with: a typeface and a picture. They are drawn on canvases,
  * which use whatever is to hand when they are drawn, so this is to be done before any object is
@@ -1286,9 +1802,12 @@ export async function loadPrinting() {
 	const face = new FontFace(GAME_FACE, `url(${monoton})`);
 	const lid = new Image();
 	lid.src = mothershipLid;
+	const photo = new Image();
+	if (digSite) photo.src = digSite;
 	await Promise.allSettled([
 		face.load().then((loaded) => document.fonts.add(loaded)),
-		lid.decode().then(() => (gameLid = lid))
+		lid.decode().then(() => (gameLid = lid)),
+		digSite ? photo.decode().then(() => (clippingPhoto = photo)) : undefined
 	]);
 }
 
@@ -1577,8 +2096,20 @@ const placements: Placement[] = [
 		x: SKULL_X,
 		back: SKULL_BACK,
 		yaw: SKULL_YAW,
-		fixed: true,
+		// Face to the viewer and turned half left, to show a horn, an eye and the frill behind them.
+		held: { pitch: 0.1, yaw: -0.6 },
 		build: skull
+	},
+	{
+		// In the skull's eye socket, wherever on the shelf that puts it (see REST).
+		id: 'clipping',
+		shelf: 2,
+		x: SKULL_X + REST.base.x,
+		back: SKULL_BACK - REST.base.z / RACK_DEPTH,
+		up: REST.base.y,
+		rides: 'skull',
+		page: { w: SHEET.W, h: SHEET.L },
+		build: clipping
 	},
 	...books,
 	{
