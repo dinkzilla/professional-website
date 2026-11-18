@@ -76,7 +76,9 @@ export function buildRoom(rackHeight: number) {
 		// a joint's full step between neighbouring pixels then tips the surface about 40 degrees.
 		bumpScale: 3
 	});
-	const boards = new MeshStandardMaterial({ color: 0x5a3f2b, roughness: 0.8, map: floorboards(FAR + CORNER, FAR) });
+	const planks = floorboards(FAR + CORNER, FAR);
+	// The colour is all in the paint (see floorboards); the relief is slight, just grain, gaps and dents.
+	const boards = new MeshStandardMaterial({ roughness: 0.8, map: planks.map, bumpMap: planks.bump, bumpScale: 1 });
 	// All the woodwork: the door and window frames, the skirting, and the frame of the pinboard.
 	const trim = new MeshStandardMaterial({ color: 0x3f2819, roughness: 0.6 }); // dark mahogany: brown first, red second
 	const iron = new MeshStandardMaterial({ color: 0x47454a, roughness: 0.8 });
@@ -601,7 +603,7 @@ export function buildRoom(rackHeight: number) {
 	// it, takes none. It dims with the room too.
 	const SPILL = 1;
 	const spill = new PointLight(0xe4ecf2, SPILL, 5, 1.6);
-	spill.position.set((DOOR.left + DOOR.right) / 2, 1.2, -0.4);
+	spill.position.set((DOOR.left + DOOR.right) / 2, 1.35, -0.4);
 	group.add(spill);
 
 	// The amp under the board: a combo, with its controls along the top of its front and the
@@ -775,6 +777,58 @@ export function buildRoom(rackHeight: number) {
 		hinge.add(knuckle);
 	}
 	group.add(hinge);
+	// The latch plate, on the jamb the door shuts against, at the height of the lever: a black plate
+	// with rounded corners let into the rebate, an opening in its middle for the latch, a screw above
+	// and below that, and a lip out past the edge of the frame.
+	const latchY = SILL + handleY + 0.05;
+	const frameFront = frameZ + REVEAL / 2;
+	const rebateZ = (STOP.z + STOP.d / 2 + frameFront) / 2; // midway across the rebate
+	// Half its width and height, its thickness, the radius of its corners, and half the lip's height.
+	const PLATE = { a: 0.023, b: 0.1, t: 0.004, r: 0.008, lip: 0.055 };
+	const { a, b, r } = PLATE;
+	const edge = frameFront - rebateZ; // from the plate's middle to the edge of the frame
+	// Drawn with the rebate's depth across (the room to the right) and height up.
+	const strike = new Shape()
+		.moveTo(-a + r, -b)
+		.lineTo(a - r, -b)
+		.quadraticCurveTo(a, -b, a, -b + r)
+		.lineTo(a, -PLATE.lip)
+		.lineTo(edge, -PLATE.lip)
+		.lineTo(edge, PLATE.lip)
+		.lineTo(a, PLATE.lip)
+		.lineTo(a, b - r)
+		.quadraticCurveTo(a, b, a - r, b)
+		.lineTo(-a + r, b)
+		.quadraticCurveTo(-a, b, -a, b - r)
+		.lineTo(-a, -b + r)
+		.quadraticCurveTo(-a, -b, -a + r, -b);
+	const MOUTH = { w: 0.011, h: 0.03 }; // half the opening's width and height
+	strike.holes.push(
+		new Path().moveTo(-MOUTH.w, -MOUTH.h).lineTo(MOUTH.w, -MOUTH.h).lineTo(MOUTH.w, MOUTH.h).lineTo(-MOUTH.w, MOUTH.h).closePath()
+	);
+	const strikePlate = new Mesh(new ExtrudeGeometry(strike, { depth: PLATE.t, bevelEnabled: false }), black);
+	strikePlate.rotation.y = -Math.PI / 2; // its face toward the doorway
+	add(strikePlate, DOOR.right, latchY, rebateZ);
+	// The mortise behind the opening, which is dark.
+	box(0.001, 2 * MOUTH.h, 2 * MOUTH.w, new MeshBasicMaterial({ color: 0x050403 }), DOOR.right - 0.0005, latchY, rebateZ);
+	// The lip, which is what the latch strikes as the door comes shut: it carries on past the edge of
+	// the frame into the room, standing proud of the woodwork, and curls away from the doorway as it
+	// goes, so that the latch rides up it. Drawn from above, with the wall to the right and the room
+	// up, as a slice of a ring, then given the lip's height.
+	const LIP = { radius: 0.03, sweep: (65 * Math.PI) / 180 };
+	const curl = new Shape()
+		.moveTo(-PLATE.t, 0)
+		.absarc(LIP.radius, 0, LIP.radius + PLATE.t, Math.PI, Math.PI - LIP.sweep, true)
+		.absarc(LIP.radius, 0, LIP.radius, Math.PI - LIP.sweep, Math.PI, false)
+		.closePath();
+	const lip = new Mesh(new ExtrudeGeometry(curl, { depth: 2 * PLATE.lip, bevelEnabled: false, curveSegments: 16 }), black);
+	lip.rotation.x = Math.PI / 2; // the drawing's up into the room, its height downward
+	add(lip, DOOR.right, latchY + PLATE.lip, frameFront);
+	for (const side of [-1, 1]) {
+		const screw = new Mesh(new CylinderGeometry(0.007, 0.007, 0.002, 12), black);
+		screw.rotation.z = Math.PI / 2;
+		add(screw, DOOR.right - PLATE.t - 0.001, latchY + side * 0.068, rebateZ);
+	}
 
 	// The wood outside the window: a few trees close by, with thicker growth behind them.
 	const thick = new Mesh(new PlaneGeometry(10, 8), thicket);
@@ -1226,39 +1280,219 @@ function corkGrain(width: number, height: number) {
 }
 
 /**
- * The floor's surface: hardwood boards 0.25 wide running toward the viewer, their ends staggered,
- * each a slightly different shade. One tile is eight boards across and four units long; `width`
- * and `depth` are the size of the floor it is spread over.
+ * The floor's surface: old hardwood boards 0.25 wide running toward the viewer, their ends
+ * staggered, in a mid-brown walnut that has seen years of use. Each board has its own shade and its own
+ * grain: fine lines along its length, on some the nested arches of a plain-sawn face, and now and
+ * then a knot. Over the boards goes the wear, which takes no notice of where one ends: pale
+ * patches where the finish has rubbed through, a few stains, scratches, the parallel scuffs of
+ * things dragged, and dents. The second texture is the relief: the gaps between boards, the
+ * deeper grain, the scratches and the dents sunk. One tile is twelve boards across and six units
+ * long; `width` and `depth` are the size of the floor it is spread over.
  */
 function floorboards(width: number, depth: number) {
-	const BOARDS = 8;
-	const W = 64; // px per board, across
-	const L = 1024; // px for the tile's length
-	const canvas = document.createElement('canvas');
-	canvas.width = BOARDS * W;
-	canvas.height = L;
-	const c = canvas.getContext('2d')!;
+	const BOARDS = 12;
+	const LENGTH = 6; // units of floor under one tile
+	const PX = 384; // px per unit
+	const W = 0.25 * PX; // px per board, across
+	const TW = BOARDS * W;
+	const L = LENGTH * PX;
+	// A fixed scatter, so that the floor is the same on every visit.
 	let seed = 11;
 	const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+	const sheet = (fill: string) => {
+		const canvas = document.createElement('canvas');
+		canvas.width = TW;
+		canvas.height = L;
+		const c = canvas.getContext('2d')!;
+		c.fillStyle = fill;
+		c.fillRect(0, 0, TW, L);
+		return { canvas, c };
+	};
+	const { canvas, c } = sheet('#000');
+	const { canvas: relief, c: r } = sheet('rgb(128,128,128)');
+	const GRAIN = '44,27,15'; // the dark of the grain, and of dirt
+	const PALE = '152,126,96'; // bare wood, where the finish is gone
+
+	/** One board, its near end at `y`. */
+	const plank = (x: number, y: number, length: number) => {
+		for (const ctx of [c, r]) {
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(x, y, W, length);
+			ctx.clip();
+		}
+		const light = 0.9 + random() * 0.2;
+		const warm = random();
+		c.fillStyle = `rgb(${[100, 71 + 5 * warm, 47 + 7 * warm].map((v) => Math.round(v * light))})`;
+		c.fillRect(x, y, W, length);
+		// The grain: lines along the board that wander a little, most darker than the wood, some paler.
+		const lines = 26 + Math.floor(random() * 14);
+		for (let k = 0; k < lines; k++) {
+			const gx = x + random() * W;
+			const sway = random() * 3;
+			const period = 300 + random() * 500;
+			const phase = random() * Math.PI * 2;
+			const dark = random() < 0.75;
+			const line = new Path2D();
+			for (let t = 0; t <= length + 24; t += 24)
+				line.lineTo(gx + sway * Math.sin((t / period) * Math.PI * 2 + phase), y + t);
+			c.lineWidth = 0.6 + random() * 1.6;
+			c.strokeStyle = dark ? `rgba(${GRAIN},${0.06 + random() * 0.14})` : `rgba(${PALE},${0.05 + random() * 0.1})`;
+			c.stroke(line);
+			// The open pores of the darker lines are low, which is the grain the lamp finds.
+			if (dark && random() < 0.4) {
+				r.lineWidth = 1;
+				r.strokeStyle = 'rgba(96,96,96,0.3)';
+				r.stroke(line);
+			}
+		}
+		// On one board in three, the arches of a plain-sawn face.
+		if (random() < 0.35) {
+			const cx = x + W * (0.3 + random() * 0.4);
+			const cy = y + random() * length;
+			const step = 5 + random() * 3;
+			const stretch = 9 + random() * 8;
+			c.lineWidth = 1.2;
+			for (let k = 1; k <= 12; k++) {
+				c.strokeStyle = `rgba(${GRAIN},${0.08 + random() * 0.1})`;
+				c.beginPath();
+				c.ellipse(cx, cy, k * step, k * step * stretch, 0, 0, Math.PI * 2);
+				c.stroke();
+			}
+		}
+		// Now and then a knot.
+		if (random() < 0.15) {
+			const kx = x + W * (0.2 + random() * 0.6);
+			const ky = y + random() * length;
+			const radius = 4 + random() * 4;
+			for (const [ctx, tone, strength] of [
+				[c, '30,18,10', 0.75],
+				[r, '96,96,96', 0.5]
+			] as const) {
+				const knot = ctx.createRadialGradient(kx, ky, 0, kx, ky, radius * 1.6);
+				knot.addColorStop(0, `rgba(${tone},${strength})`);
+				knot.addColorStop(0.5, `rgba(${tone},${strength * 0.6})`);
+				knot.addColorStop(1, `rgba(${tone},0)`);
+				ctx.fillStyle = knot;
+				ctx.fillRect(kx - radius * 2, ky - radius * 2, radius * 4, radius * 4);
+			}
+		}
+		// Dirt worked into the edges, darkest at the gap.
+		const edges = c.createLinearGradient(x, 0, x + W, 0);
+		edges.addColorStop(0, 'rgba(25,15,7,0.14)');
+		edges.addColorStop(0.07, 'rgba(25,15,7,0)');
+		edges.addColorStop(0.93, 'rgba(25,15,7,0)');
+		edges.addColorStop(1, 'rgba(25,15,7,0.1)');
+		c.fillStyle = edges;
+		c.fillRect(x, y, W, length);
+		// The gaps: along one side, and across the end.
+		c.fillStyle = 'rgba(18,11,5,0.35)';
+		c.fillRect(x, y, 1, length);
+		c.fillRect(x, y, W, 1.5);
+		r.fillStyle = 'rgb(100,100,100)';
+		r.fillRect(x, y, 1, length);
+		r.fillRect(x, y, W, 1.5);
+		c.restore();
+		r.restore();
+	};
 	for (let i = 0; i < BOARDS; i++) {
-		// Two or three boards end to end, the joints falling anywhere.
-		let y = -random() * L * 0.5;
+		// Three or four boards end to end, the joints falling anywhere.
+		let y = -random() * L * 0.3;
 		while (y < L) {
-			const length = L * (0.3 + random() * 0.35);
-			const shade = 205 + Math.round(random() * 40);
-			c.fillStyle = `rgb(${shade},${shade - 6},${shade - 14})`;
-			c.fillRect(i * W, y, W, length);
-			c.fillStyle = 'rgba(0,0,0,0.3)';
-			c.fillRect(i * W, y, W, 2);
+			const length = L * (0.2 + random() * 0.25);
+			plank(i * W, y, length);
 			y += length;
 		}
-		c.fillStyle = 'rgba(0,0,0,0.3)';
-		c.fillRect(i * W, 0, 2, L);
 	}
-	const texture = new CanvasTexture(canvas);
-	texture.wrapS = texture.wrapT = RepeatWrapping;
-	texture.repeat.set(width / (BOARDS * 0.25), depth / 4);
-	texture.anisotropy = 8;
-	texture.colorSpace = SRGBColorSpace;
-	return texture;
+
+	// --- The wear, which carries on across the tile's edges ---
+	/** A soft patch, longer along the boards than across them. */
+	const patch = (tone: string, strength: number, radius: number, stretch: number) => {
+		const x = random() * TW;
+		const y = random() * L;
+		for (const dx of [-TW, 0, TW])
+			for (const dy of [-L, 0, L]) {
+				c.save();
+				c.translate(x + dx, y + dy);
+				c.scale(1, stretch);
+				const fade = c.createRadialGradient(0, 0, 0, 0, 0, radius);
+				fade.addColorStop(0, `rgba(${tone},${strength})`);
+				fade.addColorStop(0.5, `rgba(${tone},${strength * 0.6})`);
+				fade.addColorStop(1, `rgba(${tone},0)`);
+				c.fillStyle = fade;
+				c.fillRect(-radius, -radius, radius * 2, radius * 2);
+				c.restore();
+			}
+	};
+	// Where feet have rubbed the finish through to paler, greyer wood.
+	for (let i = 0; i < 44; i++) patch('136,114,90', 0.1 + random() * 0.16, 50 + random() * 130, 1.5 + random() * 3);
+	// And where something was spilt, or stood for years.
+	for (let i = 0; i < 12; i++) patch('33,21,12', 0.06 + random() * 0.08, 40 + random() * 90, 1 + random() * 1.5);
+
+	/** One straight scratch from a point, in the paint and (if `deep`) in the relief. */
+	const scratch = (x: number, y: number, angle: number, length: number, pale: boolean, deep: boolean) => {
+		const x1 = x + Math.cos(angle) * length;
+		const y1 = y + Math.sin(angle) * length;
+		const thick = 0.5 + random() * 0.6;
+		const colour = pale ? `rgba(${PALE},${0.09 + random() * 0.16})` : `rgba(${GRAIN},${0.1 + random() * 0.15})`;
+		for (const dx of [-TW, 0, TW])
+			for (const dy of [-L, 0, L])
+				for (const [ctx, style] of [[c, colour], ...(deep ? ([[r, 'rgba(100,100,100,0.3)']] as const) : [])] as const) {
+					ctx.lineWidth = thick;
+					ctx.strokeStyle = style;
+					ctx.beginPath();
+					ctx.moveTo(x + dx, y + dy);
+					ctx.lineTo(x1 + dx, y1 + dy);
+					ctx.stroke();
+				}
+	};
+	// Scratches at every angle, most of them short and pale.
+	for (let i = 0; i < 320; i++)
+		scratch(random() * TW, random() * L, random() * Math.PI, 12 + random() * random() * 260, random() < 0.7, random() < 0.35);
+	// Scuffs: a handful of scratches side by side, where a chair or a case was dragged.
+	for (let i = 0; i < 16; i++) {
+		const x = random() * TW;
+		const y = random() * L;
+		const angle = random() * Math.PI;
+		const length = 40 + random() * 160;
+		const count = 3 + Math.floor(random() * 6);
+		for (let k = 0; k < count; k++) {
+			const aside = (k - count / 2) * (2 + random() * 3);
+			scratch(
+				x - Math.sin(angle) * aside + (random() - 0.5) * 20,
+				y + Math.cos(angle) * aside + (random() - 0.5) * 20,
+				angle + (random() - 0.5) * 0.04,
+				length * (0.6 + random() * 0.4),
+				true,
+				random() < 0.3
+			);
+		}
+	}
+	// Dents, from whatever has been dropped: each a small dark spot, and a hollow in the relief.
+	for (let i = 0; i < 150; i++) {
+		const x = random() * TW;
+		const y = random() * L;
+		const radius = 1.5 + random() * 3;
+		for (const [ctx, tone, strength] of [
+			[c, '30,20,12', 0.25 + random() * 0.3],
+			[r, '64,64,64', 0.8]
+		] as const) {
+			const spot = ctx.createRadialGradient(x, y, 0, x, y, radius);
+			spot.addColorStop(0, `rgba(${tone},${strength})`);
+			spot.addColorStop(0.5, `rgba(${tone},${strength * 0.6})`);
+			spot.addColorStop(1, `rgba(${tone},0)`);
+			ctx.fillStyle = spot;
+			ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+		}
+	}
+
+	const texture = (from: HTMLCanvasElement, colour: boolean) => {
+		const t = new CanvasTexture(from);
+		t.wrapS = t.wrapT = RepeatWrapping;
+		t.repeat.set(width / (BOARDS * 0.25), depth / LENGTH);
+		t.anisotropy = 8;
+		if (colour) t.colorSpace = SRGBColorSpace;
+		return t;
+	};
+	return { map: texture(canvas, true), bump: texture(relief, false) };
 }

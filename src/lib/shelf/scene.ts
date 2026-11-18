@@ -56,10 +56,12 @@ import {
 	screw,
 	items,
 	LEGS,
+	loadModels,
 	loadPrinting,
 	RACK_DEPTH,
 	RACK_WIDTH,
 	STANDOFF,
+	WALL_OFF,
 	WALL,
 	type Control,
 	type Item,
@@ -158,7 +160,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 
 
 /** Build the scene and draw it once, off the page, so that it can be shown without delay. */
 export async function prepare(): Promise<Shelf> {
-	await loadPrinting();
+	await Promise.all([loadPrinting(), loadModels()]);
 	const shelf = createShelf();
 	await shelf.warm();
 	return shelf;
@@ -217,9 +219,11 @@ function createShelf() {
 	const probe = new CubeCamera(0.05, 60, surroundings);
 	const red = new MeshStandardMaterial({
 		color: 0xd81a22,
-		roughness: 0.3,
-		metalness: 0.9,
-		envMap: surroundings.texture
+		roughness: 0.65,
+		metalness: 0.1,
+		envMap: surroundings.texture,
+		// Only a quarter of the reflection: at full strength it washes out the shadows cast on it.
+		envMapIntensity: 0.25
 	});
 	const drilled = [steel, steel, steel, steel, rail, rail];
 	scene.add(new HemisphereLight(0xcfd8ff, 0x1a1410, 0.22));
@@ -229,14 +233,14 @@ function createShelf() {
 	scene.add(wash, wash.target);
 	if (SHADOWS) {
 		wash.castShadow = true;
-		wash.shadow.mapSize.set(2048, 2048);
+		wash.shadow.mapSize.set(4096, 4096);
 		wash.shadow.camera.near = 1;
 		wash.shadow.camera.far = 20;
 		wash.shadow.bias = -0.0004;
 		wash.shadow.normalBias = 0.01;
 		// Soft: each edge is blurred over this many texels of the map, and the shadows are not
 		// quite full strength.
-		wash.shadow.radius = 9;
+		wash.shadow.radius = 6;
 		wash.shadow.intensity = 0.75;
 	}
 
@@ -439,7 +443,7 @@ function createShelf() {
 			p.group.visible = p.item.shelf < shelves;
 			if (p.item.shelf === WALL) {
 				// Just off the wall: against the board, or hanging from a hook.
-				p.shelfPosition.set(p.item.x, (p.item.up ?? 0) + (p.item.pinned ? room.lift : 0) - height, 0.034);
+				p.shelfPosition.set(p.item.x, (p.item.up ?? 0) + (p.item.pinned ? room.lift : 0) - height, WALL_OFF);
 				continue;
 			}
 			p.shelfPosition.set(

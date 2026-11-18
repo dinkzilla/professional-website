@@ -19,6 +19,7 @@ import {
 	Shape,
 	SphereGeometry,
 	SRGBColorSpace,
+	TextureLoader,
 	TorusGeometry,
 	TubeGeometry,
 	Vector2,
@@ -28,7 +29,11 @@ import {
 	type Object3D
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import monoton from '@fontsource/monoton/files/monoton-latin-400-normal.woff2?url';
+import skullShade from '#lib/assets/models/skull-ao.webp';
+import skullNormal from '#lib/assets/models/skull-normal.webp';
+import skullMesh from '#lib/assets/models/skull.glb?url';
 import mothershipLid from '#lib/assets/mothership-lid.jpg';
 import { createFirmware } from '#lib/video-module/firmware.ts';
 import { createMpv } from '#lib/video-module/mpv.ts';
@@ -139,8 +144,13 @@ export const RACK_WIDTH = 1.1;
 export const RACK_DEPTH = 0.7;
 export const BOARD = 0.05;
 // How far the back of the rack stands off the wall: clear of the pinboard, which runs behind it,
-// with room for the cable that goes down behind the tv.
-export const STANDOFF = 0.1;
+// with room for the cable that goes down behind the tv, and for a flier behind it to come forward
+// under the pointer, pin and all.
+export const STANDOFF = 0.14;
+/** How far off the wall something pinned to it or hung on it is. */
+export const WALL_OFF = 0.034;
+/** The backs of the rack's posts, from the wall: they stand a touch proud of its shelves. */
+export const RACK_BACK = STANDOFF - 0.005;
 export const LEGS = 0.24; // how far the posts carry on below the bottom shelf, down to the floor
 
 // The amp on the floor under the pinboard (built in room.ts): where along the wall its middle is,
@@ -836,9 +846,58 @@ function cassettePlayer() {
 	return g;
 }
 
+// The skull as scanned, once fetched: a Triceratops skull without its lower jaw, a unit long from
+// beak to frill, facing forward (+z) and rocked back onto its frill, with its base centred on the
+// origin. Made from the model in model-originals/triceratops (Creative Commons 4.0).
+let skullModel: { geometry: BufferGeometry; bone: MeshStandardMaterial } | undefined;
+
+/**
+ * Fetch the objects that are scanned models and not built here from primitives, which is to be
+ * done before any object is built. One that cannot be had is left as its grey-box stand-in.
+ */
+export async function loadModels() {
+	const textures = new TextureLoader();
+	// Laid out for the model's own texture coordinates, which run the other way up from three's.
+	const texture = async (url: string) => {
+		const t = await textures.loadAsync(url);
+		t.flipY = false;
+		t.anisotropy = 8;
+		return t;
+	};
+	try {
+		const [gltf, normalMap, shade] = await Promise.all([
+			new GLTFLoader().loadAsync(skullMesh),
+			texture(skullNormal),
+			texture(skullShade)
+		]);
+		const found = gltf.scene.getObjectByProperty('isMesh', true) as Mesh | undefined;
+		if (!found) return;
+		// The shading baked into the hollows is its only colouring, over the colour of old bone. The
+		// fine surface the scan had, and this many triangles cannot hold, is in the normal map.
+		shade.colorSpace = SRGBColorSpace;
+		// The model rests on its teeth, which is how it stands on the shelf. Centred over its base.
+		const geometry = found.geometry;
+		geometry.computeBoundingBox();
+		const { min, max } = geometry.boundingBox!;
+		geometry.translate(-(min.x + max.x) / 2, -min.y, -(min.z + max.z) / 2);
+		skullModel = {
+			geometry,
+			bone: new MeshStandardMaterial({ color: 0xd6ccb4, roughness: 0.85, map: shade, normalMap })
+		};
+	} catch {
+		// The stand-in will do.
+	}
+}
+
 function skull() {
-	// Facing forward (+z), resting on its jaw line, with the frill standing up behind.
+	// Facing forward (+z), with the frill standing up behind.
 	const g = new Group();
+	if (skullModel) {
+		g.scale.setScalar(SKULL_LENGTH);
+		g.add(mesh(skullModel.geometry, skullModel.bone));
+		return g;
+	}
+	// The stand-in, resting on its jaw line.
 	g.scale.setScalar(SKULL_SCALE);
 	g.add(box(0.22, 0.2, 0.3, light, 0, 0, 0.02)); // the cranium
 	g.add(box(0.14, 0.13, 0.2, light, 0, 0, 0.25)); // the snout
@@ -915,14 +974,19 @@ function book(thick: number, tall: number, deep: number, cover: MeshStandardMate
 	};
 }
 
-// The skull is turned to face left, which puts its frill on the right, tipped away from its face.
-// The books stand in a row to the right of it and lean left, the first with its top against the
-// top of the frill and each of the others resting on the one before. Leaning at the same angle, their bottom-left edges are a thickness apart
-// measured along the shelf, which is a little more than the thickness itself.
-const SKULL_X = -0.15;
-const SKULL_SCALE = 0.8;
-const BOOK_LEAN = 0.16;
-const BOOKS_FROM = SKULL_X + 0.27; // where the first book's bottom-left edge sits
+// The skull stands on its teeth at the left end, side on, its beak just short of the wall and its
+// frill standing up at the other end like a shield. The books stand in a row to the right of it
+// and lean left into the back of the frill. The first is the shortest, which lets it tuck in under
+// the frill's rim, and each of the others rests on the one before. Leaning at the same angle,
+// their bottom-left edges are a thickness apart measured along the shelf, which is a little more
+// than the thickness itself.
+const SKULL_X = -0.18;
+const SKULL_BACK = 0.5; // how far back its middle is, as a share of the shelf's depth
+const SKULL_YAW = -Math.PI / 2;
+const SKULL_LENGTH = 0.7; // the scanned skull, from beak to frill
+const SKULL_SCALE = 0.8; // its stand-in
+const BOOK_LEAN = 0.1;
+const BOOKS_FROM = SKULL_X + 0.3377; // where the first book's bottom-left edge sits
 const volumes: [thick: number, tall: number, deep: number, cover: MeshStandardMaterial][] = [
 	[0.07, 0.46, 0.34, dark],
 	[0.05, 0.4, 0.3, mid],
@@ -930,9 +994,12 @@ const volumes: [thick: number, tall: number, deep: number, cover: MeshStandardMa
 	[0.055, 0.37, 0.28, accent],
 	[0.065, 0.42, 0.32, mid]
 ];
+// The order they stand in, from the skull outward.
+const SHELVED = [3, 1, 4, 2, 0];
 
 let edge = BOOKS_FROM;
-const books: Placement[] = volumes.map(([thick, tall, deep, cover], i) => {
+const books: Placement[] = SHELVED.map((i) => {
+	const [thick, tall, deep, cover] = volumes[i];
 	const id = `book-${i + 1}`;
 	// The title on the spine is the book's name in the catalogue.
 	const title = catalogue.find((entry) => entry.id === id)!.label;
@@ -942,8 +1009,8 @@ const books: Placement[] = volumes.map(([thick, tall, deep, cover], i) => {
 		id,
 		shelf: 2,
 		x,
-		// Spines lined up just behind the shelf's front edge, whatever the book's depth.
-		back: (0.05 + deep / 2) / RACK_DEPTH,
+		// Centred on the frill from front to back, whatever the book's depth.
+		back: 0.5,
 		lean: BOOK_LEAN,
 		// Front cover to the viewer, turned enough to show the spine as well.
 		held: { pitch: 0.12, yaw: -Math.PI / 2 + 0.45 },
@@ -1376,9 +1443,11 @@ const FLIERS: [string, string, string, string][] = [
 
 /**
  * A photocopied show flier, flat against the wall and facing out, with a pin through its top.
- * `far` is how far along the wall it is from the door, whose air reaches it that much later.
+ * `x` is where along the wall it is, and `lean` how crooked: the air from the door reaches it later
+ * the further off it is, and what part of it is behind the rack cannot lift far.
  */
-function flier(index: number, w: number, h: number, far: number) {
+function flier(index: number, w: number, h: number, x: number, lean: number) {
+	const far = HOOK.x - x;
 	const [paper, ink, second, name] = FLIERS[index];
 	const canvas = document.createElement('canvas');
 	const W = (canvas.width = 400);
@@ -1436,10 +1505,17 @@ function flier(index: number, w: number, h: number, far: number) {
 		geometry,
 		still: Float32Array.from(geometry.attributes.position.array)
 	}));
+	// The rack's left side, along the wall: its posts stand a touch proud of that too.
+	const RACK_LEFT = -(RACK_WIDTH / 2 + BOARD) - 0.005;
+	const cos = Math.cos(lean);
+	const sin = Math.sin(lean);
 	const pose = (t: number, strength: number) => {
 		const blowing = air(t - lag) * strength * give;
 		const turn = blowing * 0.032 * (0.7 + 0.3 * Math.sin(2.9 * t + index));
 		const out = blowing * 0.2 * (0.75 + 0.25 * Math.sin(4.3 * t + 2 * index));
+		// How far the paper's face is from the back of the rack, where it is now: it may have been
+		// brought forward under the pointer.
+		const gap = Math.max(0, RACK_BACK - 0.004 - g.position.z - 0.0045);
 		for (const { geometry, still } of sheets) {
 			const at = geometry.attributes.position;
 			for (let i = 0; i < at.count; i++) {
@@ -1449,12 +1525,18 @@ function flier(index: number, w: number, h: number, far: number) {
 				const across = x / (w / 2);
 				const curl = down ** 1.7;
 				const shiver = blowing * 0.004 * Math.sin(7 * (t - lag) - 4 * down + 1.5 * across);
-				at.setXYZ(
-					i,
-					x - turn * (PIN - y),
-					y + turn * x,
-					still[i * 3 + 2] + curl * (out * (1 - 0.35 * across) + shiver)
-				);
+				const px = x - turn * (PIN - y);
+				const py = y + turn * x;
+				let lifted = curl * (out * (1 - 0.35 * across) + shiver);
+				if (lifted > 0) {
+					// Behind the rack it comes up against the back of it and lies along that, never
+					// through it. A sheet that is only partly behind is held over that part alone.
+					const k = Math.min(1, Math.max(0, (g.position.x + px * cos - py * sin - (RACK_LEFT - 0.06)) / 0.05));
+					const behind = k * k * (3 - 2 * k);
+					const held = gap ? gap * (1 - Math.exp(-lifted / gap)) : 0;
+					lifted += behind * (held - lifted);
+				}
+				at.setXYZ(i, px, py, still[i * 3 + 2] + lifted);
 			}
 			at.needsUpdate = true;
 			geometry.computeVertexNormals();
@@ -1482,7 +1564,7 @@ const fliers: Placement[] = pinned.map(([x, up, lean, w, h], i) => ({
 	up,
 	lean,
 	pinned: true,
-	build: () => flier(i, w, h, HOOK.x - x)
+	build: () => flier(i, w, h, x, lean)
 }));
 
 const placements: Placement[] = [
@@ -1493,8 +1575,8 @@ const placements: Placement[] = [
 		id: 'skull',
 		shelf: 2,
 		x: SKULL_X,
-		back: 0.4,
-		yaw: -1.15,
+		back: SKULL_BACK,
+		yaw: SKULL_YAW,
 		fixed: true,
 		build: skull
 	},

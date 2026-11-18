@@ -9,6 +9,10 @@ node_modules
 # from them for the site are in src/lib/assets/loops and src/lib/assets/triggers.
 /video-originals
 
+# Downloaded 3D models as they came: far too big to commit. The versions made from them for the
+# site are in src/lib/assets/models.
+/model-originals
+
 # OS
 .DS_Store
 Thumbs.db
