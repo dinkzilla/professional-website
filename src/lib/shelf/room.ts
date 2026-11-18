@@ -13,6 +13,7 @@
 // lies where the door looks.
 
 import {
+	BackSide,
 	BoxGeometry,
 	CapsuleGeometry,
 	CanvasTexture,
@@ -22,6 +23,7 @@ import {
 	CatmullRomCurve3,
 	CylinderGeometry,
 	DoubleSide,
+	ExtrudeGeometry,
 	Float32BufferAttribute,
 	Group,
 	IcosahedronGeometry,
@@ -40,12 +42,13 @@ import {
 	Path,
 	type Material
 } from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { AMP, AMP_JACK, braided, HOOK, PINBOARD } from './items.ts';
 
 const FAR = 30; // how far the walls and floor run on, out of sight
 const CORNER = 3.5; // x of the wall that comes toward the viewer; far enough for the bench to clear the door
 const DOOR = { left: 1.3, right: 2.7 };
-const DOOR_OPEN = (110 * Math.PI) / 180; // swung outward, hinged on the right
+const DOOR_OPEN = (100 * Math.PI) / 180; // swung inward, hinged on the left
 // Along z, and above the floor. It runs on toward the viewer well past the edge of any screen.
 const WINDOW = { near: 5.2, far: 0.3, sill: 1.3, top: 2.6 };
 const SHORE = -2.6; // z where the yard ends and the lake begins
@@ -137,10 +140,21 @@ export function buildRoom(rackHeight: number) {
 	box(SKIRT.d, SKIRT.h, FAR, trim, CORNER - SKIRT.d / 2, SKIRT.h / 2, FAR / 2);
 	const REVEAL = 0.16;
 	const doorWidth = DOOR.right - DOOR.left;
+	const doorX = (DOOR.left + DOOR.right) / 2;
+	const frameZ = -REVEAL / 2 + 0.02;
 	for (const x of [DOOR.left - FRAME / 2, DOOR.right + FRAME / 2]) {
-		box(FRAME, doorHeight + FRAME, REVEAL, trim, x, (doorHeight + FRAME) / 2, -REVEAL / 2 + 0.02);
+		box(FRAME, doorHeight + FRAME, REVEAL, trim, x, (doorHeight + FRAME) / 2, frameZ);
 	}
-	box(doorWidth, FRAME, REVEAL, trim, (DOOR.left + DOOR.right) / 2, doorHeight + FRAME / 2, -REVEAL / 2 + 0.02);
+	box(doorWidth, FRAME, REVEAL, trim, doorX, doorHeight + FRAME / 2, frameZ);
+	// A rebate for the door to shut into: the frame is thicker behind where the door would lie,
+	// up both sides and across the head.
+	const LEAF = 0.06; // the door's thickness
+	const STOP = { t: 0.02, d: REVEAL - LEAF, z: frameZ - LEAF / 2 };
+	for (const x of [DOOR.left + STOP.t / 2, DOOR.right - STOP.t / 2]) box(STOP.t, doorHeight, STOP.d, trim, x, doorHeight / 2, STOP.z);
+	box(doorWidth - 2 * STOP.t, STOP.t, STOP.d, trim, doorX, doorHeight - STOP.t / 2, STOP.z);
+	// The threshold: a low board across the foot of the doorway, as deep as the frame.
+	const SILL = 0.02;
+	box(doorWidth, SILL, REVEAL, trim, doorX, SILL / 2, frameZ);
 
 	const windowWidth = WINDOW.near - WINDOW.far;
 	const windowHeight = WINDOW.top - WINDOW.sill;
@@ -199,6 +213,230 @@ export function buildRoom(rackHeight: number) {
 		add(peg, x, HOOK.y - 0.03, 0.04);
 		box(0.024, 0.04, 0.012, iron, x, HOOK.y - 0.015, 0.08);
 	}
+
+	// A power outlet low on the wall between the rack and the door: a steel box on the surface, as
+	// it has to be on block, with a duplex receptacle in its cover. Its conduit leaves its left
+	// side and runs level along the wall, behind the rack and the amp (it is thin enough to pass
+	// through the gap the amp stands off by) and on out of sight.
+	// No further left than this: from where the camera stands, to the left, the rack hides the
+	// wall to about x = 0.92.
+	const OUTLET = { x: 1.03, y: 0.36, w: 0.145, h: 0.24, d: 0.11 };
+	const CONDUIT = { r: 0.024, z: 0.03 }; // as thick as will still pass behind the amp
+	const steel = new MeshStandardMaterial({ color: 0x8f9296, roughness: 0.5 });
+	const zinc = new MeshStandardMaterial({ color: 0xa4a7aa, roughness: 0.4 }); // the fittings, a little brighter
+	const white = new MeshStandardMaterial({ color: 0xf1f0ea, roughness: 0.55 }); // the faceplate and the receptacle in it
+	const slot = new MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.9 });
+	/** A cylinder lying along x, or with `out`, facing out of the wall. */
+	const barrel = (r: number, length: number, material: Material, x: number, y: number, z: number, out = false, sides = 20) => {
+		const m = new Mesh(new CylinderGeometry(r, r, length, sides), material);
+		if (out) m.rotation.x = Math.PI / 2;
+		else m.rotation.z = Math.PI / 2;
+		return add(m, x, y, z);
+	};
+	/** Draw a rectangle with rounded corners about the origin. */
+	const trace = <P extends Path>(path: P, w: number, h: number, r: number) =>
+		path
+			.moveTo(-w / 2 + r, -h / 2)
+			.absarc(w / 2 - r, -h / 2 + r, r, -Math.PI / 2, 0, false)
+			.absarc(w / 2 - r, h / 2 - r, r, 0, Math.PI / 2, false)
+			.absarc(-w / 2 + r, h / 2 - r, r, Math.PI / 2, Math.PI, false)
+			.absarc(-w / 2 + r, -h / 2 + r, r, Math.PI, Math.PI * 1.5, false) as P;
+	type Hole = { w: number; h: number; r: number };
+	/**
+	 * A slab with rounded corners, seen from the front, standing out from the plane z = 0, with a
+	 * hole through its middle if one is given. With `roll`, its edges (and the hole's) are rolled
+	 * over by that much, front and back, as a moulded plate's are; its size is then as measured
+	 * across the roll, and the hole's as measured at its narrowest.
+	 */
+	const rounded = (w: number, h: number, r: number, depth: number, hole?: Hole, roll = 0) => {
+		const outline = trace(new Shape(), w - 2 * roll, h - 2 * roll, r - roll);
+		if (hole) outline.holes.push(trace(new Path(), hole.w + 2 * roll, hole.h + 2 * roll, hole.r + roll));
+		const thick = Math.min(roll, depth / 2 - 0.0005); // how far back from each face the roll starts
+		const slab = new ExtrudeGeometry(outline, {
+			depth: roll ? depth - 2 * thick : depth,
+			curveSegments: 10,
+			bevelEnabled: roll > 0,
+			bevelSize: roll,
+			bevelThickness: thick,
+			bevelSegments: 5
+		});
+		if (roll) slab.translate(0, 0, thick);
+		return slab;
+	};
+	/**
+	 * A soft dark patch to lie on a surface where something standing off it keeps the lamp's light
+	 * from it. No light in the scene casts shadows, so these are painted on.
+	 */
+	const blur = document.createElement('canvas');
+	blur.width = blur.height = 128;
+	const soft = blur.getContext('2d')!;
+	soft.shadowColor = '#000';
+	soft.shadowBlur = 20;
+	soft.shadowOffsetX = 256; // the rectangle itself is drawn off the picture; only what it casts is on it
+	soft.fillRect(32 - 256, 32, 64, 64);
+	const blurred = new CanvasTexture(blur);
+	const shade = (w: number, h: number, x: number, y: number, z: number, strength: number) => {
+		const material = new MeshBasicMaterial({ color: 0x000000, map: blurred, transparent: true, opacity: strength, depthWrite: false });
+		return add(new Mesh(new PlaneGeometry(w * 2, h * 2), material), x, y, z);
+	};
+	// Where the lamp is, near enough, as the room is laid out (see scene.ts), and so which way a
+	// shadow falls from a point this far off the wall: away from the lamp, by its share of the way to it.
+	const LAMP = new Vector3(0, 2.2 + rackHeight, 4.5);
+	const cast = (x: number, y: number, off: number) => [((x - LAMP.x) * off) / (LAMP.z - off), ((y - LAMP.y) * off) / (LAMP.z - off)];
+	const ROUND = 0.022; // the radius of the box's corners
+	const COVER = 0.008; // how thick a cover is
+	const coverZ = OUTLET.d + COVER; // the face of a box's cover
+	/**
+	 * A box with its cover on, its middle this high, and the screw that holds the cover on at each
+	 * of `screws` from there. With a hole, the cover has it cut through, and behind it is a dark
+	 * well in the box for what works in the hole.
+	 */
+	const wallBox = (x: number, y: number, screws: number[], hole?: Hole) => {
+		const [dx, dy] = cast(x, y, coverZ);
+		shade(OUTLET.w, OUTLET.h, x + dx * 0.8, y + dy * 0.8, 0.002, 0.55);
+		const cut = hole && { w: hole.w + 0.008, h: hole.h + 0.008, r: hole.r };
+		add(new Mesh(rounded(OUTLET.w, OUTLET.h, ROUND, OUTLET.d, cut), steel), x, y, 0);
+		add(new Mesh(rounded(OUTLET.w + 0.008, OUTLET.h + 0.008, ROUND + 0.004, COVER, hole, 0.0035), white), x, y, OUTLET.d);
+		if (hole) {
+			const WELL = 0.03;
+			add(new Mesh(new BoxGeometry(hole.w + 0.004, hole.h + 0.004, WELL), well), x, y, OUTLET.d - WELL / 2);
+		}
+		for (const up of screws) {
+			barrel(0.008, 0.004, zinc, x, y + up, coverZ + 0.002, true, 16);
+			// The slot in its head, left wherever the screwdriver stopped.
+			box(0.013, 0.0022, 0.001, slot, x, y + up, coverZ + 0.0042).rotation.z = 0.5 + up * 31;
+		}
+	};
+	// The inside of a box, seen through a hole in its cover: only its inner faces are drawn.
+	const well = new MeshStandardMaterial({ color: 0x1b1b1e, roughness: 1, side: BackSide });
+	wallBox(OUTLET.x, OUTLET.y, [0]);
+	for (const side of [-1, 1]) {
+		const y = OUTLET.y + side * 0.052;
+		barrel(0.04, 0.008, white, OUTLET.x, y, coverZ + 0.004, true, 28);
+		const face = coverZ + 0.0085;
+		for (const x of [-0.014, 0.014]) box(0.007, 0.026, 0.002, slot, OUTLET.x + x, y + 0.008, face);
+		barrel(0.0065, 0.002, slot, OUTLET.x, y - 0.02, face, true, 12); // the earth
+	}
+	// The conduit, and the fitting that joins it to the box: a sleeve with a nut against the box.
+	const outletLeft = OUTLET.x - OUTLET.w / 2;
+	barrel(CONDUIT.r, outletLeft + FAR, steel, (outletLeft - FAR) / 2, OUTLET.y, CONDUIT.z);
+	barrel(CONDUIT.r + 0.006, 0.05, zinc, outletLeft - 0.025, OUTLET.y, CONDUIT.z);
+	barrel(CONDUIT.r + 0.011, 0.012, zinc, outletLeft - 0.006, OUTLET.y, CONDUIT.z, false, 6);
+	// On the other side of the door, a second box of the same kind with the light switch in it.
+	// Its conduit drops to the height the outlet's runs at, turns toward the corner, runs along
+	// the wall to it, turns again round it, and runs on toward the viewer along the side wall,
+	// behind the bench, whose legs it passes through unseen. Each turn is an elbow fitting.
+	const SWITCH = { x: 2.95, y: 1.3 };
+	// The switch: a toggle in a dark cutout in the cover, tipped up, which is on. Its sizes are
+	// given in inches of the cover, which stands for the standard 2.75 by 4.5 inch plate.
+	const INCH = (OUTLET.h + 0.008) / 4.5;
+	const K = 1.4 * INCH; // the mechanism is drawn bigger than life, as the receptacle is, to show at this distance
+	const TOGGLE = { w: 0.36 * K, root: 0.2 * K, tip: 0.15 * K, end: 0.9 * K, barrel: 0.42 * K, sunk: 0.27 * K, edge: 0.025 * K };
+	// The same white as the cover, but giving back a little light of its own, so that the side of
+	// it that the lamp does not reach is grey and not black.
+	const plastic = new MeshStandardMaterial({ color: 0xf1f0ea, roughness: 0.45, emissive: 0xf1f0ea, emissiveIntensity: 0.07 });
+	// The cutout the toggle moves in: a hole through the cover, enough bigger than the toggle's
+	// base to show the dark inside of the box all round it. The screws are further apart than the
+	// standard, to stand clear of it.
+	wallBox(SWITCH.x, SWITCH.y, [-0.088, 0.088], { w: 0.5 * K, h: 1.08 * K, r: 0.05 * K });
+	// What the lever keeps the light from, on the cover beside and below it.
+	const [leverX, leverY] = cast(SWITCH.x, SWITCH.y, 0.035); // the lever stands about this far off the cover
+	shade(0.3 * K, 0.36 * K, SWITCH.x + leverX, SWITCH.y + 0.012 + leverY, coverZ + 0.0006, 0.5);
+	// The toggle is one moulding, so it is made as one: its outline from the side (the barrel it
+	// turns on, of which the front bulges out through the cutout, and
+	// the lever growing out of that, thinner toward its rounded end), cut out of a slab as thick
+	// as the toggle is wide. Its two sides are flat from end to end. Drawn with the lever pointing
+	// straight out of the wall, across the page, then tipped up.
+	const R = TOGGLE.barrel;
+	const meets = Math.asin(TOGGLE.root / R); // the angle round the barrel at which the lever's edge leaves it
+	const eased = meets + 0.16; // and where the outline starts to curve out to meet that edge
+	const rootAt = R * Math.cos(meets);
+	const tipAt = TOGGLE.end - TOGGLE.tip; // the middle of the lever's rounded end
+	// A point on the lever's edge this share of the way from the barrel to the end.
+	const edgeAt = (share: number) => [rootAt + (tipAt - rootAt) * share, TOGGLE.root + (TOGGLE.tip - TOGGLE.root) * share];
+	const [easeX, easeY] = edgeAt(0.22);
+	const profile = new Shape()
+		.moveTo(R * Math.cos(eased), R * Math.sin(eased))
+		.quadraticCurveTo(rootAt, TOGGLE.root, easeX, easeY)
+		.lineTo(tipAt, TOGGLE.tip)
+		.absarc(tipAt, 0, TOGGLE.tip, Math.PI / 2, -Math.PI / 2, true)
+		.lineTo(easeX, -easeY)
+		.quadraticCurveTo(rootAt, -TOGGLE.root, R * Math.cos(eased), -R * Math.sin(eased))
+		.absarc(0, 0, R, -eased, eased, true);
+	const moulding = new ExtrudeGeometry(profile, {
+		depth: TOGGLE.w - 2 * TOGGLE.edge,
+		curveSegments: 24,
+		bevelEnabled: true, // only enough to take the sharpness off the sides' edges
+		bevelThickness: TOGGLE.edge,
+		bevelSize: TOGGLE.edge,
+		bevelSegments: 3
+	});
+	// From across the page to out of the wall, and centred on its width.
+	moulding.translate(0, 0, -(TOGGLE.w - 2 * TOGGLE.edge) / 2).rotateY(-Math.PI / 2);
+	const toggle = new Mesh(moulding, plastic);
+	toggle.position.set(SWITCH.x, SWITCH.y, coverZ - TOGGLE.sunk);
+	toggle.rotation.x = -0.42;
+	group.add(toggle);
+	const switchFoot = SWITCH.y - OUTLET.h / 2;
+	const runY = OUTLET.y;
+	const sideX = CORNER - CONDUIT.z; // the run along the side wall is as far off it as the others are off theirs
+	/** A cylinder with its middle here, lying along this axis. */
+	const pipe = (axis: 'x' | 'y' | 'z', r: number, length: number, material: Material, x: number, y: number, z: number, sides = 20) => {
+		const m = new Mesh(new CylinderGeometry(r, r, length, sides), material);
+		if (axis === 'x') m.rotation.z = Math.PI / 2;
+		if (axis === 'z') m.rotation.x = Math.PI / 2;
+		return add(m, x, y, z);
+	};
+	pipe('y', CONDUIT.r, switchFoot - runY, steel, SWITCH.x, (switchFoot + runY) / 2, CONDUIT.z);
+	pipe('y', CONDUIT.r + 0.006, 0.05, zinc, SWITCH.x, switchFoot - 0.025, CONDUIT.z); // the fitting into the box, as the outlet's
+	pipe('y', CONDUIT.r + 0.011, 0.012, zinc, SWITCH.x, switchFoot - 0.006, CONDUIT.z, 6);
+	pipe('x', CONDUIT.r, sideX - SWITCH.x, steel, (SWITCH.x + sideX) / 2, runY, CONDUIT.z);
+	pipe('z', CONDUIT.r, FAR - CONDUIT.z, steel, sideX, runY, (FAR + CONDUIT.z) / 2);
+	/**
+	 * An elbow where two lengths meet at a right angle: a round body at the corner, and toward
+	 * each length (given as an axis and which way along it) a sleeve that the conduit goes into,
+	 * with a nut at its mouth.
+	 */
+	const elbow = (x: number, y: number, z: number, legs: ['x' | 'y' | 'z', number][]) => {
+		add(new Mesh(new SphereGeometry(CONDUIT.r + 0.007, 28, 20), zinc), x, y, z);
+		for (const [axis, way] of legs) {
+			const at = (along: number): [number, number, number] => [
+				x + (axis === 'x' ? way * along : 0),
+				y + (axis === 'y' ? way * along : 0),
+				z + (axis === 'z' ? way * along : 0)
+			];
+			pipe(axis, CONDUIT.r + 0.007, 0.05, zinc, ...at(0.025), 28);
+			pipe(axis, CONDUIT.r + 0.012, 0.022, zinc, ...at(0.058), 28);
+			pipe(axis, CONDUIT.r + 0.005, 0.012, zinc, ...at(0.074), 28);
+		}
+	};
+	elbow(SWITCH.x, runY, CONDUIT.z, [
+		['y', 1],
+		['x', 1]
+	]);
+	elbow(sideX, runY, CONDUIT.z, [
+		['x', -1],
+		['z', 1]
+	]);
+
+	// The strap holding it to the wall: a band over the conduit, with a tab below it screwed to the block.
+	const strapD = CONDUIT.z + CONDUIT.r + 0.003;
+	// Only the one that shows: just clear of the amp's left side, with bare conduit either side of it.
+	for (const x of [AMP.x - AMP.w / 2 - 0.14]) {
+		box(0.03, 2 * CONDUIT.r + 0.006, strapD, zinc, x, OUTLET.y, strapD / 2);
+		box(0.03, 0.04, 0.004, zinc, x, OUTLET.y - CONDUIT.r - 0.02, 0.002);
+		barrel(0.008, 0.004, steel, x, OUTLET.y - CONDUIT.r - 0.024, 0.006, true, 10);
+	}
+	// And one of the same on the side wall under the bench, where it shows just to the right of the helmet.
+	const GUIDE = 1.15; // its z
+	box(strapD, 2 * CONDUIT.r + 0.006, 0.03, zinc, CORNER - strapD / 2, runY, GUIDE);
+	box(0.004, 0.04, 0.03, zinc, CORNER - 0.002, runY - CONDUIT.r - 0.02, GUIDE);
+	pipe('x', 0.008, 0.004, steel, CORNER - 0.006, runY - CONDUIT.r - 0.024, GUIDE, 10);
+	// And one halfway up the length that comes down from the switch, its tab to the right.
+	const guideY = (runY + switchFoot) / 2;
+	box(2 * CONDUIT.r + 0.006, 0.03, strapD, zinc, SWITCH.x, guideY, strapD / 2);
+	box(0.04, 0.03, 0.004, zinc, SWITCH.x + CONDUIT.r + 0.02, guideY, 0.002);
+	barrel(0.008, 0.004, steel, SWITCH.x + CONDUIT.r + 0.024, guideY, 0.006, true, 10);
 
 	// Under the window, a backless bench for putting shoes on: a wooden frame with a padded top.
 	// Its end nearer the door is toward the back wall.
@@ -394,7 +632,6 @@ export function buildRoom(rackHeight: number) {
 	const hill = flat(0x7d9a8c);
 	const plank = flat(0x9a7a56);
 	const pile = flat(0x5f4a36);
-	const leaf = flat(0x4f3220);
 	const bark = flat(0x6f5a44);
 	const greens = [flat(0x8fb56a), flat(0x6f9d5c), flat(0xa9c47a)];
 	const thicket = flat(0x5c8554);
@@ -417,7 +654,9 @@ export function buildRoom(rackHeight: number) {
 	// On the far shore, a geodesic dome house with a dock of its own. Its lower half is under the
 	// water; its facets are told apart by shade alone, there being no light out here to do it. The
 	// dock runs mostly across the view, since one pointing at the viewer would be a pixel tall.
-	const DOME = { x: 78, z: HORIZON + 9, r: 3.5 };
+	// The two together stand in the part of the doorway that the open door leaves clear, which
+	// is its right: at this distance, from about x = 77 to x = 95.
+	const DOME = { x: 89, z: HORIZON + 9, r: 3.5 };
 	const facets = new IcosahedronGeometry(DOME.r, 1);
 	const shades: number[] = [];
 	for (let face = 0; face < facets.attributes.position.count / 3; face++) {
@@ -447,7 +686,7 @@ export function buildRoom(rackHeight: number) {
 
 	// The dock, running out from the yard, turned a little toward the line of sight through the
 	// door so that it reads as going out into the lake and not along the shore.
-	const DOCK = { x: 3.2, z: -2.2, length: 3.8, w: 0.7, turn: -0.26 };
+	const DOCK = { x: 3.9, z: -2.2, length: 3.8, w: 0.7, turn: -0.26 };
 	const dock = new Group();
 	dock.position.set(DOCK.x, 0, DOCK.z);
 	dock.rotation.y = DOCK.turn;
@@ -463,45 +702,53 @@ export function buildRoom(rackHeight: number) {
 	}
 	group.add(dock);
 
-	// The door itself, swung out into the yard.
+	// The door itself, swung into the room.
 	const hinge = new Group();
-	// Hinged on the outside of the frame, clear of it, so that the open door does not pass
-	// through the jamb.
-	hinge.position.set(DOOR.right + 0.01, 0, -(REVEAL - 0.02) - 0.045);
+	// It turns about the edge of its room-side face, at the face of the frame and just in front
+	// of it, so that shut it would lie in the rebate, and open it clears the frame.
+	hinge.position.set(DOOR.left, 0, 0.025);
 	hinge.rotation.y = -DOOR_OPEN;
-	// A glass door: one sheet in a border of the same wood as the rest of the woodwork, but out
-	// in the daylight. The pieces are laid out from the hinge, which is at x = 0.
+	const leafHeight = doorHeight - SILL; // its foot clears the threshold
+	const door = new Group();
+	door.position.set(0, SILL, -LEAF / 2);
+	hinge.add(door);
+	// A glass door: one sheet in a border of the same wood as the rest of the woodwork, and lit
+	// by the room as that is. The pieces are laid out from the hinge, which is at x = 0.
 	const STILE = 0.2;
 	const piece = (w: number, h: number, x: number, y: number) => {
-		const m = new Mesh(new BoxGeometry(w, h, 0.06), leaf);
+		const m = new Mesh(new BoxGeometry(w, h, LEAF), trim);
 		m.position.set(x, y, 0);
-		hinge.add(m);
+		door.add(m);
 	};
-	piece(STILE, doorHeight, -STILE / 2, doorHeight / 2);
-	piece(STILE, doorHeight, -doorWidth + STILE / 2, doorHeight / 2);
-	piece(doorWidth - 2 * STILE, STILE, -doorWidth / 2, STILE / 2);
-	piece(doorWidth - 2 * STILE, STILE, -doorWidth / 2, doorHeight - STILE / 2);
-	const glass = flat(0xe6f1f5);
-	glass.transparent = true;
-	glass.opacity = 0.18;
-	glass.side = DoubleSide;
-	const pane = new Mesh(new PlaneGeometry(doorWidth - 2 * STILE, doorHeight - 2 * STILE), glass);
-	pane.position.set(-doorWidth / 2, doorHeight / 2, 0);
-	hinge.add(pane);
+	piece(STILE, leafHeight, STILE / 2, leafHeight / 2);
+	piece(STILE, leafHeight, doorWidth - STILE / 2, leafHeight / 2);
+	piece(doorWidth - 2 * STILE, STILE, doorWidth / 2, STILE / 2);
+	piece(doorWidth - 2 * STILE, STILE, doorWidth / 2, leafHeight - STILE / 2);
+	const glass = new MeshStandardMaterial({ color: 0xe6f1f5, roughness: 0.2, transparent: true, opacity: 0.18, side: DoubleSide });
+	const pane = new Mesh(new PlaneGeometry(doorWidth - 2 * STILE, leafHeight - 2 * STILE), glass);
+	pane.position.set(doorWidth / 2, leafHeight / 2, 0);
+	door.add(pane);
 	// A black lever handle on each face: a plate on the stile, a stub out from it, and the lever
 	// pointing back toward the hinge.
-	const black = flat(0x141416);
-	const handleX = -doorWidth + STILE / 2;
-	const handleY = doorHeight * 0.44;
+	const black = new MeshStandardMaterial({ color: 0x141416, roughness: 0.5 });
+	const handleX = doorWidth - STILE / 2;
+	const handleY = leafHeight * 0.44;
 	for (const face of [-1, 1]) {
 		const part = (w: number, h: number, d: number, x: number, y: number, z: number) => {
 			const m = new Mesh(new BoxGeometry(w, h, d), black);
 			m.position.set(x, y, face * z);
-			hinge.add(m);
+			door.add(m);
 		};
 		part(0.07, 0.26, 0.012, handleX, handleY, 0.036);
 		part(0.03, 0.03, 0.06, handleX, handleY + 0.05, 0.066);
-		part(0.2, 0.03, 0.025, handleX + 0.085, handleY + 0.05, 0.09);
+		part(0.2, 0.03, 0.025, handleX - 0.085, handleY + 0.05, 0.09);
+	}
+	// Three plain black hinges in the gap between the door and the frame: just the knuckles, on
+	// the line the door turns about.
+	for (const y of [0.25, doorHeight / 2, doorHeight - 0.25]) {
+		const knuckle = new Mesh(new CylinderGeometry(0.013, 0.013, 0.12, 10), black);
+		knuckle.position.set(0, y, 0.006);
+		hinge.add(knuckle);
 	}
 	group.add(hinge);
 
