@@ -45,6 +45,12 @@ import {
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { AMP, AMP_JACK, braided, HOOK, PINBOARD } from './items.ts';
 
+/**
+ * Whether the lamp casts shadows (see scene.ts). With it on, everything lit in the room casts and
+ * receives them; with it off, the two boxes on the wall have soft patches painted under them instead.
+ */
+export const SHADOWS = true;
+
 const FAR = 30; // how far the walls and floor run on, out of sight
 const CORNER = 3.5; // x of the wall that comes toward the viewer; far enough for the bench to clear the door
 const DOOR = { left: 1.3, right: 2.7 };
@@ -277,6 +283,7 @@ export function buildRoom(rackHeight: number) {
 	const blurred = new CanvasTexture(blur);
 	const shade = (w: number, h: number, x: number, y: number, z: number, strength: number) => {
 		const material = new MeshBasicMaterial({ color: 0x000000, map: blurred, transparent: true, opacity: strength, depthWrite: false });
+		material.visible = !SHADOWS;
 		return add(new Mesh(new PlaneGeometry(w * 2, h * 2), material), x, y, z);
 	};
 	// Where the lamp is, near enough, as the room is laid out (see scene.ts), and so which way a
@@ -774,6 +781,15 @@ export function buildRoom(rackHeight: number) {
 		const n = Math.round(x * 7 + z * 3); // any fixed number, to vary the trees
 		add(new Mesh(new IcosahedronGeometry(r, 1), greens[Math.abs(n) % 3]), x, h, z);
 		add(new Mesh(new IcosahedronGeometry(r * 0.7, 1), greens[Math.abs(n + 1) % 3]), x - 0.15, h + r * 0.6, z + 0.2);
+	}
+
+	if (SHADOWS) {
+		group.traverse((o) => {
+			if (!(o instanceof Mesh) || !(o.material instanceof MeshStandardMaterial)) return;
+			o.receiveShadow = true;
+			// Not the walls or the floor, which there is nothing behind, nor anything seen through.
+			o.castShadow = o.material !== wall && o.material !== boards && !o.material.transparent && o.material.side !== BackSide;
+		});
 	}
 
 	return {

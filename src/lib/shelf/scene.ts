@@ -49,7 +49,7 @@ import {
 	WebGLRenderer,
 	type Intersection
 } from 'three';
-import { buildRoom } from './room.ts';
+import { buildRoom, SHADOWS } from './room.ts';
 import {
 	BOARD,
 	FLOOR,
@@ -227,6 +227,18 @@ function createShelf() {
 	// Lights the wall around the unit, brightest at the top and falling off to the sides.
 	const wash = new SpotLight(0xffe7c8, 60, 0, 0.75, 1, 1.6);
 	scene.add(wash, wash.target);
+	if (SHADOWS) {
+		wash.castShadow = true;
+		wash.shadow.mapSize.set(2048, 2048);
+		wash.shadow.camera.near = 1;
+		wash.shadow.camera.far = 20;
+		wash.shadow.bias = -0.0004;
+		wash.shadow.normalBias = 0.01;
+		// Soft: each edge is blurred over this many texels of the map, and the shadows are not
+		// quite full strength.
+		wash.shadow.radius = 9;
+		wash.shadow.intensity = 0.75;
+	}
 
 	// Lights whichever object is being held, from above it.
 	const heldLight = new SpotLight(0xfff1dc, 0, 0, 0.6, 0.9, 1.2);
