@@ -1430,7 +1430,7 @@ const placements: Placement[] = [
 	{
 		id: 'mothersheet',
 		shelf: FLOOR,
-		x: 0.06,
+		x: -0.02,
 		back: 0.5,
 		// Its left side to the front, and askew: pushed under there, not put.
 		yaw: Math.PI / 2 - 0.16,
