@@ -14,7 +14,8 @@ import {
 	SphereGeometry,
 	SRGBColorSpace,
 	Vector3,
-	type Material
+	type Material,
+	type Object3D
 } from 'three';
 import type { Works } from './items.ts';
 
@@ -39,6 +40,56 @@ const WEAVE_PX = 32;
 const PINK = { ground: '#ff2e93', rib: '#e3207f' };
 // The same weave as a relief: its ribs are furrows.
 const RELIEF = { ground: '#808080', rib: '#6c6c6c' };
+
+// The air from the door (which is to the right) is never quite still: it comes and goes slowly, on
+// no beat. How hard it is blowing at a time, from a little to 1.
+export const air = (t: number) =>
+	Math.max(0.12, 0.5 + 0.28 * Math.sin(0.41 * t) + 0.17 * Math.sin(0.97 * t + 1.1) + 0.1 * Math.sin(2.3 * t + 2.7));
+
+// Everything in the air goes by the one time, so that a gust reaches each thing in its turn.
+let aired = 40 * Math.random();
+let airedAt = 0;
+function airTime() {
+	const now = performance.now();
+	// No further on than a slow frame, after the page has been away.
+	aired += Math.min((now - (airedAt || now)) / 1000, 0.25);
+	airedAt = now;
+	return aired;
+}
+
+/**
+ * What something that moves in the air asks of the scene (it goes in its group's userData.works).
+ * `pose` puts it as it is at a time, with the air at a strength from 0, where it hangs dead still,
+ * to 1. It asks to be drawn every frame that `showing` is in view: the scene only draws when
+ * something has changed, and this never stops changing.
+ */
+export function blown(showing: Object3D, pose: (t: number, strength: number) => void): Works {
+	let frame = 0;
+	let slack = 1; // less than 1 as it is taken out of the air, to be held
+	return {
+		start(redraw) {
+			if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+			const blow = () => {
+				frame = requestAnimationFrame(blow);
+				redraw(showing);
+			};
+			frame = requestAnimationFrame(blow);
+		},
+		stop() {
+			cancelAnimationFrame(frame);
+			frame = 0;
+			pose(aired, 0);
+		},
+		dim() {},
+		lifted(share) {
+			slack = 1 - share;
+		},
+		tick() {
+			if (frame) pose(airTime(), slack);
+			return false;
+		}
+	};
+}
 
 function sheet(width: number, height: number) {
 	const canvas = document.createElement('canvas');
@@ -703,9 +754,8 @@ export function tie() {
 		mesh(keeper, lining)
 	);
 
-	// The air from the door (which is to the right) is never quite still: it comes and goes
-	// slowly, on no beat, and the tie swings in it a little, away from the door, and lifts off the
-	// wall. The whole of it swings from the peg, the loop and the knot with it, each by how far
+	// The tie swings a little in the air from the door, away from it, and lifts off the wall. The
+	// whole of it swings from the peg, the loop and the knot with it, each by how far
 	// below the peg it is, so that everything at one height goes together and the strands stay
 	// tight on the knot. Below the knot the blades swing further still, stiff where they leave it
 	// and freer the further down, with a ripple running down them. The narrow blade,
@@ -714,8 +764,6 @@ export function tie() {
 	const HANG = LOOP + 0.92; // about how far the tip is below the hook
 	const FROM = knotY - KNOT / 2; // where the blades come out of the knot
 	const LIFT = 0.025;
-	const air = (t: number) =>
-		Math.max(0.12, 0.5 + 0.28 * Math.sin(0.41 * t) + 0.17 * Math.sin(0.97 * t + 1.1) + 0.1 * Math.sin(2.3 * t + 2.7));
 	const swing = (t: number) => 0.045 * (0.65 + 0.25 * Math.sin(3.4 * t) + 0.12 * Math.sin(5.3 * t + 1));
 	const pose = (t: number, strength: number) => {
 		const all = air(t) * strength;
@@ -746,36 +794,6 @@ export function tie() {
 		}
 	};
 
-	// It keeps its own time, and asks to be drawn every frame that it is in view: the scene only
-	// draws when something has changed, and this never stops changing.
-	let t = 40 * Math.random();
-	let then = 0;
-	let frame = 0;
-	g.userData.works = {
-		start(redraw) {
-			if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-			then = 0;
-			const blow = () => {
-				frame = requestAnimationFrame(blow);
-				redraw(wideBlade);
-			};
-			frame = requestAnimationFrame(blow);
-		},
-		stop() {
-			cancelAnimationFrame(frame);
-			frame = 0;
-			pose(t, 0);
-		},
-		dim() {},
-		tick() {
-			if (!frame) return false;
-			const now = performance.now();
-			const dt = Math.min((now - (then || now)) / 1000, 0.25);
-			then = now;
-			t += dt;
-			pose(t, 1);
-			return false;
-		}
-	} satisfies Works;
+	g.userData.works = blown(wideBlade, pose);
 	return g;
 }

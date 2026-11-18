@@ -34,7 +34,7 @@ import { createFirmware } from '#lib/video-module/firmware.ts';
 import { createMpv } from '#lib/video-module/mpv.ts';
 import { createOled } from '#lib/video-module/oled.ts';
 import { catalogue, type Entry } from './catalogue.ts';
-import { tie } from './tie.ts';
+import { air, blown, tie } from './tie.ts';
 
 interface Placement {
 	id: string;
@@ -111,6 +111,8 @@ export interface Works {
 	tick: (dt: number) => boolean;
 	/** The room's lights are down by this share. */
 	dim: (share: number) => void;
+	/** It is this far from where it is kept (0) to being held (1). */
+	lifted?: (share: number) => void;
 }
 
 // The rack the objects go in, in world units (one is about half a metre): its width inside, between
@@ -1370,8 +1372,11 @@ const FLIERS: [string, string, string, string][] = [
 	['#23323a', '#e6ecef', '#e2603c', 'LIVE']
 ];
 
-/** A photocopied show flier, flat against the wall and facing out, with a pin through its top. */
-function flier(index: number, w: number, h: number) {
+/**
+ * A photocopied show flier, flat against the wall and facing out, with a pin through its top.
+ * `far` is how far along the wall it is from the door, whose air reaches it that much later.
+ */
+function flier(index: number, w: number, h: number, far: number) {
 	const [paper, ink, second, name] = FLIERS[index];
 	const canvas = document.createElement('canvas');
 	const W = (canvas.width = 400);
@@ -1412,11 +1417,51 @@ function flier(index: number, w: number, h: number) {
 	map.anisotropy = 4;
 
 	const g = new Group();
-	g.add(mesh(new BoxGeometry(w, h, 0.004), page));
-	const front = new Mesh(new PlaneGeometry(w, h), new MeshStandardMaterial({ map, roughness: 0.95 }));
+	// In strips down it, for the paper to bend by.
+	const sheet = mesh(new BoxGeometry(w, h, 0.004, 4, 12, 1), page);
+	const front = new Mesh(new PlaneGeometry(w, h, 4, 12), new MeshStandardMaterial({ map, roughness: 0.95 }));
 	front.position.z = 0.0025;
-	g.add(front);
-	g.add(mesh(new SphereGeometry(0.016, 12, 8), accent, 0, h / 2 - 0.022, 0.012));
+	const PIN = h / 2 - 0.022;
+	g.add(sheet, front);
+	g.add(mesh(new SphereGeometry(0.016, 12, 8), accent, 0, PIN, 0.012));
+
+	// The air from the door (see tie.ts) gets under the paper. It turns a little on its pin, away
+	// from the door, and its foot comes off the board, one corner more than the other, with a
+	// shiver across it. No two go quite alike.
+	const lag = 0.5 * far + 0.3 * index;
+	const give = 0.8 + 0.1 * ((index * 3) % 5);
+	const sheets = [sheet.geometry, front.geometry].map((geometry) => ({
+		geometry,
+		still: Float32Array.from(geometry.attributes.position.array)
+	}));
+	const pose = (t: number, strength: number) => {
+		const blowing = air(t - lag) * strength * give;
+		const turn = blowing * 0.032 * (0.7 + 0.3 * Math.sin(2.9 * t + index));
+		const out = blowing * 0.2 * (0.75 + 0.25 * Math.sin(4.3 * t + 2 * index));
+		for (const { geometry, still } of sheets) {
+			const at = geometry.attributes.position;
+			for (let i = 0; i < at.count; i++) {
+				const x = still[i * 3];
+				const y = still[i * 3 + 1];
+				const down = Math.max(0, (PIN - y) / (PIN + h / 2)); // from the pin (0) to the foot (1)
+				const across = x / (w / 2);
+				const curl = down ** 1.7;
+				const shiver = blowing * 0.004 * Math.sin(7 * (t - lag) - 4 * down + 1.5 * across);
+				at.setXYZ(
+					i,
+					x - turn * (PIN - y),
+					y + turn * x,
+					still[i * 3 + 2] + curl * (out * (1 - 0.35 * across) + shiver)
+				);
+			}
+			at.needsUpdate = true;
+			geometry.computeVertexNormals();
+			// What a pointer is over is found by these.
+			geometry.computeBoundingBox();
+			geometry.computeBoundingSphere();
+		}
+	};
+	g.userData.works = blown(front, pose);
 	return g;
 }
 
@@ -1435,7 +1480,7 @@ const fliers: Placement[] = pinned.map(([x, up, lean, w, h], i) => ({
 	up,
 	lean,
 	pinned: true,
-	build: () => flier(i, w, h)
+	build: () => flier(i, w, h, HOOK.x - x)
 }));
 
 const placements: Placement[] = [

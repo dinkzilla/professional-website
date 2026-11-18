@@ -628,6 +628,7 @@ function createShelf() {
 			p.group.position.z += 0.06 * p.nudge * (1 - e);
 			p.group.quaternion.slerpQuaternions(p.shelfRotation, p.heldRotation, e);
 			lift = Math.max(lift, e);
+			p.works?.lifted?.(e);
 		}
 		for (const works of working) if (works.tick(dt)) moving = true;
 

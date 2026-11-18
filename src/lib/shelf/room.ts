@@ -47,7 +47,9 @@ import { AMP, AMP_JACK, braided, HOOK, PINBOARD } from './items.ts';
 
 /**
  * Whether the lamp casts shadows (see scene.ts). With it on, everything lit in the room casts and
- * receives them; with it off, the two boxes on the wall have soft patches painted under them instead.
+ * receives them, the two boxes on the wall among them; with it off, those have soft patches painted
+ * on the wall under them instead. Either way the switch's lever, which is too small for the lamp's
+ * shadows to show, has one painted on the cover beside it.
  */
 export const SHADOWS = true;
 
@@ -271,7 +273,7 @@ export function buildRoom(rackHeight: number) {
 	};
 	/**
 	 * A soft dark patch to lie on a surface where something standing off it keeps the lamp's light
-	 * from it. No light in the scene casts shadows, so these are painted on.
+	 * from it, painted on where the lamp's own shadows do not do it.
 	 */
 	const blur = document.createElement('canvas');
 	blur.width = blur.height = 128;
@@ -283,7 +285,6 @@ export function buildRoom(rackHeight: number) {
 	const blurred = new CanvasTexture(blur);
 	const shade = (w: number, h: number, x: number, y: number, z: number, strength: number) => {
 		const material = new MeshBasicMaterial({ color: 0x000000, map: blurred, transparent: true, opacity: strength, depthWrite: false });
-		material.visible = !SHADOWS;
 		return add(new Mesh(new PlaneGeometry(w * 2, h * 2), material), x, y, z);
 	};
 	// Where the lamp is, near enough, as the room is laid out (see scene.ts), and so which way a
@@ -300,7 +301,8 @@ export function buildRoom(rackHeight: number) {
 	 */
 	const wallBox = (x: number, y: number, screws: number[], hole?: Hole) => {
 		const [dx, dy] = cast(x, y, coverZ);
-		shade(OUTLET.w, OUTLET.h, x + dx * 0.8, y + dy * 0.8, 0.002, 0.55);
+		// On the wall, only when the lamp is not casting one there itself.
+		if (!SHADOWS) shade(OUTLET.w, OUTLET.h, x + dx * 0.8, y + dy * 0.8, 0.002, 0.55);
 		const cut = hole && { w: hole.w + 0.008, h: hole.h + 0.008, r: hole.r };
 		add(new Mesh(rounded(OUTLET.w, OUTLET.h, ROUND, OUTLET.d, cut), steel), x, y, 0);
 		add(new Mesh(rounded(OUTLET.w + 0.008, OUTLET.h + 0.008, ROUND + 0.004, COVER, hole, 0.0035), white), x, y, OUTLET.d);
