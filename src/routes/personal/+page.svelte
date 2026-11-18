@@ -12,11 +12,10 @@
 	// is not part of this page: it is built separately, often before the page is visited (see
 	// #lib/shelf/ready.ts), and put here when the page mounts.
 
-	let scroller: HTMLElement;
 	let stage: HTMLElement;
 	let probe: HTMLElement;
 	let shelf: Shelf | undefined = $state();
-	let layout: Layout = $state({ mode: 'tall', unitRight: 0, contentPx: 0 });
+	let layout: Layout = $state({ mode: 'tall', unitRight: 0 });
 
 	// Which object is picked up lives in the history entry, so Back puts it down.
 	const picked = $derived(catalogue.find((entry) => entry.id === page.state.picked));
@@ -32,7 +31,6 @@
 			.then((prepared) => {
 				if (gone) return;
 				prepared.attach(stage, {
-					scroller,
 					fitHeight: () => probe.clientHeight,
 					onLayout: (next) => (layout = next),
 					onTap: tap
@@ -50,10 +48,6 @@
 	});
 
 	$effect(() => shelf?.pick(picked?.id ?? null));
-
-	// The scroller is not the document, so it has to be given the keyboard for the arrow keys,
-	// Space and Page Down to scroll it.
-	$effect(() => scroller.focus({ preventScroll: true }));
 
 	// The tie's link paints the work site over this page with a roller (see #lib/roller.ts).
 	// The module is loaded when the tie is picked up, ahead of the click.
@@ -106,16 +100,8 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="probe" bind:this={probe}></div>
-<!-- The document itself never scrolls, which is what keeps a phone browser's bars where they
-     are: this fills the window and scrolls in its place. It does not scroll while something is
-     held. -->
-<div class="scroller" class:held={!!picked} bind:this={scroller} tabindex="-1">
-	<!-- The scene puts its canvas in here. -->
-	<div class="stage" bind:this={stage}></div>
-
-	<!-- Gives the scroller its height, so the unit scrolls like ordinary page content. -->
-	<div class="spacer" style:height="{layout.contentPx}px"></div>
-</div>
+<!-- The scene puts its canvas in here. -->
+<div class="stage" bind:this={stage}></div>
 
 {#if picked}
 	<aside class="panel {layout.mode}" style:--unit-right="{layout.unitRight}px">
@@ -129,20 +115,16 @@
 {/if}
 
 <style>
-	.scroller {
-		position: fixed;
-		inset: 0;
-		overflow: hidden auto;
-		overscroll-behavior: none;
-		scrollbar-gutter: stable;
-		outline: none;
-
-		&.held {
-			overflow-y: hidden;
-		}
+	/* Nothing here scrolls, and no touch is a scroll, pinch or pull-to-refresh: with nothing to
+	   scroll against, a phone browser leaves its bars where they are. */
+	:global(:root:has(.stage)) {
+		height: 100%;
+		overflow: hidden;
+		touch-action: none;
 	}
 
-	/* Measures the viewport as it is with the browser's bars showing. */
+	/* Measures the viewport as it is with the browser's bars showing; the canvas covers the
+	   viewport with them hidden, so a bar that does move overlaps the scene, not resizes it. */
 	.probe {
 		position: fixed;
 		top: 0;
@@ -152,26 +134,15 @@
 		visibility: hidden;
 	}
 
-	/* Stays at the top of the scroller as its content moves underneath, taking up no room there. */
-	.stage {
-		position: sticky;
-		top: 0;
-		height: 0;
-	}
-
 	/* The canvas is the scene's own element, so this rule reaches it as a global inside the
-	   stage. It hangs from the stage and covers the window. */
+	   stage. */
 	.stage :global(canvas) {
 		display: block;
-		position: absolute;
+		position: fixed;
 		top: 0;
 		left: 0;
 		width: 100%;
-		height: 100dvh;
-	}
-
-	.spacer {
-		pointer-events: none;
+		height: 100lvh;
 	}
 
 	.panel {

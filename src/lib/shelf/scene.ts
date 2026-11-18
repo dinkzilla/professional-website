@@ -3,13 +3,11 @@
 // panels flush with its front; the others stand on its shelves, and some of those come forward
 // when picked.
 //
-// The page gives the scene an element that scrolls natively (see Host.scroller); the canvas stays
-// put in it and the camera follows the scroll position, so the unit behaves like a column of
-// ordinary page content. The camera looks at the wall square-on
+// Nothing scrolls: the canvas is fixed over the window and the unit is fitted into it. The camera looks at the wall square-on
 // from its left at about eye level. One world unit is `ppu` pixels where the middle of the unit's
 // front edge is drawn.
 //
-// Nothing is drawn unless something changed: scroll, resize, hover, an object in flight, or one
+// Nothing is drawn unless something changed: resize, hover, an object in flight, or one
 // that works by itself showing something new (the tv does, with every frame of video).
 //
 // Most objects are picked up to be looked at. Some have parts that work where they are (the video
@@ -117,17 +115,10 @@ export interface Layout {
 	mode: LayoutMode;
 	/** Where the unit's right edge is on screen. */
 	unitRight: number;
-	/** How tall the scrolled content has to be for the whole unit to scroll into view. */
-	contentPx: number;
 }
 
 /** What the scene needs from the page it is shown on. */
 export interface Host {
-	/**
-	 * The element whose scrolling moves the camera. It is not the document, because a phone's
-	 * browser slides its bars in and out as the document scrolls.
-	 */
-	scroller: HTMLElement;
 	/** The height to lay out for: the viewport with the browser's bars showing. */
 	fitHeight: () => number;
 	onLayout: (layout: Layout) => void;
@@ -450,7 +441,7 @@ function createShelf() {
 		hidden.forEach((o, i) => (o.visible = shown[i]));
 	}
 
-	// --- Layout: window size and scroll position to camera -----------------------------------
+	// --- Layout: window size to camera ---------------------------------------------------------
 
 	let width = 0; // of the canvas, in CSS px
 	let height = 0;
@@ -460,7 +451,7 @@ function createShelf() {
 	let shift = 0; // px: how far below the camera's axis the window's centre is
 	let aside = 0; // px: how far to the right of the camera's axis it is
 	let offset = 0; // px: how far right of the window's centre the unit is (negative: left)
-	let top = 0; // px from the top of the scrolled content to the top of the unit
+	let top = 0; // px from the top of the window to the top of the unit
 	let mode: LayoutMode = 'tall';
 	let held: Placed | undefined;
 	const view = new Frustum(); // what the window takes in, from where the camera is
@@ -509,22 +500,15 @@ function createShelf() {
 
 		host?.onLayout({
 			mode,
-			unitRight: spare + unitPx + offset,
-			contentPx: Math.max(contentPx, fit)
+			unitRight: spare + unitPx + offset
 		});
 		follow();
 	}
 
-	/** How far the page's scroller has been scrolled. */
-	function scrolled(): number {
-		return host?.scroller.scrollTop ?? 0;
-	}
-
-	/** Put the camera where the scroll position says, and anything held in front of it. */
+	/** Put the camera where the layout says, and anything held in front of it. */
 	function follow() {
 		const distance = focal / ppu;
-		const scroll = scrolled();
-		const centre = (top - scroll - height / 2) / ppu; // world y at the window's centre
+		const centre = (top - height / 2) / ppu; // world y at the window's centre
 		// The window is centred on the unit's front and its visible side together.
 		const middle = (DEPTH * Math.sin(TURN)) / 2;
 		// The camera is placed so that this point lands in the middle of the window.
@@ -642,7 +626,7 @@ function createShelf() {
 
 	const raycaster = new Raycaster();
 	const pointer = new Vector2();
-	let down: { x: number; y: number; scroll: number } | undefined;
+	let down: { x: number; y: number } | undefined;
 
 	/** The first thing under the pointer, whatever it is. */
 	function under(event: { clientX: number; clientY: number }): Intersection | undefined {
@@ -688,7 +672,7 @@ function createShelf() {
 
 	function onPointerDown(event: PointerEvent) {
 		if (event.button !== 0 || !event.isPrimary) return;
-		down = { x: event.clientX, y: event.clientY, scroll: scrolled() };
+		down = { x: event.clientX, y: event.clientY };
 		const control = controlAt(under(event));
 		if (!control?.turn) return;
 		turning = { control, id: event.pointerId, y: event.clientY, turned: false };
@@ -707,9 +691,9 @@ function createShelf() {
 		down = undefined;
 		letGo();
 		if (!start || turned) return;
-		// A press that moved, or that scrolled the page, was not a tap.
+		// A press that moved was not a tap.
 		const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-		if (moved > 10 || Math.abs(scrolled() - start.scroll) > 4) return;
+		if (moved > 10) return;
 		const hit = under(event);
 		const control = controlAt(hit);
 		const item = itemAt(hit);
@@ -828,7 +812,6 @@ function createShelf() {
 		attach(element: HTMLElement, page: Host) {
 			host = page;
 			element.append(canvas);
-			page.scroller.addEventListener('scroll', follow, { passive: true });
 			window.addEventListener('resize', layout);
 			for (const works of working) works.start(redraw);
 			layout();
@@ -838,7 +821,6 @@ function createShelf() {
 		},
 		/** Take the scene off its page, with everything back on the shelf, and keep it for later. */
 		detach() {
-			host?.scroller.removeEventListener('scroll', follow);
 			host = undefined;
 			cancelAnimationFrame(frame);
 			frame = 0;
