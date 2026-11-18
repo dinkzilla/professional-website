@@ -408,7 +408,7 @@ function tv() {
 	const g = new Group();
 	const foot = { w: TV_WIDE, h: TV_FOOT, d: TV_DEPTH };
 	const arm = TV_ARM;
-	const w = 1.08;
+	const w = 1.09;
 	const edge = 0.036; // the border round the picture, the same on all four sides
 	const pictureH = ((w - 2 * edge) * 9) / 16;
 	const h = pictureH + 2 * edge;

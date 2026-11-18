@@ -447,22 +447,39 @@ export function tie() {
 	const TOP = -0.017;
 	const LOOP = 0.25;
 	// Hung up in a hurry: the knot is off to one side of the hook and tipped over.
-	const OFF = 0.045;
-	const TILT = -0.411;
+	const OFF = 0.025;
+	const TILT = 0.462;
 	const KNOT = 0.1;
 	const knotY = TOP - LOOP - KNOT / 2;
+	// How big the knot is drawn. The places on it that the loop and blades join were set at 1.02,
+	// and move in with it.
+	const SIZE = 0.93;
 	const fromKnot = (x: number, y: number, z = 0) =>
-		new Vector3(x, y, z).applyAxisAngle(OUT, TILT).add(new Vector3(OFF, knotY, 0));
+		new Vector3((x * SIZE) / 1.02, (y * SIZE) / 1.02, z)
+			.applyAxisAngle(OUT, TILT)
+			.add(new Vector3(OFF, knotY, 0));
 	/** Put a part of the knot, made about the knot's middle, where the knot is. */
-	const knotted = (part: BufferGeometry) => part.scale(1.02, 1.02, 1).rotateZ(TILT).translate(OFF, knotY, 0);
+	// It is mirrored on the way, left for right, about its own middle (and each face's corners are
+	// then taken the other way round, so that it still faces out).
+	const knotted = (part: BufferGeometry) => {
+		const index = part.index!;
+		for (let i = 0; i < index.count; i += 3) {
+			const a = index.getX(i);
+			index.setX(i, index.getX(i + 2));
+			index.setX(i + 2, a);
+		}
+		part.scale(-SIZE, SIZE, 1).rotateZ(TILT).translate(OFF, knotY, 0);
+		part.computeVertexNormals();
+		return part;
+	};
 
-	// The loop: a band over the peg, lying on it there and turning to face out on the way down
-	// each side. Its two sides are not alike: the left is pulled taut and hangs nearly straight;
-	// the right is slack, bows out, has a kink in it, and stays half turned, its seam showing.
-	const BAND = 0.022;
+	// The loop: a band over the peg, lying on it there, bunched a little narrower, and turning to
+	// face out over the first third of the way down each side. Its two sides are not alike: the left is pulled taut and hangs nearly straight;
+	// the right is slack, bows out, has a kink in it, and stays half turned.
+	const BAND = 0.019;
 	// Its two ends go well down into the knot, close together and gathered narrow, so that neither
 	// shows past the knot from any side.
-	const entry = { [-1]: fromKnot(-0.037, 0.0, -0.002), [1]: fromKnot(-0.02, 0.007, -0.007) };
+	const entry = { [-1]: fromKnot(-0.017, -0.01, -0.002), [1]: fromKnot(0.0, -0.003, -0.007) };
 	const band: Row[] = [];
 	const STEPS = 60;
 	for (let j = 0; j <= STEPS; j++) {
@@ -472,9 +489,9 @@ export function tie() {
 		const to = entry[side];
 		const full = side > 0 ? 0.105 * (1 - d) ** 1.05 : 0.05 * (1 - d) ** 2.6;
 		const turn =
-			(1 - ease(clamp(d / 0.24))) * (Math.PI / 2) +
+			(1 - ease(clamp(d / 0.36))) * (Math.PI / 2) +
 			(side > 0 ? 0.34 * Math.sin(Math.PI * d ** 0.8) ** 2 + 0.1 * Math.sin(11 * d) * clamp(d / 0.3) : -0.25 * Math.exp(-(((d - 0.5) / 0.2) ** 2)));
-		const half = BAND - 0.004 * Math.exp(-d / 0.05) - 0.014 * ease(clamp((d - 0.8) / 0.2));
+		const half = BAND - 0.005 * Math.exp(-d / 0.09) - 0.012 * ease(clamp((d - 0.8) / 0.2));
 		band.push({
 			at: new Vector3(
 				side * full * Math.sqrt(d) + to.x * ease(d) + 0.004 * Math.sin(9 * d + side) + (side > 0 ? 0.007 * Math.exp(-(((d - 0.55) / 0.09) ** 2)) : 0),
@@ -677,7 +694,7 @@ export function tie() {
 	const wideBlade = mesh(wide, bladeBack(WIDE, wideSeam, 3, KEEPER.down + 0.045));
 	const gathered = bandCloth(0.06, 3);
 	g.add(
-		mesh(loop, [bandCloth(2 * BAND, 0, { seam: false, seed: 7 }), bandCloth(2 * BAND, 0, { seam: true, seed: 23 })]),
+		mesh(loop, [bandCloth(2 * BAND, 0, { seam: false, seed: 7 }), bandCloth(2 * BAND, 0, { seam: false, seed: 23 })]),
 		mesh(core, gathered),
 		mesh(wrap, gathered),
 		mesh(tuck, gathered),
@@ -688,8 +705,10 @@ export function tie() {
 
 	// The air from the door (which is to the right) is never quite still: it comes and goes
 	// slowly, on no beat, and the tie swings in it a little, away from the door, and lifts off the
-	// wall. The loop and the knot hardly move: the blades hang from the knot, stiff where they
-	// leave it and freer the further down, with a ripple running down them. The narrow blade,
+	// wall. The whole of it swings from the peg, the loop and the knot with it, each by how far
+	// below the peg it is, so that everything at one height goes together and the strands stay
+	// tight on the knot. Below the knot the blades swing further still, stiff where they leave it
+	// and freer the further down, with a ripple running down them. The narrow blade,
 	// which is in front and lighter, has more of its own way lower down, a little behind the rest
 	// and a little further, so that none comes through another.
 	const HANG = LOOP + 0.92; // about how far the tip is below the hook
@@ -709,7 +728,7 @@ export function tie() {
 				const y = still[i * 3 + 1];
 				const d = clamp(-y / HANG);
 				const k = clamp((FROM - y) / (HANG + FROM));
-				const w = 0.04 * d + 0.96 * k ** 2.2;
+				const w = 0.6 * d + 0.4 * k ** 2.2;
 				const free = ease(clamp(k / 0.3)); // how far it has its own way, there
 				const ripple = all * 0.006 * Math.sin(8 * (t - lag * free) - 9 * d);
 				at.setXYZ(
@@ -734,14 +753,6 @@ export function tie() {
 	let frame = 0;
 	g.userData.works = {
 		start(redraw) {
-			// TEMPORARY, for looking at it: ?gust=2.5 holds it as it is at that moment.
-			const frozen = new URLSearchParams(location.search).get('gust');
-			if (frozen) {
-				t = Number(frozen);
-				pose(t, 1);
-				redraw();
-				return;
-			}
 			if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 			then = 0;
 			const blow = () => {
