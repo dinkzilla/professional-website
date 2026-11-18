@@ -200,9 +200,11 @@ export function buildRoom(rackHeight: number) {
 
 	// The board the fliers are pinned to (the fliers themselves are in items.ts, since they can be
 	// taken down): cork in a frame.
-	const cork = new MeshStandardMaterial({ color: 0x8f6f4b, roughness: 1 });
 	const boardW = PINBOARD.right - PINBOARD.left;
 	const boardH = PINBOARD.top - PINBOARD.bottom;
+	const grain = corkGrain(boardW, boardH);
+	// Its colour is all in the map. The relief is gentler than the wall's: granules, not joints.
+	const cork = new MeshStandardMaterial({ roughness: 1, map: grain.map, bumpMap: grain.bump, bumpScale: 0.5 });
 	const boardX = (PINBOARD.left + PINBOARD.right) / 2;
 	// Hung with its top level with the top of the door's opening.
 	const lift = doorHeight - PINBOARD.top;
@@ -874,6 +876,143 @@ function cinderBlocks() {
 		const t = new CanvasTexture(from);
 		t.wrapS = t.wrapT = RepeatWrapping;
 		t.repeat.set(1 / (ACROSS * 0.8), 1 / (ROWS * 0.4));
+		t.anisotropy = 8;
+		if (colour) t.colorSpace = SRGBColorSpace;
+		return t;
+	};
+	return { map: texture(canvas, true), bump: texture(relief, false) };
+}
+
+/**
+ * The pinboard's surface: cork, which is granules of bark pressed together, so a crowd of small
+ * rounded bits in tans and browns over the darker binder between them, with a few dark flecks and
+ * pits. That grain is drawn once on a small tile and spread over the board; over it, at the
+ * board's own size, go what does not repeat: faint blotches, a darkening toward the frame, and the
+ * holes of old pins. The second texture is the relief: the granules at their different heights,
+ * the pits and the pin holes sunk. `width` and `height` are the board's, and one copy covers it.
+ */
+function corkGrain(width: number, height: number) {
+	const PX = 600; // px per unit of board, so a granule 2 to 6 px across is 2 to 5 mm
+	const TILE = 512;
+	// A fixed scatter, so that the board is the same on every visit.
+	let seed = 23;
+	const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+	const sheet = (w: number, h: number, fill: string) => {
+		const canvas = document.createElement('canvas');
+		canvas.width = w;
+		canvas.height = h;
+		const c = canvas.getContext('2d')!;
+		c.fillStyle = fill;
+		c.fillRect(0, 0, w, h);
+		return { canvas, c };
+	};
+
+	// --- The grain, on a tile that repeats ---
+	const tile = sheet(TILE, TILE, '#ac875c'); // the binder, a shade darker than the granules
+	const tileRelief = sheet(TILE, TILE, 'rgb(126,126,126)');
+	// Where along one axis to draw a bit so that it carries on across the tile's edge.
+	const wrapped = (v: number, r: number) => (v - r < 0 ? [v, v + TILE] : v + r > TILE ? [v, v - TILE] : [v]);
+	/** One bit of cork, an ellipse at any angle, in the paint and (if `height` is given) in the relief. */
+	const bit = (rx: number, ry: number, colour: string, height?: number) => {
+		const x = random() * TILE;
+		const y = random() * TILE;
+		const turn = random() * Math.PI;
+		for (const { c, fill } of [
+			{ c: tile.c, fill: colour },
+			...(height === undefined ? [] : [{ c: tileRelief.c, fill: `rgb(${height},${height},${height})` }])
+		]) {
+			c.fillStyle = fill;
+			for (const ax of wrapped(x, rx))
+				for (const ay of wrapped(y, rx)) {
+					c.beginPath();
+					c.ellipse(ax, ay, rx, ry, turn, 0, Math.PI * 2);
+					c.fill();
+				}
+		}
+	};
+	// The granules: fine, and close to one another in shade, since from across a room cork is nearly
+	// one colour. Enough to cover about half the tile, so the binder shows between them.
+	for (let i = 0; i < 14000; i++) {
+		const rx = 1.2 + random() * 1.8;
+		const light = 0.92 + random() * 0.16;
+		const warm = random();
+		const rgb = [185, 138 + 8 * warm, 90 + 10 * warm].map((v) => Math.round(v * light));
+		bit(rx, rx * (0.5 + random() * 0.5), `rgba(${rgb},0.8)`, Math.round(118 + random() * 32));
+	}
+	// Dark flecks of bark, each a small pit.
+	for (let i = 0; i < 220; i++) {
+		const rx = 1 + random() * 1.5;
+		bit(rx, rx * (0.5 + random() * 0.5), `rgba(58,40,24,${0.2 + random() * 0.25})`, Math.round(88 + random() * 24));
+	}
+	// And a few pale ones, in the paint alone.
+	for (let i = 0; i < 120; i++) {
+		const rx = 1 + random() * 1.2;
+		bit(rx, rx * (0.5 + random() * 0.5), `rgba(198,164,118,${0.15 + random() * 0.2})`);
+	}
+
+	// --- The board, at its own size ---
+	const W = Math.round(width * PX);
+	const H = Math.round(height * PX);
+	const { canvas, c } = sheet(W, H, '#000');
+	const { canvas: relief, c: r } = sheet(W, H, '#000');
+	c.fillStyle = c.createPattern(tile.canvas, 'repeat')!;
+	c.fillRect(0, 0, W, H);
+	r.fillStyle = r.createPattern(tileRelief.canvas, 'repeat')!;
+	r.fillRect(0, 0, W, H);
+	// Uneven tone: a few wide, faint patches, some darker and some paler.
+	for (let i = 0; i < 16; i++) {
+		const x = random() * W;
+		const y = random() * H;
+		const radius = 120 + random() * 220;
+		const strength = 0.02 + random() * 0.03;
+		const patch = c.createRadialGradient(x, y, 0, x, y, radius);
+		const tone = random() < 0.6 ? '45,28,12' : '225,190,140';
+		patch.addColorStop(0, `rgba(${tone},${strength})`);
+		patch.addColorStop(1, `rgba(${tone},0)`);
+		c.fillStyle = patch;
+		c.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+	}
+	// Darker toward the frame, where the dust settles and the light has not faded it.
+	const EDGE = 80;
+	for (const [x0, y0, x1, y1] of [
+		[0, 0, EDGE, 0],
+		[W, 0, W - EDGE, 0],
+		[0, 0, 0, EDGE],
+		[0, H, 0, H - EDGE]
+	]) {
+		const shade = c.createLinearGradient(x0, y0, x1, y1);
+		shade.addColorStop(0, 'rgba(40,24,10,0.12)');
+		shade.addColorStop(1, 'rgba(40,24,10,0)');
+		c.fillStyle = shade;
+		c.fillRect(0, 0, W, H);
+	}
+	// The holes of old pins: mostly in clusters, where things have hung before, and a few strays.
+	// A pin is under a millimetre thick, so each hole is barely more than a pixel: a soft spot of
+	// shadowed cork, not of black, and a dent in the relief for the lamp to find.
+	const hole = (x: number, y: number) => {
+		const radius = 1.2 + random() * 0.6; // of the whole soft spot; its dark heart is half that
+		for (const [ctx, tone, strength] of [
+			[c, '74,52,32', 0.5 + random() * 0.2],
+			[r, '60,60,60', 0.9]
+		] as const) {
+			const spot = ctx.createRadialGradient(x, y, 0, x, y, radius);
+			spot.addColorStop(0, `rgba(${tone},${strength})`);
+			spot.addColorStop(0.4, `rgba(${tone},${strength * 0.6})`);
+			spot.addColorStop(1, `rgba(${tone},0)`);
+			ctx.fillStyle = spot;
+			ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+		}
+	};
+	for (let i = 0; i < 8; i++) {
+		const x = W * (0.08 + random() * 0.84);
+		const y = H * (0.08 + random() * 0.6); // pins go in the tops of things
+		const count = 3 + Math.floor(random() * 6);
+		for (let k = 0; k < count; k++) hole(x + (random() + random() - 1) * 45, y + (random() + random() - 1) * 30);
+	}
+	for (let i = 0; i < 14; i++) hole(W * (0.04 + random() * 0.92), H * (0.04 + random() * 0.92));
+
+	const texture = (from: HTMLCanvasElement, colour: boolean) => {
+		const t = new CanvasTexture(from);
 		t.anisotropy = 8;
 		if (colour) t.colorSpace = SRGBColorSpace;
 		return t;
