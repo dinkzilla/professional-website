@@ -29,12 +29,26 @@ Last checked 2026-11-19.
   Hall, The Camel and The National too, so those need no separate visit for the list.
 - Fallout: `falloutrva`. Posts a weekly events list (pinned) and flyers; some metal.
 
+## Other sources, found 2026-11-19
+
+- Canal Club: `thecanalclub` on Instagram. The best metal source so far: a "Coming Up" list
+  every week or two, and a flyer per show.
+- The Camel: `thecamelrva`. Pinned monthly list, a "This Week" list, and flyers.
+- Richmond Music Hall: `richmondmusichall`. Flyers months ahead, little of it metal.
+- The Apoth: `theapothrva`. Few posts; nothing upcoming on 2026-11-19.
+- The National: `thenationalrva` is an empty account, not theirs. Not yet found; its shows are on
+  The Broadberry's monthly list.
+- Freakscene: the site `freakscene.diy`, not its Instagram. Needs the user's logged-in browser.
+  Richmond's events are at `freakscene.diy/events/calendar/47/`. One event listed on
+  2026-11-19 (Dec 4 at the Material Room). Its picture could not be saved: it is not an
+  ordinary large image on the event's page. Work out how next time.
+
 ## Not found
 
 - **RVA Punk Shows**: no account under `rvapunkshows`, and search for "rva punk shows" and
   "rvapunk" finds nothing that fits. Ask the user for the handle.
-- **The Material Room** and **The Green House**: nothing in search or on the web. Ask the user
-  for the handles.
+- **The Material Room** and **The Green House**: no Instagram account found. The Material Room's
+  shows turn up on Freakscene. Ask the user for the handles.
 - `rvamustseeshows` exists but is stale. `rvashowscentral` and `showadayrva` were seen in search
   and not yet looked at.
 

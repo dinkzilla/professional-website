@@ -3,6 +3,7 @@
 // whose origin is the centre of its base, so it can be set straight down on a shelf.
 
 import {
+	BackSide,
 	BoxGeometry,
 	BufferGeometry,
 	CanvasTexture,
@@ -28,6 +29,7 @@ import {
 	TubeGeometry,
 	Vector2,
 	Vector3,
+	type Intersection,
 	type Material,
 	type Object3D
 } from 'three';
@@ -44,6 +46,7 @@ import { createFirmware } from '#lib/video-module/firmware.ts';
 import { createMpv } from '#lib/video-module/mpv.ts';
 import { createOled } from '#lib/video-module/oled.ts';
 import { catalogue, type Article, type Entry } from './catalogue.ts';
+import { loadManual, PAGE, printManual } from './manual.ts';
 import { air, blown, tie } from './tie.ts';
 
 interface Placement {
@@ -72,6 +75,14 @@ interface Placement {
 	flush?: number;
 	/** On the wall, pinned to the board: it is moved with the board (see PINBOARD). */
 	pinned?: boolean;
+	/** On the wall, over something else that is on it: this much further off the wall. */
+	proud?: number;
+	/**
+	 * Under the pointer it does not come forward, which would take it through whatever is pinned
+	 * over it: it turns this far (radians) on its pin, which its group's userData.pin gives the
+	 * height of above its middle.
+	 */
+	swing?: number;
 	/** Stays on the shelf: it cannot be picked up. */
 	fixed?: boolean;
 	/**
@@ -92,6 +103,8 @@ interface Placement {
 	 * the window it is shown in.
 	 */
 	page?: { w: number; h: number };
+	/** How many seconds it takes to come forward or go back, where that is not as long as most things do. */
+	takes?: number;
 	/** Its attitude once picked up: pitch (tipped toward the viewer) and yaw, in radians. */
 	held?: { pitch?: number; yaw?: number };
 	build: () => Group;
@@ -132,6 +145,13 @@ export interface Link {
 	v: [number, number];
 }
 
+/**
+ * What a part of an object does when it is pressed while the object is held, where that is
+ * something other than the object being put back: true if it did it. It is kept in the part's
+ * userData.press, where the scene finds it under the pointer, and is told where the press was.
+ */
+export type Press = (hit: Intersection) => boolean;
+
 export interface Works {
 	/**
 	 * The scene has been put on a page. `redraw` has it drawn again, because the object has
@@ -146,6 +166,11 @@ export interface Works {
 	dim: (share: number) => void;
 	/** It is this far from where it is kept (0) to being held (1). */
 	lifted?: (share: number) => void;
+	/**
+	 * Whether what is kept in it can come out yet, where it has to be opened first: what rides on
+	 * it waits for this, once it has been picked up.
+	 */
+	opened?: () => boolean;
 }
 
 // The rack the objects go in, in world units (one is about half a metre): its width inside, between
@@ -1709,6 +1734,17 @@ const REST = (() => {
 // The game's box: black, printed all over with a tangle of line art in dull gold, and lettered in
 // white. Long and short are its lid's sides, and it is this deep, lying flat.
 const GAME = { long: 0.72, short: 0.52, h: 0.16 };
+// It is a lid over a tray, of card this thick. The tray is filled to this depth with whatever
+// else the game comes with, and the manual lies on top of that.
+const GAME_CARD = 0.006;
+const GAME_FILL = 0.075;
+// Where the box is pushed under the rack, and how it is turned: its left side to the front, and
+// askew, pushed under there, not put.
+const GAME_AT = { x: -0.02, back: 0.5, yaw: Math.PI / 2 - 0.16 };
+// The manual: a booklet of the proportions its pages are printed at, with this much between one
+// leaf and the next. It lies in the tray this far above the floor, the top of its pages to the
+// box's back end.
+const MANUAL = { w: 0.44, h: (0.44 * PAGE.H) / PAGE.W, gap: 0.0012, up: 0.0015 + GAME_CARD + GAME_FILL };
 const GAME_PX = 1400; // of a printed face, per world unit
 const GAME_BLACK = '#070708';
 const GAME_GOLD = '#b8a273';
@@ -1988,6 +2024,35 @@ const flierArt = Object.entries(
 )
 	.sort(([a], [b]) => a.localeCompare(b))
 	.map(([, url]) => url);
+/** Where one flier is pinned, as scripts/set-fliers.js worked it out for this set of pictures. */
+interface Pinned {
+	/** Where along the wall its middle is, and how far above the floor. */
+	x: number;
+	up: number;
+	/** How crooked it hangs. */
+	lean: number;
+	w: number;
+	h: number;
+	/** How much further off the wall than the board it is: it is over others. */
+	proud: number;
+	/**
+	 * Where its pins are, from its middle as it hangs: one at its top, or one at its top and one
+	 * at its foot. And what colour the head of each is: whatever was in the box.
+	 */
+	pins: { x: number; y: number; color: string }[];
+	/**
+	 * It has the one pin, and the air gets under it. Those that do are over all the others and
+	 * clear of one another, so that nothing is ever in the way of them; the rest are pinned top
+	 * and foot and do not move, as a board that is used fills up.
+	 */
+	waves: boolean;
+}
+// The arrangement of them: made afresh for each set of pictures, since their shapes differ, to
+// look thrown up anyhow and yet hide as little of any as can be.
+const flierLayout: Pinned[] =
+	Object.values(
+		import.meta.glob<{ fliers: Pinned[] }>('../assets/fliers/layout.json', { eager: true, import: 'default' })
+	)[0]?.fliers ?? [];
 /** Those pictures, once fetched: each where its flier looks for it. */
 const flierPrints: (HTMLImageElement | undefined)[] = [];
 
@@ -2009,6 +2074,7 @@ export async function loadPrinting() {
 	if (digSite) photo.src = digSite;
 	const prints = flierArt.map((url) => Object.assign(new Image(), { src: url }));
 	await Promise.allSettled([
+		loadManual(),
 		face.load().then((loaded) => document.fonts.add(loaded)),
 		...news.map((each) => each.load().then((loaded) => document.fonts.add(loaded))),
 		lid.decode().then(() => (gameLid = lid)),
@@ -2151,35 +2217,290 @@ function gameBox() {
 	const front = gameFace(short, h, 6, marked, cutting([1, 0, 0, 1, 0, -H * 0.765]));
 
 	const under = new MeshStandardMaterial({ color: GAME_BLACK, roughness: 0.8 });
+	// The card seen from inside the box, and a face that is not there at all: the lid has no
+	// bottom and the tray no top.
+	const lining = new MeshStandardMaterial({ color: 0x1d1d20, roughness: 0.9, side: BackSide });
+	const filling = new MeshStandardMaterial({ color: 0x101012, roughness: 0.95 });
+	const none = new MeshBasicMaterial({ visible: false });
+	const T = GAME_CARD;
+	/** The edge of the card round an open side `w` by `l`, at this height. */
+	const rim = (to: Group, w: number, l: number, y: number) => {
+		for (const side of [-1, 1]) {
+			to.add(box(w - 0.0006, 0.0006, T, under, 0, y, side * (l / 2 - T / 2)));
+			to.add(box(T, 0.0006, l - 2 * T, under, side * (w / 2 - T / 2 - 0.0003), y, 0));
+		}
+	};
 	const g = new Group();
+
+	// The tray, which the lid comes down over: a loose fit inside it, and all but as deep.
+	const tray = { w: short - 2 * T - 0.004, h: h - T - 0.003, l: long - 2 * T - 0.004, y: 0.0005 };
 	// A box's faces in three.js's order: right, left, top, bottom, front, back.
-	g.add(box(short, h, long, [right, left, lid, under, front, back]));
+	g.add(box(tray.w, tray.h, tray.l, [under, under, none, under, under, under], 0, tray.y));
+	const well = box(tray.w - 2 * T, tray.h - T, tray.l - 2 * T, [lining, lining, none, lining, lining, lining], 0, tray.y + T);
+	well.castShadow = false;
+	g.add(well);
+	rim(g, tray.w, tray.l, tray.y + tray.h - 0.0006);
+	g.add(box(tray.w - 2 * T - 0.003, GAME_FILL, tray.l - 2 * T - 0.003, filling, 0, tray.y + T));
+
+	// The lid, which is all of the box that shows while it is shut. It is taken off as a lid is:
+	// lifted clear of the tray, then tipped back about its far edge (the box is held with its left
+	// side nearest) to stand open behind it.
+	const shell = new Group();
+	shell.add(box(short, h, long, [right, left, lid, none, front, back]));
+	const inside = box(short - 2 * T, h - T, long - 2 * T, [lining, lining, lining, none, lining, lining]);
+	inside.castShadow = false;
+	shell.add(inside);
+	rim(shell, short, long, 0);
+	shell.position.set(-short / 2, -h, 0);
+	const hinge = new Group();
+	hinge.position.set(short / 2, h, 0);
+	hinge.add(shell);
+	const raised = new Group();
+	raised.add(hinge);
+	g.add(raised);
+	const open = (u: number) => {
+		raised.position.y = h * 1.15 * smooth(0, 0.55, u);
+		raised.position.x = 0.07 * smooth(0.3, 1, u);
+		hinge.rotation.z = -1.85 * smooth(0.3, 1, u);
+	};
+
+	// The scene says how far the box has been lifted off the floor. The lid is not touched until it
+	// is most of the way up, and then comes off in its own time; it is back on well before the box
+	// is back on the floor.
+	const OPEN_S = 0.6;
+	const SHUT_S = 0.3;
+	let u = 0;
+	let goal = 0;
+	let lifted = 0;
+	const works: Works = {
+		start: () => {},
+		stop: () => {},
+		dim: () => {},
+		lifted: (share) => {
+			if (share < lifted) goal = 0;
+			else if (share > lifted && share > 0.7) goal = 1;
+			lifted = share;
+		},
+		tick: (dt) => {
+			if (u === goal) return false;
+			u = goal > u ? Math.min(1, u + dt / OPEN_S) : Math.max(0, u - dt / SHUT_S);
+			open(u);
+			return u !== goal;
+		},
+		opened: () => u > 0.75
+	};
+	g.userData.works = works;
 	return g;
 }
 
-// The widest a flier is hung: one that is wider than it is tall is made smaller to keep to this,
-// so that it does not lie over the one beside it.
-const FLIER_WIDEST = 0.46;
+/**
+ * The manual that is in the game's box: a booklet, its leaves printed on the front (see
+ * manual.ts) and held along their left edges. In the box it lies flat. Out of it, it stands
+ * facing out of its group, its middle on the group's origin, and a press on a page turns it:
+ * the leaf goes over to the left and on round behind the rest, as a magazine is folded back on
+ * itself, so that there is only ever the one page to look at.
+ */
+function manual() {
+	const { w, h, gap } = MANUAL;
+	const print = printManual(catalogue.find((entry) => entry.id === 'manual')!.manual!);
+	const count = print.faces.length;
+	const ACROSS = 12;
+	// The pages give off a little light of their own once they are out of the box, as the clipping
+	// does (see `lay`).
+	const paper = { roughness: 0.9, emissive: 0xffffff, emissiveIntensity: 0 };
+	const other = printed(print.back);
+	const backs = new MeshStandardMaterial({ ...paper, map: other, emissiveMap: other });
+	const lit: MeshStandardMaterial[] = [backs];
+
+	const g = new Group();
+	const body = new Group();
+	g.add(body);
+	// How far round each leaf is (0 where it was bound, 1 folded right round behind), the one page
+	// the booklet is open at, and how far out of the box it is.
+	let at = 0;
+	let lifted = 0;
+	const turn: Press = (hit) => {
+		if (lifted < 1) return false;
+		// The left of a page goes back a page, and the rest of it on one. The cover only opens, and
+		// the last page has nothing after it.
+		if (at > 0 && (hit.uv?.x ?? 1) < 0.3) at--;
+		else if (at < count - 1) at++;
+		else return false;
+		return true;
+	};
+	const leaves = print.faces.map((face, n) => {
+		// A strip of points from the bound edge out, top and bottom, and a face of the leaf made on
+		// each side of it: the same triangles, wound the other way for the back.
+		const positions = new Float32BufferAttribute(new Float32Array((ACROSS + 1) * 6), 3);
+		const uvs: number[][] = [[], []];
+		const indices: number[][] = [[], []];
+		for (let i = 0; i <= ACROSS; i++) {
+			for (const v of [1, 0]) {
+				uvs[0].push(i / ACROSS, v);
+				uvs[1].push(1 - i / ACROSS, v);
+			}
+		}
+		for (let i = 0; i < ACROSS; i++) {
+			const p = i * 2;
+			indices[0].push(p, p + 1, p + 2, p + 2, p + 1, p + 3);
+			indices[1].push(p, p + 2, p + 1, p + 2, p + 3, p + 1);
+		}
+		const sides = [0, 1].map((side) => {
+			const geometry = new BufferGeometry();
+			geometry.setIndex(indices[side]);
+			geometry.setAttribute('position', positions);
+			geometry.setAttribute('uv', new Float32BufferAttribute(uvs[side], 2));
+			return geometry;
+		});
+		const map = printed(face.canvas);
+		const fronts = new MeshStandardMaterial({ ...paper, map, emissiveMap: map });
+		lit.push(fronts);
+		const front = mesh(sides[0], fronts);
+		const back = mesh(sides[1], backs);
+		// Only the back of the last leaf casts a shadow: the rest are all but touching what is behind
+		// them, and would shadow one another in stripes.
+		front.castShadow = false;
+		back.castShadow = n === count - 1;
+		front.userData.links = face.links;
+		front.userData.press = turn;
+		// A press on the back of a leaf, which shows only while it is turning, does nothing.
+		back.userData.press = (() => lifted === 1) satisfies Press;
+		const leaf = new Group();
+		leaf.add(front, back);
+		leaf.position.x = -w / 2;
+		body.add(leaf);
+		return { leaf, positions, sides, n, q: 0 };
+	});
+	/**
+	 * Put a leaf where it is `q` of the way round. It bends as it goes, its free edge trailing, and
+	 * it moves back as well as round, from its place in the booklet to the same place from the
+	 * back of it.
+	 */
+	const fold = (each: (typeof leaves)[number]) => {
+		const q = smooth(0, 1, each.q);
+		const round = q * Math.PI * 2;
+		const bend = Math.sin(Math.PI * each.q) * 0.6;
+		for (let i = 0; i <= ACROSS; i++) {
+			const out = i / ACROSS;
+			const angle = round - bend * out ** 1.6;
+			const x = w * out * Math.cos(angle);
+			const z = w * out * Math.sin(angle);
+			each.positions.setXYZ(i * 2, x, h / 2, z);
+			each.positions.setXYZ(i * 2 + 1, x, -h / 2, z);
+		}
+		each.positions.needsUpdate = true;
+		for (const geometry of each.sides) {
+			geometry.computeVertexNormals();
+			geometry.computeBoundingBox();
+			geometry.computeBoundingSphere();
+		}
+		each.leaf.position.z = -gap * (each.n + q * (2 * (count - each.n) - 1));
+	};
+
+	// Lying in the box it faces up, and is as far above its group's origin as it is thick.
+	const lying = { turned: new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2), at: new Vector3(0, gap * count, 0) };
+	const facing = new Quaternion();
+	const RISE = 0.3;
+	/**
+	 * Put the booklet where it is `e` of the way from the box to being read. That is how far the
+	 * scene has brought it, which starts slowly; in the time that takes, it comes straight up out
+	 * of the tray, as it lay. Then it turns to face out, coming down to its group's origin, which is
+	 * what the scene brings in front of the camera.
+	 */
+	const lay = (e: number) => {
+		// How far through the time it takes, which is what the scene eases to get `e`.
+		const t = e < 0.5 ? Math.cbrt(e / 4) : 1 - Math.cbrt(2 * (1 - e)) / 2;
+		const up = smooth(0, 0.4, t);
+		const round = smooth(0.26, 0.92, t);
+		body.quaternion.slerpQuaternions(lying.turned, facing, round);
+		body.position.copy(lying.at).multiplyScalar(1 - round);
+		body.position.y += RISE * up * (1 - round);
+		for (const material of lit) material.emissiveIntensity = 0.8 * round;
+	};
+	for (const each of leaves) fold(each);
+	lay(0);
+
+	const TURN_S = 0.75;
+	const works: Works = {
+		start: () => {},
+		stop: () => {},
+		dim: () => {},
+		lifted: (share) => {
+			// On its way back to the box, it is shut.
+			if (share < lifted) at = 0;
+			if (share !== lifted) lay(share);
+			lifted = share;
+		},
+		tick: (dt) => {
+			let moving = false;
+			for (const each of leaves) {
+				const goal = each.n < at ? 1 : 0;
+				if (each.q === goal) continue;
+				// Shut in a hurry, if it is on its way back.
+				const step = dt / (lifted < 1 ? TURN_S * 0.4 : TURN_S);
+				each.q = goal > each.q ? Math.min(1, each.q + step) : Math.max(0, each.q - step);
+				fold(each);
+				moving = true;
+			}
+			return moving;
+		}
+	};
+	g.userData.works = works;
+	return g;
+}
+
+// A push pin's head, standing out from the paper (which is at y = 0 here, the pin pointing up),
+// in the proportions of a real one: about half an inch long and three eighths across, so taller
+// than it is wide. A flange against the paper, which is the widest of it; a long waist drawn in
+// to half that, to take it by; and a cap a little narrower than the flange. Made more than half
+// as big again as life, as the small things in the room are, so that it shows. Turned from its
+// outline.
+const PIN_R = 0.0152;
+const PIN_H = 0.0405;
+const PIN_HEAD = new LatheGeometry(
+	[
+		[0, 0],
+		[0.95, 0],
+		[1, 0.03],
+		[1, 0.1],
+		// The waist: in from the flange to its narrowest, less than half way up, and out to the cap.
+		...Array.from({ length: 13 }, (_, n) => {
+			const u = n / 12;
+			const full = u < 0.45 ? 0.5 + 0.5 * Math.cos((Math.PI * u) / 0.45) : 0.72 * (0.5 - 0.5 * Math.cos((Math.PI * (u - 0.45)) / 0.55));
+			return [0.5 + 0.43 * full, 0.13 + 0.7 * u];
+		}),
+		[0.82, 0.86],
+		[0.82, 0.95],
+		[0.74, 0.99],
+		[0, 1]
+	].map(([r, y]) => new Vector2(r * PIN_R, y * PIN_H)),
+	24
+);
+// Bright plastic, glossy, and lit by the room as everything else in it is: lit by itself as
+// well, it stood out of the dim like a lamp.
+// One material for each colour, however many pins have it.
+const pinHeads = new Map<string, MeshStandardMaterial>();
+function pinHead(color: string) {
+	let head = pinHeads.get(color);
+	if (!head) {
+		head = new MeshStandardMaterial({ color, roughness: 0.3 });
+		pinHeads.set(color, head);
+	}
+	return head;
+}
 
 /**
- * A show flier, flat against the wall and facing out, with a pin through its top: one of the
- * pictures in the assets (see flierArt), on a sheet of that picture's proportions and about as
- * much paper as `w` by `h`. `x` is where along the wall it is, and `lean` how crooked: the air
- * from the door reaches it later the further off it is, and what part of it is behind the rack
- * cannot lift far.
+ * A show flier, flat against the wall and facing out: one of the pictures in the assets (see
+ * flierArt), on a sheet of that picture's proportions. Most are pinned at top and foot and stay
+ * as they are. One with a single pin through its top is taken by the air from the door, later
+ * the further off it is, and what part of it is behind the rack cannot lift far.
  */
-function flier(index: number, w: number, h: number, x: number, lean: number) {
+function flier(index: number, at: Pinned) {
+	const { x, lean, w, h } = at;
 	const far = HOOK.x - x;
 	const art = flierPrints[index];
 	let map: Texture | undefined;
 	if (art) {
-		const shape = art.naturalWidth / art.naturalHeight;
-		const area = w * h;
-		h = Math.sqrt(area / shape);
-		w = h * shape;
-		const fit = Math.min(1, FLIER_WIDEST / w);
-		w *= fit;
-		h *= fit;
 		map = new Texture(art);
 		map.colorSpace = SRGBColorSpace;
 		map.anisotropy = 8;
@@ -2193,7 +2514,8 @@ function flier(index: number, w: number, h: number, x: number, lean: number) {
 	// In strips down it, for the paper to bend by. The printing is a sheet of its own, laid on the
 	// paper, so the paper is made without its front: of two faces that close together, bending as
 	// one, a phone cannot always tell which is in front, and the paper showed through in triangles.
-	const stock = new BoxGeometry(w, h, 0.004, 4, 12, 1);
+	const strips: [number, number] = at.waves ? [4, 12] : [1, 1];
+	const stock = new BoxGeometry(w, h, 0.004, ...strips, 1);
 	const facing = stock.groups[4]; // a box's faces come right, left, top, bottom, front, back
 	const faces = Array.from(stock.index!.array);
 	faces.splice(facing.start, facing.count);
@@ -2201,11 +2523,20 @@ function flier(index: number, w: number, h: number, x: number, lean: number) {
 	stock.clearGroups();
 	const sheet = mesh(stock, page);
 	// A picture that could not be had leaves the paper blank.
-	const front = new Mesh(new PlaneGeometry(w, h, 4, 12), map ? new MeshStandardMaterial({ map, roughness: 0.95 }) : page);
+	const front = new Mesh(new PlaneGeometry(w, h, ...strips), map ? new MeshStandardMaterial({ map, roughness: 0.95 }) : page);
 	front.position.z = 0.0025;
-	const PIN = h / 2 - 0.022;
 	g.add(sheet, front);
-	g.add(mesh(new SphereGeometry(0.016, 12, 8), accent, 0, PIN, 0.012));
+	for (const pin of at.pins) {
+		const head = mesh(PIN_HEAD, pinHead(pin.color), pin.x, pin.y, 0.0046);
+		// Pushed in by hand: out from the paper, and never quite square to it.
+		head.rotation.set(Math.PI / 2 + 0.22 * Math.sin(91 * pin.x + 13 * pin.y + index), 0, 0.22 * Math.sin(57 * pin.y - 29 * pin.x + 2 * index));
+		g.add(head);
+	}
+	if (!at.waves) return g;
+
+	// Its one pin, which under the pointer it turns on (see Placement.swing).
+	const PIN = at.pins[0].y;
+	g.userData.pin = PIN;
 
 	// The air from the door (see tie.ts) gets under the paper. It turns a little on its pin, away
 	// from the door, and its foot comes off the board, one corner more than the other, with a
@@ -2224,12 +2555,11 @@ function flier(index: number, w: number, h: number, x: number, lean: number) {
 		const blowing = air(t - lag) * strength * give;
 		const turn = blowing * 0.032 * (0.7 + 0.3 * Math.sin(2.9 * t + index));
 		const out = blowing * 0.2 * (0.75 + 0.25 * Math.sin(4.3 * t + 2 * index));
-		// How far the paper's face is from the back of the rack, where it is now: it may have been
-		// brought forward under the pointer.
+		// How far the paper's face is from the back of the rack, where it is now.
 		const gap = Math.max(0, RACK_BACK - 0.004 - g.position.z - 0.0045);
 		for (const { geometry, still } of sheets) {
-			const at = geometry.attributes.position;
-			for (let i = 0; i < at.count; i++) {
+			const points = geometry.attributes.position;
+			for (let i = 0; i < points.count; i++) {
 				const x = still[i * 3];
 				const y = still[i * 3 + 1];
 				const down = Math.max(0, (PIN - y) / (PIN + h / 2)); // from the pin (0) to the foot (1)
@@ -2247,9 +2577,9 @@ function flier(index: number, w: number, h: number, x: number, lean: number) {
 					const held = gap ? gap * (1 - Math.exp(-lifted / gap)) : 0;
 					lifted += behind * (held - lifted);
 				}
-				at.setXYZ(i, px, py, still[i * 3 + 2] + lifted);
+				points.setXYZ(i, px, py, still[i * 3 + 2] + lifted);
 			}
-			at.needsUpdate = true;
+			points.needsUpdate = true;
 			geometry.computeVertexNormals();
 			// What a pointer is over is found by these.
 			geometry.computeBoundingBox();
@@ -2260,23 +2590,19 @@ function flier(index: number, w: number, h: number, x: number, lean: number) {
 	return g;
 }
 
-// Pinned up none too carefully: where along the wall, how high, how crooked, and its size. There
-// is a flier at each of these for as many pictures as there are, in the order of their names.
-const pinned: [number, number, number, number, number][] = [
-	[-1.43, 2.05, 0.05, 0.34, 0.48],
-	[-0.94, 2.1, -0.04, 0.36, 0.49],
-	[-0.4, 2.07, 0.03, 0.34, 0.48],
-	[-1.19, 1.52, -0.06, 0.34, 0.46],
-	[-0.57, 1.51, 0.07, 0.36, 0.49]
-];
-const fliers: Placement[] = pinned.slice(0, flierArt.length).map(([x, up, lean, w, h], i) => ({
+const fliers: Placement[] = flierLayout.slice(0, flierArt.length).map((at, i) => ({
 	id: `flier-${i + 1}`,
 	shelf: WALL,
-	x,
-	up,
-	lean,
+	x: at.x,
+	up: at.up,
+	lean: at.lean,
 	pinned: true,
-	build: () => flier(i, w, h, x, lean)
+	proud: at.proud,
+	// One that waves is over the rest, and straightens a little under the pointer, whichever way
+	// it hangs. One pinned top and foot stays as it is: it may have others over it, which coming
+	// forward would take it through.
+	...(at.waves ? { swing: at.lean > 0 ? -0.1 : 0.1 } : { out: 0 }),
+	build: () => flier(i, at)
 }));
 
 const placements: Placement[] = [
@@ -2308,13 +2634,21 @@ const placements: Placement[] = [
 	{
 		id: 'mothersheet',
 		shelf: FLOOR,
-		x: -0.02,
-		back: 0.5,
-		// Its left side to the front, and askew: pushed under there, not put.
-		yaw: Math.PI / 2 - 0.16,
+		...GAME_AT,
 		// Lid to the viewer with the same side nearest, tipped and turned to show that and an end.
 		held: { pitch: 0.95, yaw: Math.PI / 2 - 0.4 },
 		build: gameBox
+	},
+	{
+		// In the box, as the box lies (see MANUAL): it comes out once the lid is off.
+		id: 'manual',
+		shelf: FLOOR,
+		...GAME_AT,
+		up: MANUAL.up,
+		rides: 'mothersheet',
+		page: { w: MANUAL.w, h: MANUAL.h },
+		takes: 1,
+		build: manual
 	},
 	...fliers,
 	{ id: 'tie', shelf: WALL, x: HOOK.x, up: HOOK.y, lean: -0.03, link: true, out: 0.03, build: tie },

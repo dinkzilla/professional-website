@@ -1,13 +1,13 @@
 ---
 name: update-shows
-description: Find upcoming Richmond shows, offer ten flyer images to pick from, and put the five picked on the bulletin board of the personal side. Run when the user asks to update the shows, the fliers or the posters on the board.
+description: Find upcoming Richmond shows, offer twenty flyer images to pick from, and put the seven picked on the bulletin board of the personal side. Run when the user asks to update the shows, the fliers or the posters on the board.
 ---
 
 # Update the fliers on the bulletin board
 
-The board in the personal side's room has five fliers. Each is an image file in
+The board in the personal side's room has seven fliers, overlapping. Each is an image file in
 `src/lib/assets/fliers/` and nothing else: no text is drawn and there is no stand-in. This skill
-finds ten candidate flyers, lets the user pick five, and puts those five on the board.
+finds twenty candidate flyers, lets the user pick seven, and puts those seven on the board.
 
 Read `sources.md` beside this file first. It records where each source was actually found to
 publish its shows, and what did not work. Update it at the end of every run.
@@ -16,7 +16,7 @@ publish its shows, and what did not work. Update it at the end of every run.
 
 Today's date decides what counts as upcoming, so check it before anything else.
 
-**Always on the list of ten** (one option each, every run):
+**Always on the list of twenty** (one option each, every run):
 
 - **Sunday Soundtracks** at J&R's Music World: the next upcoming one, or the most recent if none
   is announced.
@@ -26,14 +26,21 @@ If the show that should be offered has no flyer image, offer that organiser's mo
 that does have one. These two are guaranteed a place on the list, not on the board: the user may
 pick neither.
 
-**The other eight** are metal shows in Richmond, Virginia, upcoming, ranked:
+**The other eighteen** are metal shows in Richmond, Virginia, upcoming, ranked:
 
 1. screamo and noise first,
 2. then other metal and its neighbours (hardcore, powerviolence, grind, doom, sludge, black
    metal),
 3. then soonest first within each.
 
-If there are not eight upcoming metal shows with flyers, fill out the list with the nearest
+**Reach into the future.** The list is not this week's shows. Look as far ahead as anything is
+announced, months if need be: a show in February with a flyer out now belongs on the list, and
+a good one outranks a middling one that is sooner. Scroll back through each account far enough
+to find what was announced weeks ago for dates still to come, and check ticket pages and venue
+calendars for dates further out. Aim for no more than half the list falling in the next ten
+days.
+
+If there are not eighteen upcoming metal shows with flyers, fill out the list with the nearest
 thing (heavy punk, then recent metal shows just past) rather than offering fewer, and say so.
 
 **Venue show lists come first.** Some venues post one poster listing all their coming shows: a
@@ -54,6 +61,9 @@ is not current.
 - The Broadberry
 - The Camel
 - Richmond Music Hall
+- The National
+- The Apoth
+- Freakscene: anything they post for Richmond
 - RVA Punk Shows on Instagram
 
 Other Richmond venues and promoters are welcome too. Add any that turn out to be useful to
@@ -86,16 +96,16 @@ and every line on it should then be legible, the small print of a show list incl
   list itself, capturing that part of the image at full size, so the text is as large as the
   source allows.
 
-## 3. Lay the ten out
+## 3. Lay the twenty out
 
 Save into `flier-candidates/` at the top of the repository (it is git-ignored), clearing out
 what was there from the last run:
 
-- `01.jpg` to `10.jpg` (whatever the image's own format is), with Sunday Soundtracks as 01 and
+- `01.jpg` to `20.jpg` (whatever the image's own format is), with Sunday Soundtracks as 01 and
   RVA Pro Wrestling as 02, then the rest in rank order;
 - `candidates.json`: for each number, the show, date, venue, lineup, the page it came from, and
   one line on why it is on the list;
-- `index.html`: a contact sheet of the ten images, each under its number in large type, with the
+- `index.html`: a contact sheet of the twenty images, each under its number in large type, with the
   show, date, venue and a link to its page beneath. Plain and self-contained, reading the images
   from beside it.
 
@@ -104,24 +114,61 @@ list in the terminal: number, show, date, venue.
 
 ## 4. The pick
 
-Ask the user for five. They answer with numbers from the list, paths to image files of their
-own, or a mix: "2, 5, 9" and two paths, say. Their own images are as good as any candidate and
+Ask the user for seven. They answer with numbers from the list, paths to image files of their
+own, or a mix: "2, 5, 9, 11, 14" and two paths, say. Their own images are as good as any candidate and
 need no show details.
 
-The picks must come to exactly five. If they come to more or fewer, or a number is not on the
+The picks must come to exactly seven. If they come to more or fewer, or a number is not on the
 list, or a path is not a readable image, say which and ask again. Do not guess, pad the list or
 keep an old flier to make up the number.
 
-The order the user gives is the order on the board: top row left to right, then the bottom row.
+The order the user gives does not matter: where each goes on the board is worked out afresh
+every time (step 5).
 
-## 5. Put them on the board
+## 5. Put them on the board, and arrange them
 
 ```
-npm run fliers -- <first> <second> <third> <fourth> <fifth>
+npm run fliers -- <first> <second> <third> <fourth> <fifth> <sixth> <seventh>
 ```
 
-This resizes the five into `src/lib/assets/fliers/` as `1.webp` to `5.webp` and removes the old
-ones. Then:
+This resizes the seven into `src/lib/assets/fliers/` as `1.webp` to `7.webp`, removes the old
+ones, and arranges them. Seven do not fit on the board side by side, so they overlap. The
+arrangement is to look thrown up anyhow, never rows, and yet leave as much of every flier
+showing as it can: the script works one out for these particular shapes, different every time,
+and writes it to `layout.json` beside the images. It prints how much of each flier shows and
+leaves a picture of the board in `flier-candidates/board-preview.png`. The dark part of that
+picture is where the rack and the tv stand in front of the board.
+
+Three of the seven have a single pin and wave in the air from the door; the script picks which.
+They are kept over all the others and clear of one another, because sheets that move against
+each other went through each other, or looked wrong when kept from it. The other four are
+pinned top and foot, wherever along the edge the pin happened to go, and do not move. In the
+picture every pin is a dot in its own colour (they are all bright neon, picked at random),
+ringed on the three that wave.
+
+**Look at the picture, every time.** The user's taste, as given on 2026-11-19: it should look
+like a board people have been pinning things to for months, not a display. It is a good
+arrangement if:
+
+- it does not look laid out: nothing in line with its neighbours, no rows or columns, no even
+  gaps, sheets at different angles and overlapping at their corners and edges;
+- it does not shy away from the dark part: a flier or two partly behind the rack or the tv is
+  right, as long as no flier is mostly lost there;
+- every flier still shows about two thirds of itself or more. A corner of one over a band name
+  on another is fine: it is how much shows that counts, not which words;
+- the three that wave (ringed pins) do not touch each other, and no pin is under another flier;
+- no flier touches the board's frame (the script keeps them clear of it, turned on their pins
+  included; say so if one ever does).
+
+If it is not, have it arranged again, as many times as it takes:
+
+```
+npm run fliers -- --arrange
+```
+
+`--seed <number>` gives back an arrangement seen before (each run prints its seed).
+
+Then:
 
 ```
 npm run check
@@ -140,7 +187,9 @@ and nothing wider:
   unstaged and untouched, and mention it.
 - Commit only if on `master` and the check and build passed. On any other branch, stop and ask.
 - Commit message: `Fliers: ` and the week's date, with the usual attribution line.
-- `git push origin master`. The push deploys the site.
+- `git push origin master`. The push deploys the site. On 2026-11-19 the push failed from here
+  for want of GitHub credentials in this shell: if it does again, leave the commit in place and
+  ask the user to push it.
 
 Changes to this skill or `sources.md` are not covered: leave them for the user to commit.
 

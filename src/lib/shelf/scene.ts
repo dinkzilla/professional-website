@@ -66,6 +66,7 @@ import {
 	type Control,
 	type Item,
 	type Link,
+	type Press,
 	type Works
 } from './items.ts';
 
@@ -291,6 +292,8 @@ function createShelf() {
 		return on ? [{ p, on }] : [];
 	});
 	const carried = { by: new Quaternion(), at: new Vector3(), turned: new Quaternion() };
+	// What turns on its pin under the pointer: where the pin is, how far round, and how far that moves it.
+	const swung = { at: new Vector3(), by: new Quaternion(), moved: new Vector3() };
 
 	// Each shelf is only as tall as its tallest object needs. `pitch` is the distance from the
 	// surface above (the underside of the unit's top, for the first) to the shelf's own surface.
@@ -453,7 +456,7 @@ function createShelf() {
 			p.group.visible = p.item.shelf < shelves;
 			if (p.item.shelf === WALL) {
 				// Just off the wall: against the board, or hanging from a hook.
-				p.shelfPosition.set(p.item.x, (p.item.up ?? 0) + (p.item.pinned ? room.lift : 0) - height, WALL_OFF);
+				p.shelfPosition.set(p.item.x, (p.item.up ?? 0) + (p.item.pinned ? room.lift : 0) - height, WALL_OFF + (p.item.proud ?? 0));
 				continue;
 			}
 			p.shelfPosition.set(
@@ -654,10 +657,11 @@ function createShelf() {
 			// What rides on another object comes out of it once that is nearly all the way up. And
 			// that is not put back until what came out of it is nearly all the way back in.
 			const on = riders.find((rider) => rider.p === p)?.on;
-			if (on) goal = on === held && on.t > 0.85 ? 1 : 0;
+			// If that has to be opened first, it waits for that as well.
+			if (on) goal = on === held && on.t > 0.85 && (on.works?.opened?.() ?? true) ? 1 : 0;
 			else if (!goal && riders.some((rider) => rider.on === p && rider.p.t > 0.15)) goal = p.t;
 			if (p.t !== goal) {
-				const step = dt / PICK_S;
+				const step = dt / (p.item.takes ?? PICK_S);
 				p.t = goal > p.t ? Math.min(goal, p.t + step) : Math.max(goal, p.t - step);
 				moving = true;
 			}
@@ -669,8 +673,15 @@ function createShelf() {
 			}
 			const e = ease(p.t);
 			p.group.position.lerpVectors(p.shelfPosition, p.heldPosition, e);
-			p.group.position.z += (p.item.out ?? 0.06) * p.nudge * (1 - e);
 			p.group.quaternion.slerpQuaternions(p.shelfRotation, p.heldRotation, e);
+			if (p.item.swing) {
+				// Turned in its own plane about its pin, which stays where it is.
+				const pin = swung.at.set(0, p.group.userData.pin ?? 0, 0);
+				swung.by.setFromAxisAngle(Z_AXIS, p.item.swing * p.nudge * (1 - e));
+				swung.moved.copy(pin).applyQuaternion(swung.by).sub(pin).applyQuaternion(p.group.quaternion);
+				p.group.position.sub(swung.moved);
+				p.group.quaternion.multiply(swung.by);
+			} else p.group.position.z += (p.item.out ?? 0.06) * p.nudge * (1 - e);
 			lift = Math.max(lift, e);
 			p.works?.lifted?.(e);
 		}
@@ -746,6 +757,11 @@ function createShelf() {
 		return links?.find((link) => at.x >= link.u[0] && at.x <= link.u[1] && at.y >= link.v[0] && at.y <= link.v[1]);
 	}
 
+	/** What a press on this would do to what is held, short of putting it back. */
+	function pressAt(hit: Intersection | undefined): Press | undefined {
+		return held ? hit?.object.userData.press : undefined;
+	}
+
 	// A press that starts on a part that turns, and how far down the window it had got at the
 	// last click. From there it takes another CLICK_PX either way for the next one, so a finger
 	// resting where one click came does not rock between two.
@@ -790,6 +806,11 @@ function createShelf() {
 			window.open(link.href, '_blank', 'noopener,noreferrer');
 			return;
 		}
+		// So does a tap on a part of it that does something of its own, if it does.
+		if (hit && pressAt(hit)?.(hit)) {
+			request();
+			return;
+		}
 		// With something held, a tap anywhere else (the object included) puts it back.
 		if (held) host?.onTap(null);
 		else if (control) {
@@ -818,7 +839,7 @@ function createShelf() {
 		const over = held ? (item === held ? item : undefined) : item;
 		// The pointer is a hand over what a tap would do something with. With something held, a tap
 		// anywhere puts it back, so there the hand is kept for a link printed on it.
-		canvas.style.cursor = (held ? linkAt(hit) : item || controlAt(hit)) ? 'pointer' : '';
+		canvas.style.cursor = (held ? linkAt(hit) || pressAt(hit) : item || controlAt(hit)) ? 'pointer' : '';
 		if (over !== hovered) {
 			hovered = over;
 			request();

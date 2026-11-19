@@ -124,6 +124,44 @@
 			>Read “{article.headline}” at the {article.source.name} →</a
 		>
 	{/if}
+	{#if entry.manual}
+		{@const manual = entry.manual}
+		<article class="unseen">
+			<h2>{manual.title}: {manual.kind}</h2>
+			<p>{manual.tagline}</p>
+			{#each manual.pages as part}
+				<h3>{part.section}: {part.headline}</h3>
+				{#each part.blocks as block}
+					{#if block.kind === 'text'}
+						<p>{block.text}</p>
+					{:else if block.kind === 'figure'}
+						<p>Picture: {block.figure.caption}.</p>
+					{:else if block.kind === 'pair'}
+						{#each block.figures as figure}<p>Picture: {figure.caption}.</p>{/each}
+					{:else if block.kind === 'steps'}
+						<ol>
+							{#each block.steps as step}<li>{step.label}. {step.text}</li>{/each}
+						</ol>
+					{:else if block.kind === 'note'}
+						<p>{block.note.label}: {block.note.text}</p>
+					{:else if block.kind === 'call'}
+						<p>{block.over} {manual.site.name}. {block.under}</p>
+					{:else}
+						{@const points = block.kind === 'rows' ? block.rows : block.kind === 'columns' ? block.columns : block.list}
+						<dl>
+							{#each points as point}
+								<dt>{point.label}</dt>
+								<dd>{point.text}</dd>
+							{/each}
+						</dl>
+					{/if}
+				{/each}
+			{/each}
+		</article>
+		<a class="way-out third" href={manual.site.href} target="_blank" rel="noopener noreferrer"
+			>Go to {manual.site.name} →</a
+		>
+	{/if}
 {/each}
 
 <style>
@@ -191,5 +229,9 @@
 	/* Under the first, when both could show. */
 	.second {
 		top: 3.75rem;
+	}
+
+	.third {
+		top: 6.75rem;
 	}
 </style>
