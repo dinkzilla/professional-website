@@ -32,6 +32,8 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import frauncesItalic from '@fontsource-variable/fraunces/files/fraunces-latin-wght-italic.woff2?url';
+import fraunces from '@fontsource-variable/fraunces/files/fraunces-latin-opsz-normal.woff2?url';
 import monoton from '@fontsource/monoton/files/monoton-latin-400-normal.woff2?url';
 import skullShade from '#lib/assets/models/skull-ao.webp';
 import skullNormal from '#lib/assets/models/skull-normal.webp';
@@ -119,6 +121,16 @@ export interface Control {
  * What an object that does something by itself asks of the scene. It is kept in the userData.works
  * of the group its builder returns.
  */
+/**
+ * Somewhere on a part's printed face that is a link, as the share of the way across it and up it.
+ * It is kept in the part's userData.links, where the scene finds it under the pointer.
+ */
+export interface Link {
+	href: string;
+	u: [number, number];
+	v: [number, number];
+}
+
 export interface Works {
 	/**
 	 * The scene has been put on a page. `redraw` has it drawn again, because the object has
@@ -1023,7 +1035,9 @@ function printed(canvas: HTMLCanvasElement) {
 }
 
 const INK = '#22211f';
-const SERIF = `Georgia, 'Times New Roman', serif`;
+// The face the clipping is set in, once fetched (see loadPrinting), and what stands in for it.
+const NEWS_FACE = 'Clipping Fraunces';
+const SERIF = `'${NEWS_FACE}', Georgia, 'Times New Roman', serif`;
 
 /** `text` broken into lines of words no wider than `width`, in the font that is set. */
 function lines(c: CanvasRenderingContext2D, text: string, width: number, indent = 0) {
@@ -1047,43 +1061,213 @@ function lines(c: CanvasRenderingContext2D, text: string, width: number, indent 
 }
 
 /**
- * The side of the clipping that was cut out to be kept: the article's headline, its photograph
- * and as much of its opening as there is paper for, in two columns.
+ * `text` broken into as few lines as `lines` makes of it, but of about the same length, so that
+ * no word is left on a line by itself.
+ */
+function evenLines(c: CanvasRenderingContext2D, text: string, width: number) {
+	let out = lines(c, text, width);
+	for (let w = width; w > width / 2; w -= width / 64) {
+		const narrower = lines(c, text, w);
+		if (narrower.length > out.length) break;
+		out = narrower;
+	}
+	return out;
+}
+
+/**
+ * `text` broken into lines that are to be spread to `width`, all but the last. The breaks are the
+ * ones that leave the spaces nearest their own size over the whole paragraph, which filling each
+ * line as it comes does not: that sets a tight line and then a gappy one.
+ */
+function spreadLines(c: CanvasRenderingContext2D, text: string, width: number, indent = 0) {
+	const words = text.split(' ');
+	const wide = words.map((word) => c.measureText(word).width);
+	const space = c.measureText(' ').width;
+	// From each word, the least that setting the rest costs, and where its line ends to do so.
+	const cost = words.map(() => Infinity).concat(0);
+	const end = words.map(() => words.length);
+	for (let from = words.length - 1; from >= 0; from--) {
+		const room = width - (from ? 0 : indent);
+		let taken = 0;
+		for (let to = from + 1; to <= words.length; to++) {
+			taken += wide[to - 1];
+			const gaps = to - from - 1;
+			// How many times its own size each space would be.
+			const each = gaps ? (room - taken) / gaps / space : Infinity;
+			if (gaps && each < 0.82) break;
+			const last = to === words.length;
+			if (last && each < 1) break;
+			// A space squeezed shows sooner than one let out, and the last line is not spread at all.
+			// A word by itself on a line is the last resort.
+			const bad = last ? (gaps ? 0 : 2) : each < 1 ? (4 * (1 - each)) ** 2 : Math.min(1000, (each - 1) ** 2);
+			if (bad + cost[to] < cost[from]) [cost[from], end[from]] = [bad + cost[to], to];
+		}
+	}
+	const out: string[][] = [];
+	for (let from = 0; from < words.length; from = end[from]) out.push(words.slice(from, end[from]));
+	return out;
+}
+
+/**
+ * The side of the clipping that was cut out to be kept: the article's headline over what it is
+ * about and whose it is, its photograph, and as much of its opening as there is paper for, in two
+ * columns, down to the foot.
  */
 function clippingFront(article: Article) {
 	const { canvas, c, W, H } = newsprint(false);
-	const edge = W * 0.055;
+	const edge = W * 0.06;
 	const wide = W - 2 * edge;
+	const hair = Math.max(1.5, W * 0.0018);
 	c.fillStyle = INK;
 	c.textBaseline = 'alphabetic';
+	const rule = (at: number, thick = hair) => c.fillRect(edge, at, wide, thick);
 
-	// The headline, as large as fits across.
-	c.font = `900 100px ${SERIF}`;
-	const head = Math.min((100 * wide) / c.measureText(article.headline).width, W * 0.12);
-	c.font = `900 ${head}px ${SERIF}`;
-	let y = edge * 0.7 + head * 0.8;
-	c.fillText(article.headline, edge, y);
-	y += head * 0.3;
-	c.fillRect(edge, y, wide, W * 0.006);
-	y += W * 0.006;
-
-	const stand = W * 0.036;
-	c.font = `italic 600 ${stand}px ${SERIF}`;
-	for (const line of lines(c, article.standfirst, wide)) {
-		y += stand * 1.25;
+	// The headline, under the rule that parted it from the story above: as large as goes on two
+	// lines, and on more only if that would make it small. Its lines are the same length.
+	let y = edge * 0.62;
+	rule(y, W * 0.007);
+	y += W * 0.007 + W * 0.012;
+	let head = W * 0.125;
+	const heading = () => {
+		c.font = `900 ${head}px ${SERIF}`;
+		return lines(c, article.headline, wide);
+	};
+	while (head > W * 0.05 && (heading().length > 2 || c.measureText(article.headline).width > wide * 1.96)) head -= 1;
+	heading();
+	for (const line of evenLines(c, article.headline, wide)) {
+		y += head * 1.08;
 		c.fillText(line.join(' '), edge, y);
 	}
-	y += stand * 0.55;
-	const credit = W * 0.019;
-	c.font = `700 ${credit}px system-ui, sans-serif`;
-	c.letterSpacing = `${credit * 0.12}px`;
-	y += credit;
-	c.fillText(article.source.name.toUpperCase(), edge, y);
-	c.letterSpacing = '0px';
-	y += credit * 0.8;
 
-	// The photograph, across both columns, in the one ink the paper is printed with.
-	const photo = { w: wide, h: (wide * 2) / 3 };
+	// Under it, what the article is about.
+	const stand = W * 0.0325;
+	c.font = `italic 400 ${stand}px ${SERIF}`;
+	y += stand * 0.5;
+	for (const line of evenLines(c, article.standfirst, wide)) {
+		y += stand * 1.27;
+		c.fillText(line.join(' '), edge, y);
+	}
+
+	// Between two fine rules, who wrote it and whose it is, and at the far end the day it came
+	// out: whichever of them there are, in capitals small enough to go on the one line.
+	const credits = [article.byline, article.source.name].flatMap((each) => (each ? [each.toUpperCase()] : []));
+	const dated = article.date ?? '';
+	const apart = 1.6; // between one credit and the next, in ems
+	let credit = W * 0.0175;
+	const credited = () => {
+		c.letterSpacing = `${credit * 0.14}px`;
+		return credits.concat(dated).reduce((sum, each, n) => {
+			c.font = `${n ? 500 : 800} ${credit}px ${SERIF}`;
+			return sum + c.measureText(each).width + (each && n ? credit * apart : 0);
+		}, 0);
+	};
+	while (credited() > wide && credit > W * 0.012) credit -= 0.25;
+	y += stand * 0.75;
+	rule(y);
+	y += credit * 2;
+	let x = edge;
+	credits.forEach((each, n) => {
+		c.font = `${n ? 500 : 800} ${credit}px ${SERIF}`;
+		c.fillText(each, x, y);
+		x += c.measureText(each).width + credit * apart;
+		// A stroke between one and the next.
+		if (n < credits.length - 1) c.fillRect(x - credit * (apart / 2 + 0.07), y - credit * 0.8, hair, credit * 0.95);
+	});
+	// The last letter's spacing is not left hanging over the margin.
+	c.fillText(dated, edge + wide - c.measureText(dated).width + credit * 0.14, y);
+	c.letterSpacing = '0px';
+	y += credit * 1.1;
+	rule(y);
+	y += W * 0.02;
+
+	// The article is set first, though it is printed last, since the photograph gets whatever
+	// depth the type leaves. Two columns on the one set of baselines, the same length or the first
+	// a line longer. The last line is the way to the rest of it.
+	const gutter = W * 0.046;
+	const column = (wide - gutter) / 2;
+	const foot = H - edge * 0.72;
+	const small = W * 0.0205;
+	const onward = 'Continue reading on DMNS’s website…';
+	// Its paragraphs in order, each with the heading it comes under, if it is the first to.
+	const blocks = article.sections.flatMap((section, at) =>
+		section.paragraphs.map((text, i) => ({
+			text,
+			heading: i ? undefined : section.heading,
+			// Every paragraph but the first of all and the first under a heading is indented.
+			indented: i > 0 || (at > 0 && !section.heading)
+		}))
+	);
+	type Line =
+		| { words: string[]; indent: number; full: boolean; opens: boolean }
+		| { heading: string }
+		| { onward: true };
+	// The first `count` paragraphs in type of this size.
+	const set = (size: number, count: number) => {
+		c.font = `${size}px ${SERIF}`;
+		const all: Line[] = [];
+		const space = c.measureText(' ').width;
+		// How gappy it comes out: over all the lines that are spread, how far past half as wide
+		// again their spaces are.
+		let gappy = 0;
+		for (const block of blocks.slice(0, count)) {
+			if (block.heading) all.push({ heading: block.heading });
+			const indent = block.indented ? size * 1.1 : 0;
+			const broken = spreadLines(c, block.text, column, indent);
+			broken.forEach((words, n) => {
+				const full = n < broken.length - 1;
+				all.push({ words, indent: n ? 0 : indent, full, opens: n === 0 });
+				const spare = column - (n ? 0 : indent) - c.measureText(words.join('')).width;
+				if (full) gappy += Math.max(0, spare / Math.max(1, words.length - 1) / space - 1.5) ** 2;
+			});
+		}
+		all.push({ onward: true });
+		// How many lines of the column each takes: a heading has a line of room over it, unless it is
+		// the first thing in its column, and the last line has half a line over it.
+		const tall = (line: Line, first: boolean) => ('heading' in line ? (first ? 1 : 2) : 'onward' in line ? 1.5 : 1);
+		const run = (from: number, to: number) =>
+			all.slice(from, to).reduce((sum, line, n) => sum + tall(line, n === 0), 0);
+		// The second column starts wherever leaves the two nearest the same length. Not straight
+		// after a heading, which is not left at the foot of a column with nothing under it, and not,
+		// if it can be helped, one line into a paragraph or one line short of its end.
+		let turn = 1;
+		let off = Infinity;
+		for (let n = 1; n < all.length; n++) {
+			const [before, after] = [all[n - 1], all[n]];
+			if ('heading' in before) continue;
+			const orphan = 'words' in before && before.opens && before.full;
+			const widow = 'words' in after && !after.opens && !after.full;
+			const by = Math.abs(run(0, n) - run(n, all.length) - 0.25) + (orphan || widow ? 1.5 : 0);
+			if (by < off) [turn, off] = [n, by];
+		}
+		return { size, count, all, tall, turn, gappy, deep: Math.max(run(0, turn), run(turn, all.length)) };
+	};
+	// The photograph is all of the picture, or cropped a little in height. As many whole paragraphs
+	// are printed as leave it that much room in the smallest type that reads well. Then the type is
+	// as much larger as still lets those on, short of too large for so narrow a column, or a shade
+	// smaller if the words happen to fall better so, and the lines are let out to take up what is
+	// over.
+	const photo = { w: wide, h: 0 };
+	const under = small * 2.8; // what the caption takes, under the photograph
+	const most = (wide * 2) / 3;
+	const least = wide / 1.8;
+	const fits = (type: ReturnType<typeof set>) => y + least + under + type.size * 1.3 * type.deep <= foot;
+	const text = { least: W * 0.0225, most: W * 0.026 };
+	let type = set(text.least, blocks.length);
+	while (!fits(type) && type.count > 1) type = set(text.least, type.count - 1);
+	for (let larger = set(type.size + 0.25, type.count); fits(larger) && larger.size <= text.most; ) {
+		type = larger;
+		larger = set(type.size + 0.25, type.count);
+	}
+	const largest = type.size;
+	for (let n = 1; n <= 4 && largest - 0.25 * n >= text.least; n++) {
+		const smaller = set(largest - 0.25 * n, type.count);
+		if (smaller.gappy < type.gappy - 0.5) type = smaller;
+	}
+	const { size, all, tall, turn, deep } = type;
+	photo.h = Math.max(least, Math.min(most, foot - y - under - size * 1.36 * deep));
+	const first = y + photo.h + under + size * 0.95;
+	const leading = Math.max(size * 1.2, Math.min(size * 1.42, (foot - first) / (deep - 1)));
+
 	if (clippingPhoto) {
 		const from = clippingPhoto;
 		const scale = Math.max(photo.w / from.naturalWidth, photo.h / from.naturalHeight);
@@ -1091,11 +1275,11 @@ function clippingFront(article: Article) {
 		c.beginPath();
 		c.rect(edge, y, photo.w, photo.h);
 		c.clip();
-		c.filter = 'grayscale(1) contrast(1.15)';
+		// Cropped, it keeps a little more of its foot than of its top, where the people are.
 		c.drawImage(
 			from,
 			edge + (photo.w - from.naturalWidth * scale) / 2,
-			y + (photo.h - from.naturalHeight * scale) / 2,
+			y + (photo.h - from.naturalHeight * scale) * 0.4,
 			from.naturalWidth * scale,
 			from.naturalHeight * scale
 		);
@@ -1112,75 +1296,71 @@ function clippingFront(article: Article) {
 		c.ellipse(edge + photo.w * 0.3, y + photo.h, photo.w * 0.45, photo.h * 0.7, 0, Math.PI, 0);
 		c.fill();
 	}
+	c.strokeStyle = 'rgb(34 33 31 / 0.55)';
+	c.lineWidth = 1;
+	c.strokeRect(edge + 0.5, y + 0.5, photo.w - 1, photo.h - 1);
 	y += photo.h;
 	c.fillStyle = INK;
-	const small = W * 0.021;
 	c.font = `italic ${small}px ${SERIF}`;
-	y += small * 1.5;
-	c.fillText(article.caption, edge, y);
-	y += small * 1.1;
+	c.fillText(article.caption, edge, y + small * 1.3);
 
-	// The article, set as large as lets all of it on. If even the smallest type does not, it runs
-	// off the foot of the clipping, which was cut where it was cut.
-	const gutter = W * 0.04;
-	const column = (wide - gutter) / 2;
-	const foot = H - edge * 0.6;
-	type Line = { words: string[]; indent: number; full: boolean } | { heading: string };
-	const set = (size: number) => {
-		const leading = size * 1.28;
-		c.font = `${size}px ${SERIF}`;
-		const all: Line[] = [];
-		article.sections.forEach((section, at) => {
-			if (section.heading) all.push({ heading: section.heading });
-			section.paragraphs.forEach((paragraph, i) => {
-				// Every paragraph but the first under a heading is indented.
-				const indent = i || (at && !section.heading) ? size : 0;
-				const broken = lines(c, paragraph, column, indent);
-				broken.forEach((words, n) => all.push({ words, indent: n ? 0 : indent, full: n < broken.length - 1 }));
-			});
-		});
-		const height = all.reduce((sum, line) => sum + ('heading' in line ? leading * 1.9 : leading), 0);
-		return { size, leading, all, fits: height <= 2 * (foot - y) - leading * 4 };
-	};
-	let type = set(W * 0.03);
-	while (!type.fits && type.size > W * 0.022) type = set(type.size - 1);
-	const { size, leading, all } = type;
-	let at = 0;
-	let top = y + leading;
-	for (const line of all) {
-		const tall = 'heading' in line ? leading * 1.9 : leading;
-		// A heading is not left at the foot of a column with nothing under it.
-		const needs = 'heading' in line ? tall + leading : tall;
-		if (top + needs - leading > foot && at === 0) {
-			at = 1;
-			top = y + leading;
-		}
+	// A fine rule down the gutter, as deep as the columns.
+	c.fillRect(edge + column + gutter / 2 - hair / 2, first - size * 0.72, hair, (deep - 1) * leading + size * 0.94);
+
+	let link: Link | undefined;
+	let top = first;
+	all.forEach((line, n) => {
+		const at = n < turn ? 0 : 1;
+		const opens = n === 0 || n === turn;
+		if (n === turn) top = first;
 		const x = edge + at * (column + gutter);
+		const rows = tall(line, opens);
+		// Each sits on the last of the lines it takes.
+		const base = top + (rows - 1) * leading;
 		if ('heading' in line) {
-			c.font = `700 ${size * 0.92}px system-ui, sans-serif`;
-			c.fillText(line.heading.toUpperCase(), x, top + leading * 0.75);
-			c.font = `${size}px ${SERIF}`;
+			c.font = `800 ${size * 0.78}px ${SERIF}`;
+			c.letterSpacing = `${size * 0.09}px`;
+			c.fillText(line.heading.toUpperCase(), x, base);
+			c.letterSpacing = '0px';
+		} else if ('onward' in line) {
+			// Underlined, in the blue of a link, and no wider than the column.
+			c.font = `italic 500 ${size}px ${SERIF}`;
+			const fitted = Math.min(size, (size * column) / c.measureText(onward).width);
+			c.font = `italic 500 ${fitted}px ${SERIF}`;
+			const across = c.measureText(onward).width;
+			c.fillStyle = '#1d3f7a';
+			c.fillText(onward, x, base);
+			c.fillRect(x, base + fitted * 0.16, across, Math.max(1.5, fitted * 0.065));
+			c.fillStyle = INK;
+			// Where it is on the sheet, with some room round it for a finger.
+			const room = fitted * 0.7;
+			link = {
+				href: article.source.href,
+				u: [(x - room) / W, (x + across + room) / W],
+				v: [1 - (base + room) / H, 1 - (base - fitted - room) / H]
+			};
 		} else {
 			// Justified: the spare room in a line is shared out between its words.
+			c.font = `${size}px ${SERIF}`;
 			const words = line.words;
 			const taken = words.reduce((sum, word) => sum + c.measureText(word).width, 0);
-			const between =
-				line.full && words.length > 1 ? (column - line.indent - taken) / (words.length - 1) : c.measureText(' ').width;
+			const space = c.measureText(' ').width;
+			const between = line.full && words.length > 1 ? (column - line.indent - taken) / (words.length - 1) : space;
+			// A line that would be too gappy has some of it put between its letters instead.
+			const letters = words.join('').length;
+			const track = Math.min(size * 0.035, (Math.max(0, between - space * 2) * (words.length - 1)) / letters);
+			c.letterSpacing = `${track}px`;
 			let wx = x + line.indent;
 			for (const word of words) {
-				c.fillText(word, wx, top);
-				wx += c.measureText(word).width + between;
+				c.fillText(word, wx, base);
+				wx += c.measureText(word).width + between - (track * letters) / (words.length - 1 || 1);
 			}
+			c.letterSpacing = '0px';
 		}
-		top += tall;
-	}
-	// Along the foot, whose it is and where the rest of it is to be read.
-	const note = W * 0.017;
-	c.font = `600 ${note}px system-ui, sans-serif`;
-	const address = article.source.href.replace(/^https?:\/\/(www\.)?|\/$/g, '');
-	c.fillText(`An excerpt. The whole article is at ${address}`, edge, H - edge * 0.42);
+		top += rows * leading;
+	});
 	creased(c, W, H);
-	return printed(canvas);
+	return { map: printed(canvas), link };
 }
 
 /**
@@ -1267,7 +1447,7 @@ function clipping() {
 	const g = new Group();
 	// The paper gives off a little light of its own once it is out of the skull (see `lay`): it is
 	// held up nearer the camera than the light on what is held reaches, and it has to be legible.
-	const read = clippingFront(article);
+	const { map: read, link } = clippingFront(article);
 	const front = new MeshStandardMaterial({ ...paper, map: read, emissive: 0xffffff, emissiveMap: read, emissiveIntensity: 0 });
 	const inner = mesh(faces[0], front);
 	// Only the back casts a shadow. A shadow is cast by the faces turned away from the light, and
@@ -1331,6 +1511,8 @@ function clipping() {
 			if (u === goal) return false;
 			u = goal > u ? Math.min(1, u + dt / UNROLL_S) : Math.max(0, u - dt / ROLL_UP_S);
 			lay(u);
+			// What is printed as a link is one only once the sheet is flat and can be read.
+			inner.userData.links = u === 1 && link ? [link] : undefined;
 			return u !== goal;
 		}
 	};
@@ -1783,9 +1965,9 @@ const GAME_FACE = 'Monoton';
 let gameLid: HTMLImageElement | undefined;
 
 // The photograph that is printed on the clipping, if it has been saved in the assets as
-// clipping-dig-site: without it, a grey block stands in for it.
+// dig-site: without it, a grey block stands in for it.
 const digSite = Object.values(
-	import.meta.glob<string>('../assets/clipping-dig-site.{jpg,jpeg,png,webp}', {
+	import.meta.glob<string>('../assets/dig-site.{jpg,jpeg,png,webp}', {
 		eager: true,
 		query: '?url',
 		import: 'default'
@@ -1800,12 +1982,18 @@ let clippingPhoto: HTMLImageElement | undefined;
  */
 export async function loadPrinting() {
 	const face = new FontFace(GAME_FACE, `url(${monoton})`);
+	// Every weight of the clipping's face is in the one file, and its italic in another.
+	const news = [
+		new FontFace(NEWS_FACE, `url(${fraunces})`, { weight: '100 900' }),
+		new FontFace(NEWS_FACE, `url(${frauncesItalic})`, { weight: '100 900', style: 'italic' })
+	];
 	const lid = new Image();
 	lid.src = mothershipLid;
 	const photo = new Image();
 	if (digSite) photo.src = digSite;
 	await Promise.allSettled([
 		face.load().then((loaded) => document.fonts.add(loaded)),
+		...news.map((each) => each.load().then((loaded) => document.fonts.add(loaded))),
 		lid.decode().then(() => (gameLid = lid)),
 		digSite ? photo.decode().then(() => (clippingPhoto = photo)) : undefined
 	]);

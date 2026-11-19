@@ -65,6 +65,7 @@ import {
 	WALL,
 	type Control,
 	type Item,
+	type Link,
 	type Works
 } from './items.ts';
 
@@ -103,6 +104,7 @@ const MARGIN = 44; // px kept clear above and below the unit
 // and its near bottom corner hangs low in perspective, so true centre looks too low.
 const RAISE = 32;
 const GUTTER = 28; // px kept clear either side
+const PAGE_EDGE = 6; // px kept clear either side of a page held up to be read
 const FIT_SHELVES = 4; // the unit is sized so this many shelves fit the window's height...
 const MIN_PPU = 150; // ...unless that would make it narrower than this many px per unit
 const OFF_CENTRE = 0.12; // in wide windows the unit sits this share of the width left of centre
@@ -565,10 +567,11 @@ function createShelf() {
 
 	/**
 	 * Where something to read is shown, having come out of a picked object: in the middle of the
-	 * window too, in front of the object, with the whole of the window to fill.
+	 * window too, in front of the object, with the whole of the window to fill: all of its width
+	 * but a sliver, which is what a page is short of on a phone, and its height less a margin.
 	 */
 	function reading() {
-		return { x: width / 2, y: fit / 2, w: width - 2 * GUTTER, h: fit };
+		return { x: width / 2, y: fit / 2, w: width - 2 * PAGE_EDGE, h: fit * 0.88 };
 	}
 
 	/** Work out an object's held position and attitude: centred on the stage, facing the camera. */
@@ -578,8 +581,8 @@ function createShelf() {
 		const distance = focal / ppu;
 		const room = Math.min(s.w, s.h) * 0.72;
 		const dz = page
-			? // As near as fills its part of the window, all but a margin.
-				Math.max(0.4, focal * Math.max(page.w / (s.w * 0.88), page.h / (s.h * 0.88)))
+			? // As near as fills its part of the window.
+				Math.max(0.3, focal * Math.max(page.w / s.w, page.h / s.h))
 			: Math.min(Math.max((p.size * focal) / room, 1.2), distance * 0.8);
 		const down = s.y - height / 2 + shift; // px below the camera's axis
 		const right = s.x - width / 2 + aside; // px to the right of the camera's axis
@@ -723,6 +726,14 @@ function createShelf() {
 		return held ? undefined : hit?.object.userData.control;
 	}
 
+	/** The link printed on what is held that a press on this would follow. */
+	function linkAt(hit: Intersection | undefined): Link | undefined {
+		const at = hit?.uv;
+		const links: Link[] | undefined = hit?.object.userData.links;
+		if (!held || !at) return;
+		return links?.find((link) => at.x >= link.u[0] && at.x <= link.u[1] && at.y >= link.v[0] && at.y <= link.v[1]);
+	}
+
 	// A press that starts on a part that turns, and how far down the window it had got at the
 	// last click. From there it takes another CLICK_PX either way for the next one, so a finger
 	// resting where one click came does not rock between two.
@@ -761,7 +772,13 @@ function createShelf() {
 		const hit = under(event);
 		const control = controlAt(hit);
 		const item = itemAt(hit);
-		// With something held, a tap anywhere (the object included) puts it back.
+		// A tap on a link printed on what is held follows it, and leaves the object out.
+		const link = linkAt(hit);
+		if (link) {
+			window.open(link.href, '_blank', 'noopener,noreferrer');
+			return;
+		}
+		// With something held, a tap anywhere else (the object included) puts it back.
 		if (held) host?.onTap(null);
 		else if (control) {
 			// A tap on a working part works it, where it is.
@@ -787,7 +804,9 @@ function createShelf() {
 		const item = itemAt(hit);
 		// Whatever a tap would pick up, or do something else with, leans out under the pointer.
 		const over = held ? (item === held ? item : undefined) : item;
-		canvas.style.cursor = held || item || controlAt(hit) ? 'pointer' : '';
+		// The pointer is a hand over what a tap would do something with. With something held, a tap
+		// anywhere puts it back, so there the hand is kept for a link printed on it.
+		canvas.style.cursor = (held ? linkAt(hit) : item || controlAt(hit)) ? 'pointer' : '';
 		if (over !== hovered) {
 			hovered = over;
 			request();
