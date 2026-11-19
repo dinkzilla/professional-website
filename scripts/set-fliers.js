@@ -4,7 +4,7 @@
 //   npm run fliers -- 1.jpg 2.png 3.webp 4.jpg 5.jpg 6.jpg 7.png
 //
 // The board shows whatever pictures are in src/lib/assets/fliers, in the order of their names
-// (see flierArt in src/lib/shelf/items.ts). This replaces all of them: each picture given is
+// (see flierArt in src/lib/shelf/objects/fliers.ts). This replaces all of them: each picture given is
 // made no larger than a flier needs, saved there as 1.webp to 7.webp, and what was there before
 // is removed. Nothing is changed unless every picture can be read.
 //
@@ -29,13 +29,13 @@ const LONGEST = 1600;
 // A picture smaller than this on its longer side is too small to read once it fills a window.
 const SMALLEST = 900;
 
-// The board, in the room's units (see PINBOARD in items.ts), and what a flier is kept inside.
+// The board, in the room's units (see PINBOARD in rack.ts), and what a flier is kept inside.
 const BOARD = { left: -1.7, right: 0, bottom: 1.21, top: 2.4 };
 // The board's frame comes this far in over the cork and stands further off the wall than a
 // flier does, so a flier that reached it would go into it; and a little more than that is kept.
 const FRAME = 0.025;
 const EDGE = FRAME + 0.02;
-// A flier turns this far on its pin under the pointer, at most (see `swing` in items.ts), which
+// A flier turns this far on its pin under the pointer, at most (see `swing` in types.ts), which
 // swings its foot out to the side: room is kept for that too.
 const SWING = 0.1;
 // The rack and the tv on it stand in front of the board's right end: nothing is pinned behind
@@ -53,7 +53,7 @@ const OVER = 0.008;
 // are pinned top and foot and stay still: sheets moving against each other went through each
 // other, or looked wrong kept from it (2026-11-19).
 const WAVING = 3;
-// A pin is this far in from the edge of its sheet (as in items.ts), and wants this much clear.
+// A pin is this far in from the edge of its sheet (as in objects/fliers.ts), and wants this much clear.
 const PIN_DOWN = 0.022;
 const PIN_CLEAR = 0.03;
 

@@ -4,7 +4,7 @@
 //
 // The files play in video elements that are never put on the page. Each new frame of the one on
 // screen is copied to a canvas, which is the picture sent down the cable: the scene uses it as a
-// texture on the tv (see tv in #lib/shelf/items.ts).
+// texture on the tv (see tv in #lib/shelf/objects/video.ts).
 //
 // A browser fetches a file where mpv has it to hand, so a file loaded in place of another is
 // swapped in when its first frame is ready, and until then the picture stays as it was.

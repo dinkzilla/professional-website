@@ -47,7 +47,7 @@ const LEAD = 0.011; // the radius of a mains lead
 const PLUG = { w: 0.07, h: 0.075, d: 0.052, relief: 0.04 }; // a plug's body, and the sleeve the lead leaves it by
 const PLUG_OUT = PLUG.h + PLUG.relief - 0.004; // how far from a socket's face the lead starts
 
-// The amp, as it stands in the room (see items.ts): its middle, and its size.
+// The amp, as it stands in the room (see rack.ts): its middle, and its size.
 const AMP_BOX = { x: -1.22, z: 0.31, w: 1.2, h: 1, d: 0.5 };
 const STRIP = { x: 0.9, z: 0.86, yaw: -0.35, w: 0.13, h: 0.065, l: 0.62 };
 // Where along the strip its sockets are, from the end its cord is at.
@@ -136,14 +136,14 @@ export function powerStrip(outlet: Vector3) {
 		strip.add(p);
 		return from(strip, 0, STRIP.h + PLUG_OUT, z);
 	});
-	const WART = { w: 0.135, h: 0.075, d: 0.088, off: -0.022, sleeve: 0.05 };
+	const WART = { w: 0.135, h: 0.075, d: 0.088, off: -0.022, sleeve: 0.017 };
 	const wart = new Mesh(new RoundedBoxGeometry(WART.w, WART.h, WART.d, 3, 0.012), moulded);
 	wart.position.set(WART.off, STRIP.h + WART.h / 2 - 0.002, SOCKETS[2]);
 	strip.add(wart);
 	// The way its lead leaves it, and where: from the middle of its side, the sleeve first.
 	const slanting = new Vector3(-1, 0, 0); // straight out of that side
 	const exit = new Vector3(WART.off - WART.w / 2 + 0.004, STRIP.h + 0.032, SOCKETS[2]);
-	const relief = new Mesh(new CylinderGeometry(0.019, LEAD + 0.003, WART.sleeve, 16), moulded);
+	const relief = new Mesh(new CylinderGeometry(LEAD + 0.003, 0.017, WART.sleeve, 16), moulded); // tapering outward
 	relief.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), slanting);
 	relief.position.copy(exit).addScaledVector(slanting, WART.sleeve / 2);
 	strip.add(relief);
@@ -219,7 +219,7 @@ export function powerStrip(outlet: Vector3) {
 	// The amp's lead: off the strip to the left, clear of the empty socket, down onto the floor in
 	// front of the rack's leg, and along the
 	// floor in front of the rack, on the viewer's side of the cable that runs from the cassette
-	// player to the amp (see items.ts), to a power brick on the floor in front of the amp.
+	// player to the amp (see objects/cassette.ts), to a power brick on the floor in front of the amp.
 	const brick = new Group();
 	brick.position.set(-1.3, 0, 0.98);
 	brick.rotation.y = -0.3;
@@ -330,7 +330,7 @@ function ribbon(points: Point[], width: number) {
 	return new Mesh(strip, ribbonMaterial());
 }
 
-// As the mounted gear and the tv are built (see items.ts): how far behind the front of its panel
+// As the mounted gear and the tv are built (see objects/): how far behind the front of its panel
 // the back of each case is, and where under the hump on the tv's back its power goes in, from the
 // middle of its foot.
 const CASE = { video: 0.312, cassette: 0.512 };

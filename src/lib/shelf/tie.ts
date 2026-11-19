@@ -1,4 +1,4 @@
-// The tie on the hook by the door (placed in items.ts).
+// The tie on the hook by the door.
 
 import {
 	BufferGeometry,
@@ -17,7 +17,8 @@ import {
 	type Material,
 	type Object3D
 } from 'three';
-import type { Works } from './items.ts';
+import { HOOK, WALL } from './rack.ts';
+import type { Placement, Works } from './types.ts';
 
 function mesh(geometry: BufferGeometry, material: Material | Material[]) {
 	const m = new Mesh(geometry, material);
@@ -797,3 +798,5 @@ export function tie() {
 	g.userData.works = blown(wideBlade, pose);
 	return g;
 }
+
+export const tiePlacement: Placement = { id: 'tie', shelf: WALL, x: HOOK.x, up: HOOK.y, lean: -0.03, link: true, out: 0.03, build: tie };

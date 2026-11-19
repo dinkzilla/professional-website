@@ -1,4 +1,4 @@
-// The printing of the manual that is in the game's box (see items.ts, which makes the booklet):
+// The printing of the manual that is in the game's box (see objects/mothersheet.ts, which makes the booklet):
 // its cover, in the box's own black and gold, and its pages, which are white, as the site they are
 // about is. What the pages say is in the catalogue. Every page sends its reader to the site: in
 // what it says, and in a black band along its foot, and each mention of the address is a link.
@@ -7,7 +7,7 @@ import manrope from '@fontsource-variable/manrope/files/manrope-latin-wght-norma
 import martian from '@fontsource-variable/martian-mono/files/martian-mono-latin-wght-normal.woff2?url';
 import lidArt from '#lib/assets/mothership-lid.jpg';
 import type { Block, Figure, Manual, ManualPage, Point } from './catalogue.ts';
-import type { Link } from './items.ts';
+import type { Link } from './types.ts';
 
 /** A page's proportions, and how many px it is printed at. */
 export const PAGE = { W: 1200, H: 1680 };

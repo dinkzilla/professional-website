@@ -133,7 +133,7 @@ export interface Host {
 	onLayout: (layout: Layout) => void;
 	/**
 	 * An object was tapped (its id), or the space around a held object was (null). The page has
-	 * the object picked up, unless it is one that does something else (`link` in items.ts).
+	 * the object picked up, unless it is one that does something else (`link` in types.ts).
 	 */
 	onTap: (id: string | null) => void;
 }

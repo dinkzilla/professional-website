@@ -4,7 +4,7 @@
 // library's own, so a line holds 21 characters and anything longer runs off the right-hand edge.
 //
 // What is drawn is kept on a canvas, a square of canvas pixels to each of the display's, which the
-// scene uses as a texture (see videoModule in #lib/shelf/items.ts).
+// scene uses as a texture (see videoModule in #lib/shelf/objects/video.ts).
 
 export const WIDTH = 128;
 export const HEIGHT = 32;

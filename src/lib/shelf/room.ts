@@ -15,11 +15,9 @@
 import {
 	BackSide,
 	BoxGeometry,
-	CapsuleGeometry,
 	CanvasTexture,
 	CircleGeometry,
 	Color,
-	ConeGeometry,
 	CatmullRomCurve3,
 	CylinderGeometry,
 	DoubleSide,
@@ -45,6 +43,7 @@ import {
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { AMP, AMP_JACK, braided, HOOK, PINBOARD } from './items.ts';
 import { powerStrip } from './wiring.ts';
+import { dominic } from './objects/dominic.ts';
 import { buildRod, ROD } from './rod.ts';
 
 /**
@@ -204,7 +203,7 @@ export function buildRoom(rackHeight: number) {
 		box(0.02, 0.14, 0.02, iron, x - SASH.d / 2 - 0.01, windowY, from + SASH.rail / 2);
 	}
 
-	// The board the fliers are pinned to (the fliers themselves are in items.ts, since they can be
+	// The board the fliers are pinned to (the fliers themselves are in objects/fliers.ts, since they can be
 	// taken down): cork in a frame.
 	const boardW = PINBOARD.right - PINBOARD.left;
 	const boardH = PINBOARD.top - PINBOARD.bottom;
@@ -221,7 +220,7 @@ export function buildRoom(rackHeight: number) {
 	for (const y of [PINBOARD.bottom, PINBOARD.top]) box(boardW + 0.05, 0.05, 0.05, trim, boardX, y + lift, 0.025);
 
 	// The hooks by the door: three pegs with lips, on a rail. The tie hangs on the middle one (the
-	// tie is in items.ts); the other two are empty.
+	// tie is in tie.ts); the other two are empty.
 	const SPACING = 0.13;
 	box(2 * SPACING + 0.1, 0.09, 0.012, iron, HOOK.x, HOOK.y - 0.03, 0.006);
 	for (const side of [-1, 0, 1]) {
@@ -525,44 +524,9 @@ export function buildRoom(rackHeight: number) {
 	helmet.rotation.y = 0.55;
 	group.add(helmet);
 
-	// A second cat, asleep on the bench next to the rope: grey and white and a little fat, flat out on his side with
-	// his belly toward the room and his legs anywhere. Built lying along x with his head at +x and
-	// his belly toward +z, then turned so that the belly faces the room, and mirrored end for end
-	// so that his head is toward the rope.
-	const fur = new MeshStandardMaterial({ color: 0x8b8e94, roughness: 0.95 });
-	const snow = new MeshStandardMaterial({ color: 0xf1efe9, roughness: 0.95 });
-	const cat = new Group();
-	const blob = (r: number, material: Material, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1) => {
-		const m = new Mesh(new SphereGeometry(r, 24, 16), material);
-		m.position.set(x, y, z);
-		m.scale.set(sx, sy, sz);
-		cat.add(m);
-	};
-	/** A leg or tail from this point, this long, pointing this way. */
-	const limb = (r: number, length: number, material: Material, from: Vector3, toward: Vector3) => {
-		const m = new Mesh(new CapsuleGeometry(r, length, 4, 10), material);
-		const way = toward.clone().normalize();
-		m.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), way);
-		m.position.copy(from).addScaledVector(way, length / 2);
-		cat.add(m);
-	};
-	blob(0.2, fur, 0, 0.2, -0.03, 1.9, 1, 1.15); // his back and sides
-	blob(0.19, snow, -0.02, 0.19, 0.06, 1.65, 0.92, 1.1); // the belly, which is most of him
-	blob(0.13, fur, 0.43, 0.14, 0.03); // head, on the floor
-	blob(0.075, snow, 0.47, 0.12, 0.11, 1, 0.8, 1); // muzzle and chin
-	for (const [x, y] of [
-		[0.5, 0.25],
-		[0.4, 0.27]
-	]) {
-		const ear = new Mesh(new ConeGeometry(0.045, 0.09, 4), fur);
-		ear.position.set(x, y, 0);
-		cat.add(ear);
-	}
-	limb(0.035, 0.2, snow, new Vector3(0.24, 0.24, 0.16), new Vector3(0.5, 0.7, 0.6)); // front legs
-	limb(0.035, 0.22, snow, new Vector3(0.26, 0.07, 0.16), new Vector3(0.6, 0, 0.8));
-	limb(0.04, 0.22, snow, new Vector3(-0.24, 0.26, 0.16), new Vector3(-0.4, 0.75, 0.55)); // hind legs
-	limb(0.04, 0.24, fur, new Vector3(-0.28, 0.07, 0.14), new Vector3(-0.7, 0, 0.7));
-	limb(0.03, 0.34, fur, new Vector3(-0.36, 0.05, -0.06), new Vector3(-0.9, 0, 0.35)); // tail
+	// A second cat, Dominic, asleep on the bench next to the rope (see objects/dominic.ts): turned
+	// so that his belly faces the room, and mirrored end for end so that his head is toward the rope.
+	const cat = dominic();
 	// Built oversize; this brings his head to a little more than the size of the other cat's.
 	cat.scale.set(-0.65, 0.65, 0.65);
 	cat.position.set(benchX + 0.04, benchTop, ROPE.z + 0.58);
@@ -593,7 +557,7 @@ export function buildRoom(rackHeight: number) {
 	group.add(spill);
 
 	// The amp under the board: a combo, with its controls along the top of its front and the
-	// speaker cloth below them. The cable in its input is the cassette player's (see items.ts).
+	// speaker cloth below them. The cable in its input is the cassette player's (see objects/cassette.ts).
 	const tolex = new MeshStandardMaterial({ color: 0x1d1c1f, roughness: 0.85 });
 	const cloth = new MeshStandardMaterial({ color: 0x6b6254, roughness: 1 });
 	const plate = new MeshStandardMaterial({ color: 0xa5a29a, roughness: 0.5 });
