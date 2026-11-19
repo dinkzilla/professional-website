@@ -34,7 +34,7 @@ import {
 	MeshStandardMaterial,
 	Object3D,
 	Path,
-	PCFSoftShadowMap,
+	PCFShadowMap,
 	PerspectiveCamera,
 	Quaternion,
 	Raycaster,
@@ -203,7 +203,9 @@ function createShelf() {
 
 	const renderer = new WebGLRenderer({ canvas, antialias: true });
 	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = PCFSoftShadowMap;
+	// The kind the shaders are compiled for ahead of time (see warm) has to be the kind they are
+	// drawn with, or every one of them is compiled a second time at the first draw.
+	renderer.shadowMap.type = PCFShadowMap;
 	renderer.toneMapping = ACESFilmicToneMapping;
 
 	const scene = new Scene();
@@ -463,14 +465,23 @@ function createShelf() {
 		}
 	}
 
-	/** Take the picture of the room that the tray reflects: from the middle of the rack, without it. */
+	/**
+	 * Do something with the room as the tray reflects it: without the rack, or anything in it. They
+	 * are taken out of the scene, not just hidden, so that nothing is compiled for them either.
+	 */
+	function emptied(work: () => void) {
+		const rack = [unit, ...placed.filter((p) => p.item.shelf >= 0).map((p) => p.group)];
+		scene.remove(...rack);
+		work();
+		scene.add(...rack);
+	}
+
+	/** Take the picture of the room that the tray reflects: from the middle of the rack. */
 	function reflect() {
-		const hidden = [unit, ...placed.filter((p) => p.item.shelf >= 0).map((p) => p.group)];
-		const shown = hidden.map((o) => o.visible);
-		for (const o of hidden) o.visible = false;
-		probe.position.set(0, -unitHeight() / 2, STANDOFF + DEPTH / 2);
-		probe.update(renderer, scene);
-		hidden.forEach((o, i) => (o.visible = shown[i]));
+		emptied(() => {
+			probe.position.set(0, -unitHeight() / 2, STANDOFF + DEPTH / 2);
+			probe.update(renderer, scene);
+		});
 	}
 
 	// --- Layout: window size to camera ---------------------------------------------------------
@@ -888,6 +899,13 @@ function createShelf() {
 		/** Compile the scene's shaders without blocking the page, then draw it once. */
 		async warm() {
 			layout();
+			// The picture the tray reflects is not drawn as the screen is (and is lit by less: what
+			// lights are in the rack are out of it), so whatever is in it needs shaders of its own.
+			// They are started first, and are ready, or nearly, when the screen's are: compiled when
+			// that picture is taken, they would hold everything up one at a time.
+			renderer.setRenderTarget(surroundings);
+			emptied(() => renderer.compile(scene, camera));
+			renderer.setRenderTarget(null);
 			await renderer.compileAsync(scene, camera);
 			// A full draw, which is what stands the objects on their shelves.
 			draw(performance.now());

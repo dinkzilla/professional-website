@@ -2195,8 +2195,16 @@ function flier(index: number, w: number, h: number, x: number, lean: number) {
 	map.anisotropy = 4;
 
 	const g = new Group();
-	// In strips down it, for the paper to bend by.
-	const sheet = mesh(new BoxGeometry(w, h, 0.004, 4, 12, 1), page);
+	// In strips down it, for the paper to bend by. The printing is a sheet of its own, laid on the
+	// paper, so the paper is made without its front: of two faces that close together, bending as
+	// one, a phone cannot always tell which is in front, and the paper showed through in triangles.
+	const stock = new BoxGeometry(w, h, 0.004, 4, 12, 1);
+	const facing = stock.groups[4]; // a box's faces come right, left, top, bottom, front, back
+	const faces = Array.from(stock.index!.array);
+	faces.splice(facing.start, facing.count);
+	stock.setIndex(faces);
+	stock.clearGroups();
+	const sheet = mesh(stock, page);
 	const front = new Mesh(new PlaneGeometry(w, h, 4, 12), new MeshStandardMaterial({ map, roughness: 0.95 }));
 	front.position.z = 0.0025;
 	const PIN = h / 2 - 0.022;
