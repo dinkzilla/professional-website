@@ -223,7 +223,7 @@
 		</ul>
 	</section>
 
-	<p class="personal">
+	<p class="personal" hidden>
 		<PersonalLink class="back">personal stuff</PersonalLink>
 	</p>
 </div>
