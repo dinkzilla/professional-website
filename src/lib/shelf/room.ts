@@ -44,6 +44,8 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { AMP, AMP_JACK, braided, HOOK, PINBOARD } from './items.ts';
+import { powerStrip } from './wiring.ts';
+import { buildRod, ROD } from './rod.ts';
 
 /**
  * Whether the lamp casts shadows (see scene.ts). With it on, everything lit in the room casts and
@@ -339,6 +341,10 @@ export function buildRoom(rackHeight: number) {
 	barrel(CONDUIT.r, outletLeft + FAR, steel, (outletLeft - FAR) / 2, OUTLET.y, CONDUIT.z);
 	barrel(CONDUIT.r + 0.006, 0.05, zinc, outletLeft - 0.025, OUTLET.y, CONDUIT.z);
 	barrel(CONDUIT.r + 0.011, 0.012, zinc, outletLeft - 0.006, OUTLET.y, CONDUIT.z, false, 6);
+	// Plugged into the lower receptacle, a power strip on the floor, and what is plugged into that
+	// (see wiring.ts).
+	const power = powerStrip(new Vector3(OUTLET.x, OUTLET.y - 0.052, coverZ + 0.008));
+	group.add(power.group);
 	// On the other side of the door, a second box of the same kind with the light switch in it.
 	// Its conduit drops to the height the outlet's runs at, turns toward the corner, runs along
 	// the wall to it, turns again round it, and runs on toward the viewer along the side wall,
@@ -563,29 +569,9 @@ export function buildRoom(rackHeight: number) {
 	cat.rotation.y = -Math.PI / 2 + 0.2;
 	group.add(cat);
 
-	// A fly rod stood in the corner, leaning into it, its tip far above the top of the view: a
-	// cork grip with the reel under it, and a long thin blank with line guides along it. Built
-	// upright from its butt, then leant.
-	const rod = new Group();
-	const ROD = 5.4;
-	const along = (m: Mesh, y: number, x = 0) => {
-		m.position.set(x, y, 0);
-		rod.add(m);
-		return m;
-	};
-	const blank = new MeshStandardMaterial({ color: 0x2c4a3a, roughness: 0.4 });
-	const grip = new MeshStandardMaterial({ color: 0xc8a273, roughness: 1 }); // cork
-	const alloy = new MeshStandardMaterial({ color: 0x9b9ea3, roughness: 0.35 });
-	const flyLine = new MeshStandardMaterial({ color: 0xc6de38, roughness: 0.8 });
-	along(new Mesh(new CylinderGeometry(0.022, 0.022, 0.2, 12), iron), 0.1); // the reel seat
-	along(new Mesh(new CylinderGeometry(0.026, 0.032, 0.36, 14), grip), 0.38);
-	along(new Mesh(new CylinderGeometry(0.004, 0.013, ROD - 0.56, 8), blank), 0.56 + (ROD - 0.56) / 2);
-	// The reel, hanging under the seat, with the line wound on it.
-	along(new Mesh(new CylinderGeometry(0.09, 0.09, 0.05, 28), alloy), 0.11, -0.1).rotation.x = Math.PI / 2;
-	along(new Mesh(new CylinderGeometry(0.07, 0.07, 0.056, 28), flyLine), 0.11, -0.1).rotation.x = Math.PI / 2;
-	for (let y = 1.1; y < ROD; y += 0.75) {
-		along(new Mesh(new TorusGeometry(0.018, 0.004, 6, 14), alloy), y, -0.026).rotation.x = Math.PI / 2;
-	}
+	// A fly rod stood in the corner, leaning into it, its tip far above the top of the view, strung,
+	// with a fly in its keeper (see rod.ts). It is built upright from its butt, then leant.
+	const rod = buildRod();
 	const butt = new Vector3(CORNER - 0.46, 0, 0.14); // out from the corner, clear of the bench's leg
 	const tip = new Vector3(CORNER - 0.05, ROD * 0.998, 0.05);
 	rod.position.copy(butt);
@@ -867,6 +853,8 @@ export function buildRoom(rackHeight: number) {
 		group,
 		/** The board the fliers are on: a press on it takes one of them down. */
 		board,
+		/** Where the tv's lead leaves its plug in the power strip, from the floor (see wiring.ts). */
+		tvPlug: power.tv,
 		/** How far the board was moved up from where PINBOARD has it, and so what is pinned to it. */
 		lift,
 		/** Darken the daylight outside by this share, as the room's lights are when something is held. */

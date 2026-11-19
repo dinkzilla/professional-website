@@ -50,6 +50,7 @@ import {
 	type Intersection
 } from 'three';
 import { buildRoom, SHADOWS } from './room.ts';
+import { rackWiring } from './wiring.ts';
 import {
 	BOARD,
 	FLOOR,
@@ -466,6 +467,21 @@ function createShelf() {
 				STANDOFF + (p.item.flush ? DEPTH + 0.008 : DEPTH * (1 - (p.item.back ?? 0.5)))
 			);
 		}
+
+		// The wiring that runs up the rack: the tv's lead, from the power strip on the floor, and
+		// the ribbon from the cassette player to the video module (see wiring.ts). It is part of the
+		// unit, but placed from the wall, which the unit stands off.
+		const tv = placed.find((p) => p.item.id === 'tv')!;
+		const wiring = rackWiring({
+			floor: -height,
+			top: shelfY(0),
+			video: shelfY(1),
+			cassette: shelves > 3 ? shelfY(3) : undefined,
+			tv: { position: tv.shelfPosition, rotation: tv.shelfRotation },
+			plug: room.tvPlug
+		});
+		wiring.position.z = -STANDOFF;
+		unit.add(wiring);
 	}
 
 	/**
