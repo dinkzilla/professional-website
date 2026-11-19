@@ -12,6 +12,7 @@
 		"preview": "vite build && vite preview",
 		"preview:personal": "DEFAULT_SIDE=personal vite build && DEFAULT_SIDE=personal vite preview",
 		"sync": "node scripts/sync-medium.js",
+		"fliers": "node scripts/set-fliers.js",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
@@ -27,6 +28,7 @@
 		"@types/three": "^0.187.0",
 		"html-to-image": "^1.11.13",
 		"marked": "^18.1.0",
+		"sharp": "^0.35.5",
 		"svelte": "^5.57.1",
 		"svelte-check": "^4.6.0",
 		"three": "^0.187.0",

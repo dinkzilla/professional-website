@@ -13,6 +13,10 @@ node_modules
 # site are in src/lib/assets/models.
 /model-originals
 
+# The shows found for the board's fliers, to be picked from (see .claude/skills/update-shows).
+# The ones picked are in src/lib/assets/fliers.
+/flier-candidates
+
 # OS
 .DS_Store
 Thumbs.db

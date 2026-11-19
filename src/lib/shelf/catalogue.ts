@@ -94,7 +94,7 @@ export const catalogue: Entry[] = [
 	...['one', 'two', 'three', 'four', 'five'].map((n, i) => ({
 		id: `flier-${i + 1}`,
 		label: `flier ${n}`,
-		blurb: 'Placeholder: which show this was.'
+		blurb: 'A flier for a show in Richmond.'
 	})),
 	{
 		// The way back to the work side: a tap on it goes there (see routes/personal). It is never

@@ -587,7 +587,8 @@ function createShelf() {
 
 	/** Work out an object's held position and attitude: centred on the stage, facing the camera. */
 	function hold(p: Placed) {
-		const page = p.item.page;
+		// A flier's size as a page is known only once it is built, so it is kept on its group.
+		const page: { w: number; h: number } | undefined = p.item.page ?? p.group.userData.page;
 		const s = page ? reading() : stage();
 		const distance = focal / ppu;
 		const room = Math.min(s.w, s.h) * 0.72;

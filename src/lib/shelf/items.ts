@@ -22,6 +22,7 @@ import {
 	Shape,
 	SphereGeometry,
 	SRGBColorSpace,
+	Texture,
 	TextureLoader,
 	TorusGeometry,
 	TubeGeometry,
@@ -1975,6 +1976,21 @@ const digSite = Object.values(
 )[0];
 let clippingPhoto: HTMLImageElement | undefined;
 
+// The fliers on the board: the pictures saved in the assets' fliers folder, in the order of their
+// names, which `npm run fliers` puts there (see scripts/set-fliers.js). A flier is its picture
+// and nothing else, so there are only as many fliers as pictures.
+const flierArt = Object.entries(
+	import.meta.glob<string>('../assets/fliers/*.{jpg,jpeg,png,webp}', {
+		eager: true,
+		query: '?url',
+		import: 'default'
+	})
+)
+	.sort(([a], [b]) => a.localeCompare(b))
+	.map(([, url]) => url);
+/** Those pictures, once fetched: each where its flier looks for it. */
+const flierPrints: (HTMLImageElement | undefined)[] = [];
+
 /**
  * Fetch what the objects are printed with: a typeface and a picture. They are drawn on canvases,
  * which use whatever is to hand when they are drawn, so this is to be done before any object is
@@ -1991,11 +2007,13 @@ export async function loadPrinting() {
 	lid.src = mothershipLid;
 	const photo = new Image();
 	if (digSite) photo.src = digSite;
+	const prints = flierArt.map((url) => Object.assign(new Image(), { src: url }));
 	await Promise.allSettled([
 		face.load().then((loaded) => document.fonts.add(loaded)),
 		...news.map((each) => each.load().then((loaded) => document.fonts.add(loaded))),
 		lid.decode().then(() => (gameLid = lid)),
-		digSite ? photo.decode().then(() => (clippingPhoto = photo)) : undefined
+		digSite ? photo.decode().then(() => (clippingPhoto = photo)) : undefined,
+		...prints.map((print, i) => print.decode().then(() => (flierPrints[i] = print)))
 	]);
 }
 
@@ -2139,62 +2157,39 @@ function gameBox() {
 	return g;
 }
 
-// Placeholder art for the fliers: paper, ink, a second ink, and the name in the largest type.
-const FLIERS: [string, string, string, string][] = [
-	['#e9e2cf', '#151515', '#b3201c', 'BAND'],
-	['#161417', '#ece6da', '#d9a400', 'NOISE'],
-	['#c9462f', '#141212', '#f1e9d6', 'DOOM'],
-	['#d8d24a', '#17161a', '#17161a', 'FEST'],
-	['#23323a', '#e6ecef', '#e2603c', 'LIVE']
-];
+// The widest a flier is hung: one that is wider than it is tall is made smaller to keep to this,
+// so that it does not lie over the one beside it.
+const FLIER_WIDEST = 0.46;
 
 /**
- * A photocopied show flier, flat against the wall and facing out, with a pin through its top.
- * `x` is where along the wall it is, and `lean` how crooked: the air from the door reaches it later
- * the further off it is, and what part of it is behind the rack cannot lift far.
+ * A show flier, flat against the wall and facing out, with a pin through its top: one of the
+ * pictures in the assets (see flierArt), on a sheet of that picture's proportions and about as
+ * much paper as `w` by `h`. `x` is where along the wall it is, and `lean` how crooked: the air
+ * from the door reaches it later the further off it is, and what part of it is behind the rack
+ * cannot lift far.
  */
 function flier(index: number, w: number, h: number, x: number, lean: number) {
 	const far = HOOK.x - x;
-	const [paper, ink, second, name] = FLIERS[index];
-	const canvas = document.createElement('canvas');
-	const W = (canvas.width = 400);
-	const H = (canvas.height = Math.round((400 * h) / w));
-	const c = canvas.getContext('2d')!;
-	c.fillStyle = paper;
-	c.fillRect(0, 0, W, H);
-	// A different block of second ink on each, behind the name.
-	c.fillStyle = second;
-	c.beginPath();
-	if (index % 5 === 0) {
-		for (let i = 0; i < 32; i++) {
-			const a = (i / 32) * Math.PI * 2;
-			const r = i % 2 ? 95 : 170 - (i % 3) * 20;
-			c.lineTo(W / 2 + Math.cos(a) * r, H * 0.45 + Math.sin(a) * r);
-		}
-	} else if (index % 5 === 1) c.arc(W / 2, H * 0.45, 135, 0, Math.PI * 2);
-	else if (index % 5 === 2) c.rect(0, H * 0.3, W, H * 0.3);
-	else if (index % 5 === 3) for (let y = 0.28; y < 0.62; y += 0.07) c.rect(30, H * y, W - 60, H * 0.035);
-	else {
-		c.moveTo(W / 2, H * 0.2);
-		c.lineTo(W - 40, H * 0.66);
-		c.lineTo(40, H * 0.66);
+	const art = flierPrints[index];
+	let map: Texture | undefined;
+	if (art) {
+		const shape = art.naturalWidth / art.naturalHeight;
+		const area = w * h;
+		h = Math.sqrt(area / shape);
+		w = h * shape;
+		const fit = Math.min(1, FLIER_WIDEST / w);
+		w *= fit;
+		h *= fit;
+		map = new Texture(art);
+		map.colorSpace = SRGBColorSpace;
+		map.anisotropy = 8;
+		map.needsUpdate = true;
 	}
-	c.fill();
-	c.fillStyle = ink;
-	c.textAlign = 'center';
-	c.font = '700 26px sans-serif';
-	c.fillText('ONE NIGHT ONLY', W / 2, 78);
-	c.font = 'italic 900 96px sans-serif';
-	c.fillText(name, W / 2, H * 0.45 + 34, W - 40);
-	c.font = '700 30px sans-serif';
-	c.fillText('WITH SUPPORT', W / 2, H * 0.78);
-	c.font = '600 22px sans-serif';
-	c.fillText('DATE · VENUE · DOORS', W / 2, H * 0.9);
-	const map = new CanvasTexture(canvas);
-	map.colorSpace = SRGBColorSpace;
-	map.anisotropy = 4;
 
 	const g = new Group();
+	// Taken down, it is something to read: held as near as fills the window (see Placement.page,
+	// which cannot say this for it, since its size is not known until its picture is).
+	g.userData.page = { w, h };
 	// In strips down it, for the paper to bend by. The printing is a sheet of its own, laid on the
 	// paper, so the paper is made without its front: of two faces that close together, bending as
 	// one, a phone cannot always tell which is in front, and the paper showed through in triangles.
@@ -2205,7 +2200,8 @@ function flier(index: number, w: number, h: number, x: number, lean: number) {
 	stock.setIndex(faces);
 	stock.clearGroups();
 	const sheet = mesh(stock, page);
-	const front = new Mesh(new PlaneGeometry(w, h, 4, 12), new MeshStandardMaterial({ map, roughness: 0.95 }));
+	// A picture that could not be had leaves the paper blank.
+	const front = new Mesh(new PlaneGeometry(w, h, 4, 12), map ? new MeshStandardMaterial({ map, roughness: 0.95 }) : page);
 	front.position.z = 0.0025;
 	const PIN = h / 2 - 0.022;
 	g.add(sheet, front);
@@ -2264,7 +2260,8 @@ function flier(index: number, w: number, h: number, x: number, lean: number) {
 	return g;
 }
 
-// Pinned up none too carefully: where along the wall, how high, how crooked, and its size.
+// Pinned up none too carefully: where along the wall, how high, how crooked, and its size. There
+// is a flier at each of these for as many pictures as there are, in the order of their names.
 const pinned: [number, number, number, number, number][] = [
 	[-1.43, 2.05, 0.05, 0.34, 0.48],
 	[-0.94, 2.1, -0.04, 0.36, 0.49],
@@ -2272,7 +2269,7 @@ const pinned: [number, number, number, number, number][] = [
 	[-1.19, 1.52, -0.06, 0.34, 0.46],
 	[-0.57, 1.51, 0.07, 0.36, 0.49]
 ];
-const fliers: Placement[] = pinned.map(([x, up, lean, w, h], i) => ({
+const fliers: Placement[] = pinned.slice(0, flierArt.length).map(([x, up, lean, w, h], i) => ({
 	id: `flier-${i + 1}`,
 	shelf: WALL,
 	x,
