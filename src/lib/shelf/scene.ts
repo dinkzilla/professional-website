@@ -324,6 +324,7 @@ function createShelf() {
 	// The walls, the floor the legs stand on, and what is outside (see room.ts).
 	const room = buildRoom(unitHeight(FIT_SHELVES));
 	scene.add(room.group);
+	working.push(...room.works);
 
 	function buildUnit() {
 		scene.remove(unit);

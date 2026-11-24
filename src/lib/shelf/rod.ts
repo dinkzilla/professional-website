@@ -1,8 +1,8 @@
-// The fly rod that stands in the corner of the room (placed in room.ts): a nine-foot five-weight
+// The fly rods that hang on the side wall of the room (placed in room.ts): a nine-foot five-weight
 // after Orvis's Helios, which is a matte dark blank with a white label above the cork, a dark
 // anodised reel seat and a large-arbor reel. It is strung: the fly line runs from the reel up
-// through every guide to the tip, and the leader comes back down outside them to a green drake
-// hooked in the keeper above the grip.
+// through every guide to the tip, and the leader comes back down outside them to a fly hooked in
+// the keeper above the grip: a green drake, or if asked a woolly bugger.
 //
 // Built upright from its butt, which is the origin, with the reel and the guides on its -x side
 // and the reel's handle toward +z. Sizes are a real rod's, at about 1.85 units to the metre, except
@@ -64,7 +64,7 @@ const blankR = (y: number) => BLANK.butt + ((BLANK.tip - BLANK.butt) * (y - GRIP
 const INSERT_R = 0.0135; // the part of the seat the reel's foot lies on
 const SPOOL = { r: 0.083, half: 0.0215, arbor: 0.04, line: 0.071 };
 const CAGE = SPOOL.r + 0.0065; // the outside of the frame, round the spool
-const FOOT = { long: 0.115, thick: 0.004, pillar: 0.016, sunk: 0.0015 };
+const FOOT = { long: 0.115, thick: 0.004, pillar: 0.007, sunk: 0.0015 };
 const REEL = { x: -(INSERT_R - FOOT.sunk + FOOT.thick + FOOT.pillar + CAGE), y: 0.1385 };
 
 // The guides, as a rod builder's chart gives them: inches down from the tip.
@@ -159,9 +159,29 @@ function label() {
 	return texture(canvas);
 }
 
-export function buildRod() {
+export type RodOptions = {
+	/** The blank's colour. Matte and nearly black, a little blue, unless given. */
+	blank?: number;
+	/** The fly line's colour. A yellow green unless given. */
+	line?: number;
+	/**
+	 * Which way the label faces, as an angle round the rod from the handle's side: positive is
+	 * round toward the side away from the reel. It faces a little toward the reel unless given.
+	 */
+	labelFaces?: number;
+	/** The fly in the keeper: a green drake, tied dry, unless a woolly bugger is asked for, which is bright green. */
+	fly?: 'drake' | 'bugger';
+	/**
+	 * How far up from the butt a hook holds the rod, if one does between the reel and the first
+	 * guide: the line and the leader are both caught there between the hook and the underside of
+	 * the blank, and go on from it to the reel and to the fly.
+	 */
+	pinch?: number;
+};
+
+export function buildRod({ blank = 0x1b1f26, line = 0xc3d44a, labelFaces = -0.75, fly: pattern = 'drake', pinch }: RodOptions = {}) {
 	const paintOn = (hex: number, roughness: number) => new MeshStandardMaterial({ color: hex, roughness });
-	const graphite = paintOn(0x1b1f26, 0.55); // the blank: matte, nearly black, a little blue
+	const graphite = paintOn(blank, 0.55); // the blank: matte
 	const gloss = paintOn(0x0c0d10, 0.22); // thread wraps under epoxy, the seat's carbon insert, the reel's handle
 	const anodised = paintOn(0x676b73, 0.3); // the seat's hardware, and the reel's drag knob
 	const carbon = new MeshStandardMaterial({ map: weave(), roughness: 0.3 }); // the seat's insert
@@ -169,7 +189,7 @@ export function buildRod() {
 	const cherry = paintOn(0x7a1f1c, 0.35); // its handle: cherry wood, a dark red, to show against the black
 	const wire = paintOn(0xb9bcc1, 0.3); // the guides
 	const cork = new MeshStandardMaterial({ map: corkRings(13), roughness: 1 });
-	const flyLine = paintOn(0xc3d44a, 0.75);
+	const flyLine = paintOn(line, 0.75);
 	const mono = paintOn(0xe4e8e2, 0.3); // the leader
 	// The fly.
 	const bronze = paintOn(0x4d3b28, 0.3); // its hook
@@ -272,12 +292,12 @@ export function buildRod() {
 		wrap(y - 0.004, y + 0.016);
 	}
 
-	// The label, which is its own mesh since it has its own picture, turned to face the room.
+	// The label, which is its own mesh since it has its own picture, turned to face where it is asked to.
 	const badge = new Mesh(
 		new CylinderGeometry(blankR(LABEL.to) + 0.0005, blankR(LABEL.from) + 0.0005, LABEL.to - LABEL.from, 16, 1, true),
 		new MeshStandardMaterial({ map: label(), roughness: 0.4 })
 	);
-	badge.geometry.rotateY(Math.PI - 0.75).translate(0, (LABEL.from + LABEL.to) / 2, 0);
+	badge.geometry.rotateY(Math.PI + labelFaces).translate(0, (LABEL.from + LABEL.to) / 2, 0);
 	wrap(GRIP_TOP + 0.006, LABEL.from);
 	wrap(LABEL.to, LABEL.to + 0.012);
 
@@ -454,17 +474,20 @@ export function buildRod() {
 	reel(pewter, flat(foot, 0.017), -0.0085);
 
 	// --- The line. It comes off the far side of the spool and runs straight up to the first guide,
-	// then from guide to guide to the tip.
-	const first = through[0];
+	// then from guide to guide to the tip. If a hook has caught it on the way, it runs to that first,
+	// where it lies along the underside of the blank.
+	const held = pinch === undefined ? [] : [new Vector3(-(blankR(pinch) + 0.0026), pinch, -0.003)];
+	const first = held[0] ?? through[0];
 	const reach = Math.hypot(first.x - REEL.x, first.y - REEL.y);
 	const leaves = Math.atan2(first.y - REEL.y, first.x - REEL.x) + Math.acos(SPOOL.line / reach);
-	const run = [new Vector3(REEL.x + SPOOL.line * Math.cos(leaves), REEL.y + SPOOL.line * Math.sin(leaves), 0), ...through];
+	const run = [new Vector3(REEL.x + SPOOL.line * Math.cos(leaves), REEL.y + SPOOL.line * Math.sin(leaves), 0), ...held, ...through];
 	for (let k = 1; k < run.length; k++) put(flyLine, stick(run[k - 1], run[k], 0.0026, 5));
 
-	// --- The fly: a green drake, a big olive mayfly, tied dry. Made in its own frame, the hook's
-	// shank along +x from the bend to the eye and the wings up, then hung by its bend from the
-	// keeper with its eye toward the tip, which is the way the leader pulls it.
-	const SHANK = 0.035;
+	// --- The fly. Made in its own frame, the hook's shank along +x from the bend to the eye and its
+	// top up, then hung by its bend from the keeper with its eye toward the tip, which is the way
+	// the leader pulls it. A woolly bugger is tied on a longer hook than a drake.
+	const bugger = pattern === 'bugger';
+	const SHANK = bugger ? 0.056 : 0.035;
 	const GAPE = 0.012;
 	// Where the shank's rear end goes: the keeper's outer wire sits in the bend.
 	const hung = new Matrix4()
@@ -485,49 +508,81 @@ export function buildRod() {
 	);
 	fly(bronze, new TubeGeometry(hook, 22, 0.00065, 5));
 	fly(bronze, new TorusGeometry(0.0013, 0.0005, 4, 8).rotateY(Math.PI / 2).translate(SHANK + 0.001, 0, 0)); // the eye
-	// The abdomen, tapering to the tail, ribbed in yellow.
-	const bodyR = (x: number) => 0.0015 + (0.0017 * (x - 0.04 * SHANK)) / (0.58 * SHANK);
-	fly(olive, new CylinderGeometry(bodyR(0.62 * SHANK), bodyR(0.04 * SHANK), 0.58 * SHANK, 8).rotateZ(-Math.PI / 2).translate(0.33 * SHANK, 0, 0));
-	for (let k = 0; k < 5; k++) {
-		const x = (0.1 + k * 0.105) * SHANK;
-		fly(rib, new TorusGeometry(bodyR(x) + 0.0001, 0.00042, 4, 8).rotateY(Math.PI / 2).translate(x, 0, 0));
+	if (!bugger) {
+		// A green drake: a big olive mayfly, tied dry.
+		// The abdomen, tapering to the tail, ribbed in yellow.
+		const bodyR = (x: number) => 0.0015 + (0.0017 * (x - 0.04 * SHANK)) / (0.58 * SHANK);
+		fly(olive, new CylinderGeometry(bodyR(0.62 * SHANK), bodyR(0.04 * SHANK), 0.58 * SHANK, 8).rotateZ(-Math.PI / 2).translate(0.33 * SHANK, 0, 0));
+		for (let k = 0; k < 5; k++) {
+			const x = (0.1 + k * 0.105) * SHANK;
+			fly(rib, new TorusGeometry(bodyR(x) + 0.0001, 0.00042, 4, 8).rotateY(Math.PI / 2).translate(x, 0, 0));
+		}
+		fly(olive, new SphereGeometry(0.0034, 10, 8).scale(1.5, 1, 1).translate(0.74 * SHANK, 0, 0)); // the thorax
+		fly(moose, new SphereGeometry(0.0017, 8, 6).translate(0.95 * SHANK, 0, 0)); // the head
+		// Three tails, as long as the body, splayed.
+		for (const [up, out] of [
+			[0.006, 0],
+			[0.0025, 0.0075],
+			[0.0025, -0.0075]
+		]) {
+			fly(moose, stick(new Vector3(0.05 * SHANK, 0.0005, 0), new Vector3(-0.85 * SHANK, up, out), 0.0005, 3, 0.0002));
+		}
+		// A pair of upright wings, leaning back a little and apart.
+		const WING = 0.031;
+		const wing = new Shape()
+			.moveTo(0, 0)
+			.bezierCurveTo(0.008, 0.2 * WING, 0.007, 0.8 * WING, -0.003, WING)
+			.bezierCurveTo(-0.01, 0.75 * WING, -0.008, 0.25 * WING, 0, 0);
+		for (const side of [-1, 1]) {
+			fly(dun, new ShapeGeometry(wing, 5).rotateX(side * 0.3).translate(0.72 * SHANK, 0.002, side * 0.0008));
+		}
+	} else {
+		// A woolly bugger, all of it a bright green: a fat chenille body, a brass bead for a head, and
+		// a tail of marabou as long as the hook, which is soft and lies in a loose bunch.
+		const chenille = paintOn(0x58e01c, 1);
+		const marabou = paintOn(0x74ee2a, 1);
+		const brass = paintOn(0xc9a13a, 0.25);
+		fly(chenille, new CylinderGeometry(0.0085, 0.0075, 0.78 * SHANK, 12).rotateZ(-Math.PI / 2).translate(0.47 * SHANK, 0, 0));
+		fly(brass, new SphereGeometry(0.0058, 12, 8).translate(0.93 * SHANK, 0, 0));
+		// The tail is a plume: a soft mass, with loose strands all round it to break its outline.
+		fly(marabou, new SphereGeometry(1, 12, 8).scale(0.56 * SHANK, 0.0085, 0.0085).translate(-0.42 * SHANK, 0, 0));
+		const loose = dice(11);
+		for (let k = 0; k < 70; k++) {
+			const long = SHANK * (0.75 + loose() * 0.4);
+			const to = new Vector3(-long, (loose() - 0.5) * 0.04, (loose() - 0.5) * 0.04);
+			fly(marabou, stick(new Vector3(0.1 * SHANK, 0, 0), to, 0.0018, 4, 0.0005));
+		}
 	}
-	fly(olive, new SphereGeometry(0.0034, 10, 8).scale(1.5, 1, 1).translate(0.74 * SHANK, 0, 0)); // the thorax
-	fly(moose, new SphereGeometry(0.0017, 8, 6).translate(0.95 * SHANK, 0, 0)); // the head
-	// Three tails, as long as the body, splayed.
-	for (const [up, out] of [
-		[0.006, 0],
-		[0.0025, 0.0075],
-		[0.0025, -0.0075]
-	]) {
-		fly(moose, stick(new Vector3(0.05 * SHANK, 0.0005, 0), new Vector3(-0.85 * SHANK, up, out), 0.0005, 3, 0.0002));
-	}
-	// A pair of upright wings, leaning back a little and apart.
-	const WING = 0.031;
-	const wing = new Shape()
-		.moveTo(0, 0)
-		.bezierCurveTo(0.008, 0.2 * WING, 0.007, 0.8 * WING, -0.003, WING)
-		.bezierCurveTo(-0.01, 0.75 * WING, -0.008, 0.25 * WING, 0, 0);
-	for (const side of [-1, 1]) {
-		fly(dun, new ShapeGeometry(wing, 5).rotateX(side * 0.3).translate(0.72 * SHANK, 0.002, side * 0.0008));
-	}
+
 	// The hackle: stiff fibres standing out all round the hook in front of and behind the wings,
 	// barred light and dark, as a grizzly feather dyed olive is. Each is one sliver of a triangle.
-	const FIBRES = 44;
-	const FIBRE = 0.014;
+	// The bugger's is green, far thicker, and wound the whole length of its body, so that it is fuzzy all over.
+	const FIBRES = bugger ? 300 : 44;
+	const FIBRE = bugger ? 0.02 : 0.014;
+	const SLIVER = bugger ? 0.0016 : 0.0007; // half a fibre's width at its root
+	const palmered = bugger ? { from: 0.1, over: 0.74 } : { from: 0.6, over: 0.3 };
+	const barred = bugger
+		? [
+				[0.08, 0.3, 0.02],
+				[0.3, 0.85, 0.08]
+			]
+		: [
+				[0.05, 0.05, 0.03],
+				[0.4, 0.42, 0.13]
+			];
 	const random = dice(3);
 	const points: number[] = [];
 	const normals: number[] = [];
 	const shades: number[] = [];
 	for (let k = 0; k < FIBRES; k++) {
-		const x = (0.6 + (0.3 * k) / FIBRES) * SHANK;
+		const x = (palmered.from + (palmered.over * k) / FIBRES) * SHANK;
 		const turn = k * 2.4 + random() * 0.4;
 		const lean = (random() - 0.5) * 0.004;
 		const long = FIBRE * (0.8 + random() * 0.35);
 		const [cy, cz] = [Math.cos(turn), Math.sin(turn)];
-		points.push(x - 0.0007, 0, 0, x + 0.0007, 0, 0, x + lean, cy * long, cz * long);
+		points.push(x - SLIVER, 0, 0, x + SLIVER, 0, 0, x + lean, cy * long, cz * long);
 		for (let v = 0; v < 3; v++) normals.push(0, -cz, cy);
-		const shade = k % 3 === 0 ? [0.05, 0.05, 0.03] : [0.4, 0.42, 0.13];
+		const shade = barred[k % 3 === 0 ? 0 : 1];
 		for (let v = 0; v < 3; v++) shades.push(...shade);
 	}
 	const fibres = new BufferGeometry();
@@ -540,7 +595,7 @@ export function buildRod() {
 	// against the sides of the two big ones on its way.
 	const eye = new Vector3(SHANK + 0.002, 0, 0).applyMatrix4(hung);
 	const [lower, upper] = through;
-	const leader = [top, new Vector3(upper.x, upper.y, 0.011), new Vector3(lower.x, lower.y, 0.0125), eye];
+	const leader = [top, new Vector3(upper.x, upper.y, 0.011), new Vector3(lower.x, lower.y, 0.0125), ...held.map((at) => new Vector3(at.x + 0.0015, at.y, 0.004)), eye];
 	for (let k = 1; k < leader.length; k++) put(mono, stick(leader[k - 1], leader[k], 0.0011, 4));
 
 	const rod = new Group();

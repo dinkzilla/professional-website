@@ -1,4 +1,4 @@
-// Dominic, the grey and white cat, asleep on the bench (room.ts puts him there).
+// Dominic, the grey and white cat, asleep (room.ts places him; he is put away for now).
 
 import { CapsuleGeometry, ConeGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry, Vector3, type Material } from 'three';
 

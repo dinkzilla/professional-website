@@ -25,17 +25,20 @@ import {
 	Float32BufferAttribute,
 	Group,
 	IcosahedronGeometry,
+	Matrix4,
 	Mesh,
 	MeshBasicMaterial,
 	MeshStandardMaterial,
 	PlaneGeometry,
 	PointLight,
+	Quaternion,
 	RepeatWrapping,
 	Shape,
 	ShapeGeometry,
 	SphereGeometry,
 	SRGBColorSpace,
 	TorusGeometry,
+	TubeGeometry,
 	Vector3,
 	Path,
 	type Material
@@ -44,7 +47,11 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { AMP, AMP_JACK, braided, HOOK, PINBOARD } from './items.ts';
 import { powerStrip } from './wiring.ts';
 import { dominic } from './objects/dominic.ts';
-import { buildRod, ROD } from './rod.ts';
+import { buildRod } from './rod.ts';
+import { buildCoatRack } from './coatrack.ts';
+import { buildRope } from './rope.ts';
+import type { Works } from './types.ts';
+import { buildHarness } from './harness.ts';
 
 /**
  * Whether the lamp casts shadows (see scene.ts). With it on, everything lit in the room casts and
@@ -55,7 +62,7 @@ import { buildRod, ROD } from './rod.ts';
 export const SHADOWS = true;
 
 const FAR = 30; // how far the walls and floor run on, out of sight
-const CORNER = 3.5; // x of the wall that comes toward the viewer; far enough for the bench to clear the door
+const CORNER = 3.5; // x of the wall that comes toward the viewer; far enough to leave some wall beside the door
 const DOOR = { left: 1.3, right: 2.7 };
 const DOOR_OPEN = (100 * Math.PI) / 180; // swung inward, hinged on the left
 // Along z, and above the floor. It runs on toward the viewer well past the edge of any screen.
@@ -347,7 +354,7 @@ export function buildRoom(rackHeight: number) {
 	// On the other side of the door, a second box of the same kind with the light switch in it.
 	// Its conduit drops to the height the outlet's runs at, turns toward the corner, runs along
 	// the wall to it, turns again round it, and runs on toward the viewer along the side wall,
-	// behind the bench, whose legs it passes through unseen. Each turn is an elbow fitting.
+	// under the rods. Each turn is an elbow fitting.
 	const SWITCH = { x: 2.95, y: 1.3 };
 	// The switch: a toggle in a dark cutout in the cover, tipped up, which is on. Its sizes are
 	// given in inches of the cover, which stands for the standard 2.75 by 4.5 inch plate.
@@ -449,7 +456,7 @@ export function buildRoom(rackHeight: number) {
 		box(0.03, 0.04, 0.004, zinc, x, OUTLET.y - CONDUIT.r - 0.02, 0.002);
 		barrel(0.008, 0.004, steel, x, OUTLET.y - CONDUIT.r - 0.024, 0.006, true, 10);
 	}
-	// And one of the same on the side wall under the bench, where it shows just to the right of the helmet.
+	// And one of the same on the side wall, where it shows under the rods.
 	const GUIDE = 1.15; // its z
 	box(strapD, 2 * CONDUIT.r + 0.006, 0.03, zinc, CORNER - strapD / 2, runY, GUIDE);
 	box(0.004, 0.04, 0.03, zinc, CORNER - 0.002, runY - CONDUIT.r - 0.02, GUIDE);
@@ -460,89 +467,142 @@ export function buildRoom(rackHeight: number) {
 	box(0.04, 0.03, 0.004, zinc, SWITCH.x + CONDUIT.r + 0.02, guideY, 0.002);
 	barrel(0.008, 0.004, steel, SWITCH.x + CONDUIT.r + 0.024, guideY, 0.006, true, 10);
 
-	// Under the window, a backless bench for putting shoes on: a wooden frame with a padded top.
-	// Its end nearer the door is toward the back wall.
-	// It starts a little way out from the corner, which the fishing rod stands in.
-	const BENCH = { from: 0.5, to: 2.9, d: 0.6, seat: 0.8, pad: 0.12, gap: 0.02 };
+	// A backless bench for putting shoes on used to stand here, under the window, with a coiled
+	// climbing rope slung over its door end and a second cat, Dominic, asleep on it. The bench is
+	// gone, and the rope and the cat are put away for now: they are still made as they lay on it, so
+	// its measures are kept for them. (A motorcycle helmet lay on the floor under it; that is gone too.)
+	const SHOWN = { rope: false, cat: false };
+	const BENCH = { from: 0.5, d: 0.6, seat: 0.8, pad: 0.12, gap: 0.02 };
 	const benchFront = CORNER - BENCH.gap - BENCH.d;
 	const benchX = benchFront + BENCH.d / 2;
-	const benchZ = (BENCH.from + BENCH.to) / 2;
 	const benchTop = BENCH.seat + BENCH.pad;
-	const padding = new MeshStandardMaterial({ color: 0xb3a589, roughness: 1 });
-	for (const x of [benchFront + 0.04, benchFront + BENCH.d - 0.04]) {
-		for (const z of [BENCH.from + 0.04, BENCH.to - 0.04]) box(0.07, BENCH.seat - 0.1, 0.07, trim, x, (BENCH.seat - 0.1) / 2, z);
-	}
-	box(BENCH.d, 0.1, BENCH.to - BENCH.from, trim, benchX, BENCH.seat - 0.05, benchZ);
-	box(BENCH.d - 0.03, BENCH.pad, BENCH.to - BENCH.from - 0.03, padding, benchX, BENCH.seat + BENCH.pad / 2, benchZ);
-
-	// A climbing rope, coiled and slung over the bench at the door end, above the helmet: each turn of the coil lies
-	// across the pad and hangs down the front, no two quite alike.
 	const ROPE = { z: BENCH.from + 0.3, r: 0.02 };
-	for (let turn = 0; turn < 5; turn++) {
-		const wide = 0.1 + turn * 0.012; // half the gap between the turn's two sides
-		const drop = 0.5 + ((turn * 3) % 5) * 0.035; // how far it hangs
-		const lift = benchTop + ROPE.r + turn * 0.008;
-		const side = (s: number) => [
-			new Vector3(benchFront + 0.4, lift, ROPE.z + s * wide),
-			new Vector3(benchFront + 0.06, lift + 0.01, ROPE.z + s * (wide + 0.03)),
-			new Vector3(benchFront - 0.035, benchTop - 0.12, ROPE.z + s * (wide + 0.02)),
-			new Vector3(benchFront - 0.04, benchTop - drop + 0.08, ROPE.z + s * wide * 0.7)
-		];
-		const turnPath = new CatmullRomCurve3(
-			[
-				new Vector3(benchFront + 0.47, lift, ROPE.z),
-				...side(-1),
-				new Vector3(benchFront - 0.04, benchTop - drop, ROPE.z),
-				...side(1).reverse()
-			],
-			true
-		);
-		group.add(braided(turnPath, '#1fa39a', '#f2d13a', 4, ROPE.r));
+
+	// The rope: each turn of the coil lies across the pad and hangs down the front, no two quite alike.
+	if (SHOWN.rope) {
+		for (let turn = 0; turn < 5; turn++) {
+			const wide = 0.1 + turn * 0.012; // half the gap between the turn's two sides
+			const drop = 0.5 + ((turn * 3) % 5) * 0.035; // how far it hangs
+			const lift = benchTop + ROPE.r + turn * 0.008;
+			const side = (s: number) => [
+				new Vector3(benchFront + 0.4, lift, ROPE.z + s * wide),
+				new Vector3(benchFront + 0.06, lift + 0.01, ROPE.z + s * (wide + 0.03)),
+				new Vector3(benchFront - 0.035, benchTop - 0.12, ROPE.z + s * (wide + 0.02)),
+				new Vector3(benchFront - 0.04, benchTop - drop + 0.08, ROPE.z + s * wide * 0.7)
+			];
+			const turnPath = new CatmullRomCurve3(
+				[
+					new Vector3(benchFront + 0.47, lift, ROPE.z),
+					...side(-1),
+					new Vector3(benchFront - 0.04, benchTop - drop, ROPE.z),
+					...side(1).reverse()
+				],
+				true
+			);
+			group.add(braided(turnPath, '#1fa39a', '#f2d13a', 4, ROPE.r));
+		}
+		// The wraps that hold the coil together, round both its sides where they lie on the pad.
+		const wraps = new Mesh(new TorusGeometry(0.16, 0.022, 8, 24), new MeshStandardMaterial({ color: 0x1fa39a, roughness: 0.8 }));
+		wraps.rotation.y = Math.PI / 2;
+		wraps.scale.set(1, 0.3, 3.2);
+		add(wraps, benchFront + 0.22, benchTop + 0.04, ROPE.z);
 	}
-	// The wraps that hold the coil together, round both its sides where they lie on the pad.
-	const wraps = new Mesh(new TorusGeometry(0.16, 0.022, 8, 24), new MeshStandardMaterial({ color: 0x1fa39a, roughness: 0.8 }));
-	wraps.rotation.y = Math.PI / 2;
-	wraps.scale.set(1, 0.3, 3.2);
-	add(wraps, benchFront + 0.22, benchTop + 0.04, ROPE.z);
 
-	// A full-face motorcycle helmet on the floor under the bench, below the rope, facing into the room and a little toward the
-	// viewer: a shell, cut off flat underneath, with a dark visor across the front.
-	const helmet = new Group();
-	const HELMET = 0.27;
-	const lid = new Mesh(
-		new SphereGeometry(HELMET, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.8),
-		new MeshStandardMaterial({ color: 0xe6e1d6, roughness: 0.35 })
-	);
-	lid.scale.set(1.1, 1, 0.94);
-	const visor = new Mesh(
-		new SphereGeometry(HELMET * 1.02, 24, 8, -Math.PI / 3, (Math.PI * 2) / 3, Math.PI * 0.36, Math.PI * 0.2),
-		new MeshStandardMaterial({ color: 0x0e1216, roughness: 0.15 })
-	);
-	visor.scale.copy(lid.scale);
-	helmet.add(lid, visor);
-	helmet.position.set(benchFront + 0.35, -HELMET * Math.cos(Math.PI * 0.8), ROPE.z);
-	helmet.rotation.y = 0.55;
-	group.add(helmet);
+	// Dominic (see objects/dominic.ts): turned so that his belly faces the room, and mirrored end
+	// for end so that his head is toward the rope.
+	if (SHOWN.cat) {
+		const cat = dominic();
+		// Built oversize; this brings his head to a little more than the size of the other cat's.
+		cat.scale.set(-0.65, 0.65, 0.65);
+		cat.position.set(benchX + 0.04, benchTop, ROPE.z + 0.58);
+		cat.rotation.y = -Math.PI / 2 + 0.2;
+		group.add(cat);
+	}
 
-	// A second cat, Dominic, asleep on the bench next to the rope (see objects/dominic.ts): turned
-	// so that his belly faces the room, and mirrored end for end so that his head is toward the rope.
-	const cat = dominic();
-	// Built oversize; this brings his head to a little more than the size of the other cat's.
-	cat.scale.set(-0.65, 0.65, 0.65);
-	cat.position.set(benchX + 0.04, benchTop, ROPE.z + 0.58);
-	cat.rotation.y = -Math.PI / 2 + 0.2;
-	group.add(cat);
+	// Two fly rods hung level on the side wall under the window, one right below the other, their
+	// reels toward the door (see rod.ts): strung, each with a fly in its keeper. Each lies in two
+	// hooks, close to the wall, with its guides hanging down and the reel's handle toward the
+	// wall. The handle stands further out from the reel than the rod is off the wall, so it lies
+	// against the blocks and holds the reel out, which turns the whole rod about its length: the
+	// reel, the guides and the line all hang a little out into the room. The lower one is just far enough under
+	// the upper to clear its line, which comes off the bottom of the reel and climbs to the first
+	// guide. That is still not quite as far as the upper one's reel hangs, so it is set along the
+	// wall toward the viewer by enough for that reel to hang past its butt.
+	// The turn is what brings the end of the handle to the wall with the rod this far off it.
+	const RODS = { z: 0.45, y: 1.06, off: 0.035, turned: 0.19, apart: 0.21, along: 0.3 };
+	const hung = new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(new Vector3(0, 1, 0), new Vector3(0, 0, 1), new Vector3(1, 0, 0)));
+	hung.multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -RODS.turned));
+	const rodX = CORNER - RODS.off;
+	// Where along the rod each hook is, and how far below the rod's middle the bottom of what lies
+	// in it: one behind the reel, under the threaded end of the seat, and one just past the fly and
+	// the label, under the bare blank. The rod and reel balance between the two. Nothing further
+	// along shows. The second is between the reel and the first guide, so the line is in it under
+	// the rod, and the leader with it: both are pinched there against the blank, which lies on them.
+	const HOOKS = [
+		{ at: 0.028, under: 0.0147 },
+		{ at: 0.72, under: 0.0135 }
+	];
+	const WIRE = 0.006; // the hook's thickness, as a radius
+	/**
+	 * A hook for a rod whose middle is at this height and this far along the wall: a plate screwed
+	 * to the blocks above and below, and a round bar that leaves it behind the rod, goes down and
+	 * under whatever lies in it, and comes up in front with its end turned out.
+	 */
+	const hook = (y: number, z: number, under: number) => {
+		const round = under + WIRE; // from the rod's middle to the bar's
+		const at = (out: number, up: number) => new Vector3(CORNER - out, y + up, z);
+		const bar = new CatmullRomCurve3([
+			at(0.003, 0.014),
+			...[200, 235, 270, 305, 340, 375].map((degrees) => {
+				const a = (degrees * Math.PI) / 180;
+				return at(RODS.off + round * Math.cos(a), round * Math.sin(a));
+			}),
+			at(RODS.off + round + 0.005, 0.26 * round + 0.017)
+		]);
+		group.add(new Mesh(new TubeGeometry(bar, 40, WIRE, 10), zinc));
+		const end = bar.getPoint(1);
+		add(new Mesh(new SphereGeometry(WIRE, 12, 8), zinc), end.x, end.y, end.z);
+		const PLATE = { t: 0.004, w: 0.03, top: 0.052, foot: -0.064 };
+		box(PLATE.t, PLATE.top - PLATE.foot, PLATE.w, zinc, CORNER - PLATE.t / 2, y + (PLATE.top + PLATE.foot) / 2, z);
+		// The screws: pan heads, slotted, no two slots turned alike.
+		[PLATE.top - 0.014, PLATE.foot + 0.014].forEach((up, k) => {
+			pipe('x', 0.0075, 0.004, steel, CORNER - PLATE.t - 0.002, y + up, z, 14);
+			box(0.001, 0.002, 0.0135, slot, CORNER - PLATE.t - 0.004, y + up, z).rotation.x = 0.5 + k * 1.9 + z * 7;
+		});
+	};
+	[
+		{}, // the first: a dark blank and a green line, with a green drake
+		{ blank: 0x1d4a2c, line: 0x1f8fff, fly: 'bugger' as const } // the second: a dark green blank and a bright blue line, with a woolly bugger
+	].forEach((its, k) => {
+		const rod = buildRod({ ...its, labelFaces: Math.PI - 0.6, pinch: HOOKS[1].at });
+		const y = RODS.y - k * RODS.apart;
+		const z = RODS.z + k * RODS.along;
+		rod.position.set(rodX, y, z);
+		rod.quaternion.copy(hung);
+		group.add(rod);
+		for (const { at, under } of HOOKS) hook(y, z + at, under);
+	});
 
-	// A fly rod stood in the corner, leaning into it, its tip far above the top of the view, strung,
-	// with a fly in its keeper (see rod.ts). It is built upright from its butt, then leant.
-	const rod = buildRod();
-	const butt = new Vector3(CORNER - 0.46, 0, 0.14); // out from the corner, clear of the bench's leg
-	const tip = new Vector3(CORNER - 0.05, ROD * 0.998, 0.05);
-	rod.position.copy(butt);
-	rod.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), tip.sub(butt).normalize());
-	group.add(rod);
+	// A coat rack standing in the corner (see coatrack.ts): black steel, with pegs at different
+	// heights, turned to show from where the room is seen. The highest points toward the window and
+	// the viewer, and a harness hangs from it (see harness.ts). The next down points the other way
+	// across the corner, toward the back wall and the door, and is bare. Below that a climbing rope
+	// hangs from one toward the door (see rope.ts), and the lowest, toward the side wall, is bare.
+	// The rope and the harness are both made in the rack's own frame, hung on the peg they are given.
+	const RACK = { out: 0.4 }; // how far the pole is from each wall
+	const coats = buildCoatRack([
+		{ way: 225, height: 1.88 },
+		{ way: 60, height: 2.12 }, // turned a little toward the viewer, so that its end stands clear of the window's frame
+		{ way: 172, height: 1.3 },
+		{ way: 352, height: 1.12 }
+	]);
+	const rope = buildRope(coats.pegs[2]);
+	const harness = buildHarness(coats.pegs[1]);
+	coats.group.add(rope, harness);
+	coats.group.position.set(CORNER - RACK.out, 0, RACK.out);
+	group.add(coats.group);
 
-	// Daylight from the window, falling on the bench and the corner. It dims with the room.
+	// Daylight from the window, falling on the rods and the corner. It dims with the room.
 	const DAYLIGHT = 2.2;
 	const daylight = new PointLight(0xe4ecf2, DAYLIGHT, 4.5, 1.6);
 	daylight.position.set(CORNER - 0.7, 2.2, 1.3);
@@ -815,6 +875,8 @@ export function buildRoom(rackHeight: number) {
 
 	return {
 		group,
+		/** What in the room moves by itself, for the scene to run with the rest: what the air stirs of the rope and of the harness. */
+		works: [rope.userData.works, harness.userData.works].filter(Boolean) as Works[],
 		/** The board the fliers are on: a press on it takes one of them down. */
 		board,
 		/** Where the tv's lead leaves its plug in the power strip, from the floor (see wiring.ts). */
