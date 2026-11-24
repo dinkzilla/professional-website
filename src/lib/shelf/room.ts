@@ -36,6 +36,7 @@ import {
 	Shape,
 	ShapeGeometry,
 	SphereGeometry,
+	SpotLight,
 	SRGBColorSpace,
 	TorusGeometry,
 	TubeGeometry,
@@ -607,14 +608,36 @@ export function buildRoom(rackHeight: number) {
 	const daylight = new PointLight(0xe4ecf2, DAYLIGHT, 4.5, 1.6);
 	daylight.position.set(CORNER - 0.7, 2.2, 1.3);
 	group.add(daylight);
-	// And a little from the door, spilling onto the mat and the boards just inside: brightest at the
-	// threshold and fading into the room with no edge to it, as the sky's light does, so a bare point
-	// of light with no cone. It hangs just outside the doorway, where the back wall, facing away from
-	// it, takes none. It dims with the room too.
-	const SPILL = 1;
+	// And some from the door. Part of it is the sky's: brightest at the threshold and fading into the
+	// room with no edge to it, so a bare point of light with no cone, hung just outside the doorway,
+	// where the back wall, facing away from it, takes none.
+	const SPILL = 0.55;
 	const spill = new PointLight(0xe4ecf2, SPILL, 5, 1.6);
 	spill.position.set((DOOR.left + DOOR.right) / 2, 1.35, -0.4);
 	group.add(spill);
+	// The rest is the sun's, which stands outside somewhere behind the pinboard, high and to the left:
+	// it comes through the doorway at a slant and pours off to the right, onto the mat, the boards
+	// and the foot of the side wall. It is a narrow cone from far enough off that its rays are near
+	// enough parallel, and no wider than the doorway needs; the back wall casts its shadow in it (see
+	// below), so the patch has the doorway's shape. Both dim with the room.
+	const BEAM = 2;
+	const SUN = new Vector3(0.37, -0.77, 0.53); // the way its light travels
+	const through = new Vector3((DOOR.left + DOOR.right) / 2, 1, 0); // the middle of the doorway
+	const beam = new SpotLight(0xfff0d8, BEAM, 0, 0.24, 0.3, 0);
+	beam.position.copy(through).addScaledVector(SUN, -7);
+	beam.target.position.copy(through).addScaledVector(SUN, 1.3);
+	group.add(beam, beam.target);
+	if (SHADOWS) {
+		beam.castShadow = true;
+		beam.shadow.mapSize.set(2048, 2048);
+		// The map's depth is spent only on the room, and the offsets that keep a surface out of its own
+		// shadow are small, so that a shadow starts at the foot of what casts it and not a little way off.
+		beam.shadow.camera.near = 5;
+		beam.shadow.camera.far = 11;
+		beam.shadow.bias = -0.0002;
+		beam.shadow.normalBias = 0.003;
+		beam.shadow.radius = 5;
+	}
 
 	// The amp under the board: a combo, with its controls along the top of its front and the
 	// speaker cloth below them. The cable in its input is the cassette player's (see objects/cassette.ts).
@@ -868,8 +891,9 @@ export function buildRoom(rackHeight: number) {
 		group.traverse((o) => {
 			if (!(o instanceof Mesh) || !(o.material instanceof MeshStandardMaterial)) return;
 			o.receiveShadow = true;
-			// Not the walls or the floor, which there is nothing behind, nor anything seen through.
-			o.castShadow = o.material !== wall && o.material !== boards && !o.material.transparent && o.material.side !== BackSide;
+			// Not the floor, which there is nothing behind, nor anything seen through. The walls do, though
+			// only the sun's shadow: they face the lamp, and a shadow is drawn from the faces turned away.
+			o.castShadow = o.material !== boards && !o.material.transparent && o.material.side !== BackSide;
 		});
 	}
 
@@ -888,6 +912,7 @@ export function buildRoom(rackHeight: number) {
 			for (const { material, colour } of outdoors) material.color.copy(colour).multiplyScalar(1 - share);
 			daylight.intensity = DAYLIGHT * (1 - share);
 			spill.intensity = SPILL * (1 - share);
+			beam.intensity = BEAM * (1 - share);
 		}
 	};
 }
