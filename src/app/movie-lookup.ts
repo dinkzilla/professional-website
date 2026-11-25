@@ -1,5 +1,7 @@
-import { Injectable, inject, signal } from '@angular/core';
-import { MovieStore } from './movie-store';
+import { Injectable, effect, inject, signal } from '@angular/core';
+import { doc, getDoc } from 'firebase/firestore';
+import { AuthService } from './auth';
+import { firestore } from './firebase';
 
 export interface LookupHit {
   tmdbId: number;
@@ -20,22 +22,23 @@ const API = 'https://api.themoviedb.org/3';
 const IMG = 'https://image.tmdb.org/t/p/w342';
 
 /**
- * Movie search backed by The Movie Database (TMDB). Needs a free TMDB API key
- * in public/tmdb-key.txt. Not available on claude.ai hosting, which blocks
- * requests to outside services.
+ * Movie search backed by The Movie Database (TMDB), for the editor only.
+ * With Firebase set up, the TMDB API key is the "key" field of the Firestore
+ * document private/tmdb, which only the signed-in editor can read. Without
+ * Firebase it comes from public/tmdb-key.txt (git-ignored, never deployed).
  */
 @Injectable({ providedIn: 'root' })
 export class MovieLookup {
-  private store = inject(MovieStore);
-  readonly supported = !this.store.hosted;
+  private readonly auth = inject(AuthService);
   readonly key = signal('');
 
   constructor() {
-    if (this.supported) void this.loadKey();
+    if (!firestore) void this.loadKeyFile();
+    else effect(() => void this.loadKeyDoc(this.auth.email()));
   }
 
   get ready(): boolean {
-    return this.supported && !!this.key();
+    return !!this.key();
   }
 
   async search(query: string, signal: AbortSignal): Promise<LookupHit[]> {
@@ -81,12 +84,25 @@ export class MovieLookup {
     }
   }
 
-  /** Reads the key from public/tmdb-key.txt (git-ignored); search stays off without it. */
-  private async loadKey() {
+  private async loadKeyDoc(email: string) {
+    if (!email) {
+      this.key.set('');
+      return;
+    }
+    try {
+      const snap = await getDoc(doc(firestore!, 'private/tmdb'));
+      this.setKey(String(snap.data()?.['key'] ?? ''));
+    } catch {}
+  }
+
+  private async loadKeyFile() {
     try {
       const res = await fetch('tmdb-key.txt');
-      const text = res.ok ? (await res.text()).trim() : '';
-      if (/^[\w.-]{16,}$/.test(text)) this.key.set(text);
+      this.setKey(res.ok ? await res.text() : '');
     } catch {}
+  }
+
+  private setKey(text: string) {
+    this.key.set(/^[\w.-]{16,}$/.test(text.trim()) ? text.trim() : '');
   }
 }

@@ -1,11 +1,12 @@
-import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, signal, viewChild } from '@angular/core';
 import { CRITERIA, Criterion, DEFAULT_NETWORKS, MovieData, PEOPLE, answered, fmt, total, groupStart, watchDates } from './criteria';
+import { EmojiBurst } from './emoji-burst';
 import { RatingIcons } from './rating-icons';
 import { MovieStore } from './movie-store';
 
 @Component({
   selector: 'app-movie-form',
-  imports: [RatingIcons],
+  imports: [RatingIcons, EmojiBurst],
   template: `
     @if (draft(); as d) {
       <form class="form" (submit)="save($event)">
@@ -61,7 +62,7 @@ import { MovieStore } from './movie-store';
             @if (c.kind === 'scale') {
               <div class="scale">
                 @for (n of [1, 2, 3, 4, 5]; track n) {
-                  <button type="button" [class.on]="d.scores[c.key] === n" [attr.aria-pressed]="d.scores[c.key] === n" [attr.aria-label]="n + ' out of 5'" (click)="pick(c, n)">
+                  <button type="button" [class.on]="d.scores[c.key] === n" [attr.aria-pressed]="d.scores[c.key] === n" [attr.aria-label]="n + ' out of 5'" (click)="pick(c, n); burst(c, $event)">
                     <app-rating-icons [criterion]="c.key" single [off]="d.scores[c.key] == null || n > d.scores[c.key]!" />
                   </button>
                 }
@@ -73,7 +74,7 @@ import { MovieStore } from './movie-store';
             } @else if (c.kind === 'choice') {
               <div class="choices">
                 @for (o of c.options; track o.value) {
-                  <button type="button" [class.on]="d.scores[c.key] === o.value" [attr.aria-pressed]="d.scores[c.key] === o.value" (click)="pick(c, o.value)">
+                  <button type="button" [class.on]="d.scores[c.key] === o.value" [attr.aria-pressed]="d.scores[c.key] === o.value" (click)="pick(c, o.value); burst(c, $event)">
                     <span>{{ o.label }}</span>
                     <b>{{ o.value > 0 ? '+' : '' }}{{ num(o.value) }}</b>
                   </button>
@@ -81,9 +82,9 @@ import { MovieStore } from './movie-store';
               </div>
             } @else {
               <div class="stepper">
-                <button type="button" [attr.aria-label]="'Lower ' + c.label" (click)="step(c, -1)">−</button>
+                <button type="button" [attr.aria-label]="'Lower ' + c.label" (click)="step(c, -1); burst(c, $event)">−</button>
                 <output [class.unset]="d.scores[c.key] == null">{{ d.scores[c.key] == null ? '—' : num(d.scores[c.key]!) }}</output>
-                <button type="button" [attr.aria-label]="'Raise ' + c.label" (click)="step(c, 1)">+</button>
+                <button type="button" [attr.aria-label]="'Raise ' + c.label" (click)="step(c, 1); burst(c, $event)">+</button>
                 @if (d.scores[c.key] != null) {
                   <button type="button" class="clear" (click)="pick(c, d.scores[c.key]!)">Clear</button>
                 }
@@ -103,6 +104,7 @@ import { MovieStore } from './movie-store';
           </button>
         </div>
       </form>
+      <app-emoji-burst />
     } @else {
       <p class="empty">That movie isn’t in the list any more.</p>
     }
@@ -117,6 +119,7 @@ export class MovieForm implements OnInit {
   protected readonly people = PEOPLE;
   protected readonly draft = signal<MovieData | null>(null);
   protected readonly saving = signal(false);
+  private readonly bursts = viewChild(EmojiBurst);
 
   protected readonly sum = computed(() => fmt(total(this.draft()?.scores ?? {})));
   protected readonly count = computed(() => answered(this.draft()?.scores ?? {}));
@@ -179,6 +182,11 @@ export class MovieForm implements OnInit {
     let next = cur == null ? (dir > 0 ? size : 0) : cur + dir * size;
     if (c.min != null) next = Math.max(c.min, next);
     this.patch({ scores: { ...d.scores, [c.key]: Math.round(next * 2) / 2 } });
+  }
+
+  /** Showers the screen with the criterion's icon from the button that was pressed. */
+  protected burst(c: Criterion, event: Event) {
+    this.bursts()?.fire(c.key, event.currentTarget as Element);
   }
 
   protected cancel() {

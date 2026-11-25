@@ -1,0 +1,10 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": "dist/holiday-romance/browser",
+    "ignore": ["tmdb-key.txt", "seed/**", "3rdpartylicenses.txt"],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+  }
+}

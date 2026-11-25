@@ -1,33 +1,38 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { AuthService } from './auth';
 import { Movie, MovieData, normalize } from './criteria';
+import { firestore } from './firebase';
 
-declare global {
-  interface Window {
-    claude?: { use(name: string): Promise<any> };
-  }
-}
-
-export type View = { name: 'list' } | { name: 'detail' | 'edit'; id: string };
+export type View = { name: 'list' | 'signin' } | { name: 'detail' | 'edit'; id: string };
 
 const LOCAL_KEY = 'holiday-romance-movies';
 const SEEDED_KEY = 'holiday-romance-seeded';
 
+/** True when the address bar is on the sign-in page, /kiki. */
+function onSignInPath(): boolean {
+  return /\/kiki\/?$/.test(location.pathname);
+}
+
 /**
- * Holds the movie list. On claude.ai it reads and writes the artifact's shared
- * database; anywhere else (ng serve) it falls back to this browser's storage.
+ * Holds the movie list. With Firebase set up it is the shared Firestore
+ * "movies" collection, which anyone can read and only the signed-in editor can
+ * change. Without it (src/app/firebase.ts left blank) it falls back to this
+ * browser's storage.
  */
 @Injectable({ providedIn: 'root' })
 export class MovieStore {
+  private readonly auth = inject(AuthService);
+
   readonly movies = signal<Movie[]>([]);
   readonly status = signal<'loading' | 'ready' | 'unavailable'>('loading');
   readonly slow = signal(false);
-  readonly canWrite = signal(true);
+  /** Whether to show the add, edit and delete controls. */
+  readonly canWrite = this.auth.isEditor;
   readonly error = signal('');
-  readonly view = signal<View>({ name: 'list' });
-  /** True when hosted as a claude.ai artifact (no outside network access). */
-  readonly hosted = typeof window !== 'undefined' && !!window.claude?.use;
+  readonly view = signal<View>({ name: onSignInPath() ? 'signin' : 'list' });
 
-  private db: any = null;
+  private readonly db = firestore;
 
   constructor() {
     void this.init();
@@ -36,6 +41,10 @@ export class MovieStore {
   go(view: View) {
     this.error.set('');
     this.view.set(view);
+    // Keep the address bar on /kiki only while the sign-in page is showing.
+    if ((view.name === 'signin') !== onSignInPath()) {
+      history.replaceState(null, '', new URL(view.name === 'signin' ? 'kiki' : '.', document.baseURI));
+    }
     window.scrollTo(0, 0);
   }
 
@@ -44,7 +53,8 @@ export class MovieStore {
   }
 
   private async init() {
-    if (!this.hosted) {
+    const db = this.db;
+    if (!db) {
       const saved = this.readLocal();
       const seed = await this.fetchSeed();
       const seedById = new Map(seed.map((m) => [m.id, m]));
@@ -72,20 +82,13 @@ export class MovieStore {
       this.status.set('ready');
       return;
     }
-    const [db, user] = await Promise.all([window.claude!.use('db'), window.claude!.use('user')]);
-    if (!db) {
-      this.status.set('unavailable');
-      return;
-    }
-    this.db = db;
-    if ((await user?.can?.('data.write')) === false) this.canWrite.set(false);
-
     const timer = setTimeout(() => this.slow.set(true), 10_000);
-    db.collection('movies').onSnapshot(
-      (snap: any) => {
-        this.movies.set(snap.docs.map((d: any) => normalize(d.id, d.data())));
+    onSnapshot(
+      collection(db, 'movies'),
+      (snap) => {
+        this.movies.set(snap.docs.map((d) => normalize(d.id, d.data())));
         this.status.set('ready');
-        if (!snap.metadata?.fromCache) {
+        if (!snap.metadata.fromCache) {
           clearTimeout(timer);
           this.slow.set(false);
         }
@@ -94,7 +97,7 @@ export class MovieStore {
         clearTimeout(timer);
         this.slow.set(false);
         if (this.status() === 'loading') this.status.set('unavailable');
-        else this.error.set('Lost the connection to your saved ratings. Reopen the page to reconnect.');
+        else this.error.set('Lost the connection to the ratings. Reopen the page to reconnect.');
       },
     );
   }
@@ -102,7 +105,8 @@ export class MovieStore {
   /** Creates (id null) or replaces a movie. Resolves with its id, or null if the save failed. */
   async save(id: string | null, data: MovieData): Promise<string | null> {
     this.error.set('');
-    if (!this.db) {
+    const db = this.db;
+    if (!db) {
       const newId = id ?? 'm' + Date.now().toString(36);
       const rest = this.movies().filter((m) => m.id !== newId);
       this.writeLocal([...rest, { ...data, id: newId }]);
@@ -111,10 +115,10 @@ export class MovieStore {
     try {
       return await this.withRetry(async () => {
         if (id) {
-          await this.db.doc('movies/' + id).set(data);
+          await setDoc(doc(db, 'movies', id), data);
           return id;
         }
-        return (await this.db.collection('movies').add(data)).id as string;
+        return (await addDoc(collection(db, 'movies'), data)).id;
       });
     } catch (e: any) {
       this.fail(e, 'save');
@@ -124,12 +128,13 @@ export class MovieStore {
 
   async remove(id: string): Promise<boolean> {
     this.error.set('');
-    if (!this.db) {
+    const db = this.db;
+    if (!db) {
       this.writeLocal(this.movies().filter((m) => m.id !== id));
       return true;
     }
     try {
-      await this.withRetry(() => this.db.doc('movies/' + id).delete());
+      await this.withRetry(() => deleteDoc(doc(db, 'movies', id)));
       return true;
     } catch (e: any) {
       this.fail(e, 'delete');
@@ -148,11 +153,10 @@ export class MovieStore {
   }
 
   private fail(e: any, verb: string) {
-    if (e?.code === 'invalid_argument' || e?.code === 'not_granted' || e?.code === 'revoked') {
-      this.canWrite.set(false);
-      this.error.set('You can view this list but you don’t have access to change it.');
-    } else if (e?.code === 'quota_exceeded') {
-      this.error.set('Storage is full. Delete a movie to make room.');
+    if (e?.code === 'permission-denied' || e?.code === 'unauthenticated') {
+      this.error.set('Only Kiki can change this list. Sign in again and retry.');
+    } else if (e?.code === 'resource-exhausted') {
+      this.error.set('The ratings database has hit its daily limit. Try again tomorrow.');
     } else {
       this.error.set(`Couldn’t ${verb}. Check your connection and try again.`);
     }

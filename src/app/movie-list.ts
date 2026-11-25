@@ -49,9 +49,9 @@ import { Poster } from './poster';
         {{ store.slow() ? 'Still trying to reach your saved ratings…' : 'Loading your ratings…' }}
       </p>
     } @else if (store.status() === 'unavailable') {
-      <p class="empty">Your saved ratings can’t be reached from this view. Open the page while signed in to Claude.</p>
+      <p class="empty">The ratings can’t be reached right now. Check your connection and reload the page.</p>
     } @else if (!store.movies().length) {
-      <p class="empty">No movies yet. Add a title above, then tap it to rate it.</p>
+      <p class="empty">{{ store.canWrite() ? 'No movies yet. Add a title above, then tap it to rate it.' : 'No movies have been rated yet.' }}</p>
     } @else {
       @if (store.slow()) {
         <p class="note">This list may be out of date. Still reconnecting…</p>
@@ -98,11 +98,14 @@ import { Poster } from './poster';
           <ol class="cards">
             @for (m of rated(); track m.id; let i = $index) {
               <li>
-                <button type="button" class="card" (click)="open(m)">
+                <button type="button" class="card" [class.champ]="sort() === 'score' && i === 0" (click)="open(m)">
+                  @if (sort() === 'score') {
+                    <span class="rank">{{ i + 1 }}</span>
+                  }
                   <app-poster [url]="m.poster" [title]="m.title" />
                   <span class="card-text">
-                    @if (sort() === 'score') {
-                      <span class="rank">{{ i === 0 ? '★ Top of the tree' : 'No. ' + (i + 1) }}</span>
+                    @if (sort() === 'score' && i === 0) {
+                      <span class="crown">★ Top of the tree</span>
                     }
                     <strong>{{ m.title }}</strong>
                     <span class="muted">{{ meta(m) }}</span>
@@ -192,7 +195,7 @@ export class MovieList {
         this.hits.set([]);
         this.searchNote.set(
           e?.message === 'key'
-            ? 'Movie search rejected the TMDB key in public/tmdb-key.txt. Tap Add to use the title as typed.'
+            ? 'Movie search rejected the TMDB key. Tap Add to use the title as typed.'
             : 'Movie search isn’t reachable right now. Tap Add to use the title as typed.',
         );
       }

@@ -10,6 +10,8 @@
   --accent: #b01e3a;
   --accent-ink: #ffffff;
   --accent-soft: #f8e3e7;
+  --holly: #1a7a4a;
+  --holly-ink: #ffffff;
   --gold: #9a6410;
   --sky-top: #ffbfe0;
   --sky-bottom: #bff5e4;
@@ -26,6 +28,7 @@
   --flake-edge: rgba(150, 60, 120, 0.2);
   --scene-ink: #3b1030;
   --veil: 88%;
+  --edge: color-mix(in srgb, var(--line) 70%, var(--ink));
   --font-display: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'Figtree', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
@@ -41,6 +44,8 @@
     --accent: #f26b82;
     --accent-ink: #2b0710;
     --accent-soft: #3a1820;
+    --holly: #4fd08a;
+    --holly-ink: #06281a;
     --gold: #e9b85c;
     --sky-top: #1c083d;
     --sky-bottom: #06403f;
@@ -71,6 +76,8 @@
   --accent: #f26b82;
   --accent-ink: #2b0710;
   --accent-soft: #3a1820;
+  --holly: #4fd08a;
+  --holly-ink: #06281a;
   --gold: #e9b85c;
   --sky-top: #1c083d;
   --sky-bottom: #06403f;
@@ -107,7 +114,7 @@ body::before {
   inset: 0 0 auto;
   height: env(safe-area-inset-top, 0px);
   z-index: 10;
-  background: var(--pine);
+  background: var(--sky-top);
 }
 button,
 input {
@@ -155,6 +162,10 @@ ol {
   overflow: hidden;
   pointer-events: none;
   background: linear-gradient(var(--sky-top), var(--sky-bottom) 80%);
+  /* Sizes are capped by width as well as height so the cast still fits side by side in portrait. */
+  --shop-h: min(32vh, 18rem);
+  --tree-h: min(80vh, 48rem);
+  --rainbow-r: min(65vmin, 48vw);
 }
 .scene svg {
   position: absolute;
@@ -185,13 +196,13 @@ ol {
   position: absolute;
   left: 50%;
   bottom: 6vh;
-  width: 130vmin;
-  height: 65vmin;
-  margin-left: -65vmin;
+  width: calc(var(--rainbow-r) * 2);
+  height: var(--rainbow-r);
+  margin-left: calc(var(--rainbow-r) * -1);
   transform-origin: 50% 100%;
   opacity: 0.85;
   background: radial-gradient(
-    circle 65vmin at 50% 100%,
+    circle var(--rainbow-r) at 50% 100%,
     transparent 0 76%,
     #b05cff 76% 80%,
     #3d9bff 80% 84%,
@@ -222,8 +233,8 @@ ol {
 /* Santa, rising behind the workshop like a jolly, hypnotised sun. */
 .scene-santa {
   left: 0;
-  bottom: 33vh;
-  height: min(46vh, 26rem);
+  bottom: calc(8vh + var(--shop-h) * 0.78);
+  height: calc(var(--shop-h) * 1.44);
   transform-origin: 50% 100%;
 }
 .santa-eye,
@@ -244,7 +255,7 @@ ol {
 .scene-shop {
   left: 1.5vw;
   bottom: 8vh;
-  height: min(32vh, 18rem);
+  height: var(--shop-h);
   transform-origin: 50% 100%;
 }
 .shop-window {
@@ -290,9 +301,8 @@ ol {
 /* The tree. It has a face now. */
 .scene-tree {
   bottom: 4vh;
-  left: 50%;
-  height: min(80vh, 48rem);
-  margin-left: calc(min(80vh, 48rem) * -0.318);
+  right: 2vw;
+  height: var(--tree-h);
   transform-origin: 50% 100%;
 }
 .tree-a {
@@ -599,70 +609,89 @@ ol {
     translate: 12vw 0;
   }
 }
-@media (min-width: 72rem) {
-  /* Room beside the column: workshop in the left gutter, tree in the right. */
-  .scene-tree {
-    left: auto;
-    right: 2vw;
-    margin-left: 0;
-  }
-}
 @media (max-width: 71.99rem) {
+  /* Workshop on the left, tree on the right, each kept to roughly half the width. */
+  .scene {
+    --shop-h: min(24vh, 40vw);
+    --tree-h: min(60vh, 85vw);
+  }
   .scene-burst {
     left: 50%;
   }
-  .scene-santa {
-    height: 34vh;
-    bottom: 26vh;
-  }
-  .scene-shop {
-    height: 24vh;
+  .scene-tree {
+    right: -2vw;
   }
   .scene-cane,
   .scene-chorus svg:nth-child(n + 5) {
     display: none;
   }
 }
-
-/* Header */
-.top {
-  position: sticky;
-  top: env(safe-area-inset-top, 0px);
-  z-index: 9;
-  background: var(--pine);
-  color: var(--pine-ink);
+@media (max-width: 71.99rem) and (orientation: portrait) {
+  /* Its feet are hidden behind the workshop and tree here, so lift the arc clear of them. */
+  .scene-rainbow {
+    bottom: calc(8vh + var(--shop-h) * 0.5);
+  }
 }
+
+/* Masthead: the name as a chunky sticker sitting straight on the scene. No toolbar. */
 .top .wrap {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding-block: 12px;
+  align-items: center;
+  gap: 4px;
+  padding-block: calc(22px + env(safe-area-inset-top, 0px)) 16px;
 }
 .top h1 {
-  font: 800 1.375rem/1.1 var(--font-display);
-  letter-spacing: -0.01em;
+  font: 800 clamp(2.75rem, 15vw, 4.25rem) / 0.95 var(--font-display);
+  letter-spacing: -0.03em;
+  color: #e8173f;
+  -webkit-text-stroke: 10px #fff;
+  paint-order: stroke fill;
+  stroke-linejoin: round;
+  rotate: -3deg;
+  filter: drop-shadow(0 5px 0 rgba(59, 16, 48, 0.28));
 }
 .top h1 span {
-  font-weight: 500;
-  opacity: 0.75;
+  color: #1f9459;
+}
+/* Inside a movie the name shrinks to a corner badge and makes room for the way back. */
+.top.sub .wrap {
+  flex-direction: row;
+  justify-content: space-between;
+  padding-block: calc(14px + env(safe-area-inset-top, 0px)) 12px;
+}
+.top.sub h1 {
+  font-size: 1.875rem;
+  -webkit-text-stroke-width: 6px;
+  filter: drop-shadow(0 3px 0 rgba(59, 16, 48, 0.28));
 }
 .back {
-  align-self: flex-start;
-  background: none;
-  border: 0;
-  padding: 4px 0;
-  color: inherit;
-  font-weight: 600;
+  min-height: 38px;
+  padding: 0 14px 0 10px;
+  border: 2px solid var(--edge);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 3px 0 var(--edge);
+  font-weight: 700;
   font-size: 0.875rem;
 }
+.back:active {
+  translate: 0 3px;
+  box-shadow: 0 0 0 var(--edge);
+}
+/* The page itself is one raised slab floating over the scene. */
 main.wrap {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding-block: 20px 32px;
+  gap: 22px;
+  width: min(40rem, 100% - 16px);
+  margin-bottom: 28px;
+  padding-block: 20px 24px;
   /* A veil of page colour keeps text readable where it sits over the scene. */
   background: color-mix(in srgb, var(--bg) var(--veil), transparent);
-  border-radius: 0 0 16px 16px;
+  border: 2px solid var(--edge);
+  border-radius: 26px;
+  box-shadow: 0 6px 0 var(--edge);
 }
 app-movie-list,
 section {
@@ -671,7 +700,31 @@ section {
   gap: 12px;
 }
 app-movie-list {
-  gap: 20px;
+  gap: 22px;
+}
+/* List headings are gift tags: a tilted label with the count punched into it. */
+app-movie-list h2 {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8px;
+  padding: 5px 7px 5px 14px;
+  border-radius: 12px 5px 12px 5px;
+  background: var(--pine);
+  color: var(--pine-ink);
+  rotate: -1.5deg;
+}
+app-movie-list .count {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--pine-ink);
+  color: var(--pine);
+  font-size: 0.875rem;
+  font-weight: 800;
 }
 
 h2 {
@@ -702,30 +755,38 @@ input[type='password'] {
   width: 100%;
   min-width: 0;
   min-height: 46px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  padding: 10px 14px;
+  border: 2px solid var(--edge);
+  border-radius: 14px;
   background: var(--surface);
+  box-shadow: inset 0 3px 0 color-mix(in srgb, var(--ink) 9%, transparent);
 }
 .btn {
   min-height: 46px;
   padding: 0 18px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
+  border-radius: 14px;
+  border: 2px solid var(--edge);
   background: var(--surface);
+  box-shadow: 0 4px 0 var(--edge);
   font-weight: 700;
 }
+.btn:active:not(:disabled) {
+  translate: 0 4px;
+  box-shadow: 0 0 0 var(--edge);
+}
 .btn.primary {
+  --edge: color-mix(in srgb, var(--accent) 65%, #000);
   background: var(--accent);
-  border-color: var(--accent);
   color: var(--accent-ink);
 }
 .btn.danger {
-  border-color: var(--accent);
+  --edge: var(--accent);
   color: var(--accent);
 }
 .btn.quiet {
+  border-color: transparent;
   background: none;
+  box-shadow: none;
   color: var(--muted);
 }
 .btn:disabled {
@@ -741,15 +802,19 @@ input[type='password'] {
   min-height: 36px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 2px solid var(--edge);
   background: var(--surface);
+  box-shadow: 0 3px 0 var(--edge);
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 700;
 }
+/* The chosen chip stays pushed in, like a chosen score key. */
 .chip.on {
+  --edge: var(--ink);
   background: var(--ink);
-  border-color: var(--ink);
   color: var(--bg);
+  translate: 0 3px;
+  box-shadow: none;
 }
 .note,
 .error,
@@ -781,8 +846,8 @@ input[type='password'] {
 .hits {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 2px solid var(--edge);
+  border-radius: 14px;
   background: var(--surface);
   overflow: hidden;
 }
@@ -834,22 +899,86 @@ input[type='password'] {
   opacity: 0.8;
 }
 
-/* Movie rows */
+/* Movie rows: raised tiles with the poster stuck on at a slight angle, a rank pinned to the corner
+   and the score hanging off the end as a bauble. */
 .cards {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  /* Room for the lights hanging off each tile. */
+  gap: 28px;
+  padding-bottom: 22px;
 }
 .card {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   width: 100%;
-  padding: 10px 14px 10px 10px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  padding: 12px 14px 12px 12px;
+  border: 2px solid var(--edge);
+  border-radius: 18px;
   background: var(--surface);
+  box-shadow: 0 5px 0 var(--edge);
   text-align: left;
+}
+/* Under a mouse the whole tile, edge and all, lifts off the page and casts a soft shadow. */
+@media (hover: hover) {
+  .card:hover {
+    translate: 0 -4px;
+    box-shadow:
+      0 5px 0 var(--edge),
+      0 16px 16px -6px color-mix(in srgb, var(--ink) 35%, transparent);
+  }
+}
+.card:active {
+  translate: 0 5px;
+  box-shadow: 0 0 0 var(--edge);
+}
+/* A string of Christmas lights hangs along every tile's bottom edge: a green wire swagged between
+   sockets, each with a coloured bulb. The bulbs are split over two layers (red and green with the wire,
+   gold and blue) so the two halves can glow in turn. */
+.card::before,
+.card::after {
+  content: '';
+  position: absolute;
+  inset: calc(100% + 1px) 24px auto;
+  height: 24px;
+  background-repeat: round no-repeat;
+  background-size: 96px 24px;
+  filter: drop-shadow(0 0 3px rgba(255, 214, 120, 0.75));
+  pointer-events: none;
+}
+.card::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 24'%3E%3Cpath fill='none' stroke='%2314402f' stroke-width='1.6' d='M-12 4Q0 9 12 4Q24 9 36 4Q48 9 60 4Q72 9 84 4Q96 9 108 4'/%3E%3Cg transform='rotate(10 12 4)'%3E%3Crect x='9.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%23ff3d5e' d='M9.4 8C6 11 7 17 12 21C17 17 18 11 14.6 8Z'/%3E%3Cellipse cx='10.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3Cg transform='rotate(8 60 4)'%3E%3Crect x='57.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%232fd673' d='M57.4 8C54 11 55 17 60 21C65 17 66 11 62.6 8Z'/%3E%3Cellipse cx='58.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3C/svg%3E");
+}
+.card::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 24'%3E%3Cg transform='rotate(-9 36 4)'%3E%3Crect x='33.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%23ffc91a' d='M33.4 8C30 11 31 17 36 21C41 17 42 11 38.6 8Z'/%3E%3Cellipse cx='34.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3Cg transform='rotate(-11 84 4)'%3E%3Crect x='81.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%233d9bff' d='M81.4 8C78 11 79 17 84 21C89 17 90 11 86.6 8Z'/%3E%3Cellipse cx='82.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3C/svg%3E");
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card::before {
+    animation: twinkle 2.4s ease-in-out infinite;
+  }
+  .card::after {
+    animation: twinkle 2.4s ease-in-out -1.2s infinite;
+  }
+}
+/* Dimmed, a layer loses its glow and darkens a little but stays plainly a bulb. */
+@keyframes twinkle {
+  50% {
+    filter: drop-shadow(0 0 0 transparent) brightness(0.72) saturate(0.8);
+  }
+}
+.card .poster,
+.detail-head .poster {
+  box-shadow:
+    0 0 0 3px #fff,
+    0 4px 10px rgba(20, 5, 31, 0.3);
+}
+.cards li:nth-child(odd) .poster {
+  rotate: -2.5deg;
+}
+.cards li:nth-child(even) .poster {
+  rotate: 2deg;
 }
 .card-text {
   display: flex;
@@ -862,12 +991,64 @@ input[type='password'] {
   font: 700 1.0625rem/1.25 var(--font-display);
   overflow-wrap: anywhere;
 }
+/* The rank is a heart pinned to the tile's corner. The shape is drawn by ::before so the white
+   outline (a drop shadow on the whole badge) can follow it. */
 .rank {
+  position: absolute;
+  top: -12px;
+  left: -10px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 30px;
+  padding-bottom: 4px;
+  color: var(--accent-ink);
+  font: 800 0.8125rem/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  rotate: -10deg;
+  filter: drop-shadow(1.5px 0 0 var(--surface)) drop-shadow(-1.5px 0 0 var(--surface))
+    drop-shadow(0 1.5px 0 var(--surface)) drop-shadow(0 -1.5px 0 var(--surface));
+}
+.rank::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--accent);
+  clip-path: path(
+    'M16 29C16 29 1 19 1 9.5C1 4.5 5 1 9.2 1C12.2 1 14.8 2.6 16 5C17.2 2.6 19.8 1 22.8 1C27 1 31 4.5 31 9.5C31 19 16 29 16 29Z'
+  );
+}
+.crown {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--gold);
+}
+/* First place gets a bigger, gilded tile. */
+.card.champ {
+  --edge: color-mix(in srgb, var(--gold) 75%, var(--ink));
+  padding: 16px 16px 16px 14px;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--star) 26%, var(--surface)), var(--surface) 65%);
+}
+.champ .poster {
+  width: 88px;
+}
+.champ .card-text strong {
+  font-size: 1.25rem;
+}
+.champ .rank {
+  scale: 1.25;
+  color: #3b1030;
+}
+.champ .rank::before {
+  background: var(--star);
+}
+.champ .score {
+  width: 68px;
+  font-size: 1.625rem;
 }
 .tag {
   align-self: flex-start;
@@ -879,17 +1060,79 @@ input[type='password'] {
   font-weight: 600;
 }
 .score {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font: 800 1.75rem/1 var(--font-display);
+  position: relative;
+  flex: none;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  width: 58px;
+  aspect-ratio: 1;
+  margin-top: 10px;
+  border-radius: 50%;
+  /* A glass ball lit from the upper left: a sharp window glint, a broad sheen, then the body colour
+     falling off to a dark rim, with a little light bounced back up into the underside. */
+  background:
+    radial-gradient(ellipse 22% 13% at 30% 21%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 100%),
+    radial-gradient(ellipse 60% 30% at 50% 96%, color-mix(in srgb, var(--bauble) 55%, #fff) 0, transparent 100%),
+    radial-gradient(
+      circle at 36% 30%,
+      color-mix(in srgb, var(--bauble) 68%, #fff) 0,
+      var(--bauble) 42%,
+      color-mix(in srgb, var(--bauble) 58%, #000) 100%
+    );
+  box-shadow:
+    inset -3px -5px 9px rgba(0, 0, 0, 0.28),
+    inset 2px 3px 5px rgba(255, 255, 255, 0.22),
+    0 5px 7px -1px rgba(20, 5, 31, 0.35);
+  color: var(--bauble-ink);
+  text-shadow: 0 1px 1px color-mix(in srgb, var(--bauble) 40%, #000);
+  font: 800 1.375rem/1 var(--font-display);
   font-variant-numeric: tabular-nums;
-  color: var(--accent);
+}
+/* Baubles alternate red and green down the list. */
+.score {
+  --bauble: var(--accent);
+  --bauble-ink: var(--accent-ink);
+}
+.cards li:nth-child(even) .score {
+  --bauble: var(--holly);
+  --bauble-ink: var(--holly-ink);
+}
+/* The bauble's crimped brass cap, and the wire loop it hangs from. */
+.score::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 16px;
+  height: 9px;
+  margin-left: -8px;
+  border-radius: 2px 2px 1px 1px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 2px, rgba(90, 55, 0, 0.3) 2px 3px),
+    linear-gradient(90deg, #a8770f, #ffe9a3 35%, #e0ac2c 60%, #8f6208);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+.score::after {
+  content: '';
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border: 1.5px solid #c9982a;
+  border-radius: 50%;
 }
 .score small,
 .big-score small {
   font: 600 0.75rem var(--font-body);
   color: var(--muted);
+}
+.score small {
+  font-size: 0.625rem;
+  color: inherit;
+  opacity: 0.85;
 }
 
 /* Detail */
@@ -905,6 +1148,7 @@ input[type='password'] {
 }
 .detail-head .poster {
   width: 108px;
+  rotate: -3deg;
 }
 .detail-text {
   display: flex;
@@ -1229,7 +1473,7 @@ h3 {
   grid-template-columns: 1fr 1fr;
   align-items: start;
   gap: 18px;
-  margin: -4px calc((100% - 32px) / 10 - 1px) 0;
+  margin: 4px calc((100% - 32px) / 10 - 1px) 0;
 }
 .note {
   display: flex;
@@ -1256,7 +1500,6 @@ h3 {
 .note.high b {
   color: var(--accent);
 }
-.scale button,
 .stepper button:not(.clear) {
   min-height: 48px;
   border: 1px solid var(--line);
@@ -1264,20 +1507,59 @@ h3 {
   background: var(--surface);
   font: 700 1.125rem var(--font-display);
 }
-.scale button.on,
 .choices button.on {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
 }
-/* Scale buttons are the criterion's icon itself, with no button box: lit up to the chosen score, greyed after it. */
-.scale button,
-.scale button.on {
-  min-height: 0;
-  padding: 2px 0;
+/* Choice and stepper buttons are raised keys: each sits on a thick bottom edge and sinks onto it
+   while pressed. The chosen one stays pushed in. */
+.choices button,
+.stepper button:not(.clear) {
+  position: relative;
+  border-color: var(--edge);
+  box-shadow:
+    0 4px 0 var(--edge),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.choices button:active,
+.stepper button:not(.clear):active {
+  translate: 0 4px;
+  box-shadow:
+    0 0 0 var(--edge),
+    inset 0 2px 4px rgba(0, 0, 0, 0.18);
+}
+.choices button.on {
+  --edge: color-mix(in srgb, var(--accent) 65%, #000);
+  translate: 0 3px;
+  box-shadow:
+    0 1px 0 var(--edge),
+    inset 0 2px 4px rgba(0, 0, 0, 0.22);
+}
+.choices button.on:active {
+  translate: 0 4px;
+  box-shadow:
+    0 0 0 var(--edge),
+    inset 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+/* A scale button is only the criterion's icon, lit up to the chosen score and greyed after it: no
+   outline, no fill. It still presses like a key, the icon sinking and shrinking under the finger. */
+.scale button {
+  padding: 6px 0;
   border: 0;
+  border-radius: 10px;
   background: none;
   color: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.scale button:active app-rating-icons {
+  translate: 0 4px;
+  scale: 0.88;
 }
 .scale app-rating-icons {
   display: flex;
@@ -1288,11 +1570,16 @@ h3 {
   height: 46px;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .scale button {
-    transition: transform 0.12s;
+  .choices button,
+  .stepper button:not(.clear) {
+    transition:
+      translate 0.07s ease-out,
+      box-shadow 0.07s ease-out;
   }
-  .scale button:active {
-    transform: scale(0.88);
+  .scale app-rating-icons {
+    transition:
+      translate 0.07s ease-out,
+      scale 0.07s ease-out;
   }
 }
 .choices {
@@ -1307,7 +1594,7 @@ h3 {
   gap: 12px;
   min-height: 48px;
   padding: 8px 14px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 10px;
   background: var(--surface);
   text-align: left;
@@ -1362,7 +1649,69 @@ h3 {
 @media (prefers-reduced-motion: no-preference) {
   .card,
   .chip,
-  .btn {
-    transition: border-color 0.15s, background-color 0.15s;
+  .btn,
+  .back {
+    transition:
+      border-color 0.15s,
+      background-color 0.15s,
+      translate 0.07s ease-out,
+      box-shadow 0.07s ease-out;
   }
+}
+
+/* Icons sprayed across the screen when a score button is pressed */
+app-emoji-burst {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  overflow: hidden;
+  pointer-events: none;
+}
+app-emoji-burst .bit {
+  position: absolute;
+  margin: -16px 0 0 -16px;
+  opacity: 0;
+  animation: spray 1.2s cubic-bezier(0.12, 0.75, 0.25, 1) both;
+  will-change: transform, opacity;
+}
+app-emoji-burst app-rating-icons {
+  display: block;
+}
+app-emoji-burst app-rating-icons svg,
+app-emoji-burst app-rating-icons img {
+  display: block;
+  width: 32px;
+  height: 32px;
+}
+@keyframes spray {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(0.2);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) rotate(var(--spin)) scale(var(--size));
+  }
+}
+
+/* Sign-in page (/kiki) and the signed-in footer */
+.signin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-block: 24px;
+  text-align: center;
+}
+.whoami {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 0.875rem;
+  color: var(--muted);
 }

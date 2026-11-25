@@ -1,19 +1,21 @@
 import { Component, inject } from '@angular/core';
+import { AuthService } from './auth';
 import { MovieDetail } from './movie-detail';
 import { MovieForm } from './movie-form';
 import { MovieList } from './movie-list';
 import { MovieStore } from './movie-store';
+import { SignIn } from './sign-in';
 
 @Component({
   selector: 'app-root',
-  imports: [MovieList, MovieDetail, MovieForm],
+  imports: [MovieList, MovieDetail, MovieForm, SignIn],
   template: `
-    <header class="top">
+    <header class="top" [class.sub]="view().name !== 'list'">
       <div class="wrap">
         @if (view().name !== 'list') {
           <button type="button" class="back" (click)="store.go({ name: 'list' })">‹ All movies</button>
         }
-        <h1>Holiday Romance <span>Scorecard</span></h1>
+        <h1>Yule <span>Swoon</span></h1>
       </div>
     </header>
     <main class="wrap">
@@ -24,14 +26,27 @@ import { MovieStore } from './movie-store';
       @if (v.name === 'detail') {
         <app-movie-detail [id]="v.id" />
       } @else if (v.name === 'edit') {
-        <app-movie-form [id]="v.id" />
+        @if (store.canWrite()) {
+          <app-movie-form [id]="v.id" />
+        } @else {
+          <app-movie-detail [id]="v.id" />
+        }
+      } @else if (v.name === 'signin') {
+        <app-sign-in />
       } @else {
         <app-movie-list />
+      }
+      @if (auth.enabled && auth.email() && v.name === 'list') {
+        <p class="whoami">
+          Signed in as {{ auth.email() }}
+          <button type="button" class="btn quiet" (click)="auth.signOut()">Sign out</button>
+        </p>
       }
     </main>
   `,
 })
 export class App {
   protected readonly store = inject(MovieStore);
+  protected readonly auth = inject(AuthService);
   protected readonly view = this.store.view;
 }

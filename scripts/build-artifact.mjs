@@ -17,7 +17,7 @@ if (files.filter((f) => f.endsWith('.js')).length !== 1) {
   throw new Error('Expected a single script bundle; lazy chunks cannot be inlined.');
 }
 
-const page = `<title>Holiday Romance Scorecard</title>
+const page = `<title>Yule Swoon</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400..700&display=swap">
 <style>${css}</style>

@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // The one Google account that may change anything. Must match EDITOR_EMAIL in src/app/firebase.ts.
+    function isEditor() {
+      return request.auth != null
+        && request.auth.token.email == 'venablekd@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    // Everyone can see the ratings; only the editor can add, edit or delete.
+    match /movies/{movie} {
+      allow read: if true;
+      allow write: if isEditor();
+    }
+
+    // private/tmdb holds the movie-search API key. Set it from the Firebase console or `npm run seed`.
+    match /private/{document} {
+      allow read: if isEditor();
+    }
+  }
+}

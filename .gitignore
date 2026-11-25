@@ -45,3 +45,7 @@ Thumbs.db
 
 # Local TMDB API key for movie search
 public/tmdb-key.txt
+
+# Firebase
+.firebase/
+*-debug.log
