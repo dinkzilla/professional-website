@@ -13,6 +13,31 @@
         var theme = localStorage.getItem('yule-swoon-theme');
         if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
       } catch (e) {}
+
+      // On a phone or tablet, the tallest the page has been, for the scene (styles.css). It only grows, so the
+      // scene holds still as the browser's bar comes and goes, and starts over when the screen is turned.
+      if (matchMedia('(hover: none) and (pointer: coarse)').matches) {
+        var root = document.documentElement, width, tallest, turned;
+        var measure = function () {
+          if (innerHeight <= tallest) return;
+          tallest = innerHeight;
+          root.style.setProperty('--scene-h', tallest + 'px');
+        };
+        var start = function () {
+          tallest = 0;
+          measure();
+        };
+        var resized = function () {
+          if (root.clientWidth === width) return measure();
+          width = root.clientWidth;
+          start();
+          // The height can arrive after the width.
+          clearTimeout(turned);
+          turned = setTimeout(start, 500);
+        };
+        addEventListener('resize', resized);
+        resized();
+      }
     </script>
     <link rel="preload" href="/fonts/figtree-latin-v9.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/sansita-swashed-latin-v23.woff2" as="font" type="font/woff2" crossorigin />

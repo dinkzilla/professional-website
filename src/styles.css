@@ -31,6 +31,11 @@
   --flake: #ffffff;
   --flake-edge: rgba(150, 60, 120, 0.2);
   --scene-ink: #3b1030;
+  /* Pictures of the list's baubles: --accent and --holly are painted into them. */
+  --ball-red: url('/images/bauble-whole-red-light-v1.webp');
+  --ball-green: url('/images/bauble-whole-green-light-v1.webp');
+  --cracked-red: url('/images/bauble-broken-red-light-v1.webp');
+  --cracked-green: url('/images/bauble-broken-green-light-v1.webp');
   --veil: 97%;
   --edge: color-mix(in srgb, var(--line) 70%, var(--ink));
   --font-display: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
@@ -68,6 +73,10 @@
     --flake: #ffffff;
     --flake-edge: transparent;
     --scene-ink: #14051f;
+    --ball-red: url('/images/bauble-whole-red-dark-v1.webp');
+    --ball-green: url('/images/bauble-whole-green-dark-v1.webp');
+    --cracked-red: url('/images/bauble-broken-red-dark-v1.webp');
+    --cracked-green: url('/images/bauble-broken-green-dark-v1.webp');
     color-scheme: dark;
   }
 }
@@ -100,6 +109,10 @@
   --flake: #ffffff;
   --flake-edge: transparent;
   --scene-ink: #14051f;
+  --ball-red: url('/images/bauble-whole-red-dark-v1.webp');
+  --ball-green: url('/images/bauble-whole-green-dark-v1.webp');
+  --cracked-red: url('/images/bauble-broken-red-dark-v1.webp');
+  --cracked-green: url('/images/bauble-broken-green-dark-v1.webp');
   color-scheme: dark;
 }
 
@@ -159,18 +172,20 @@ ol {
   position: fixed;
   inset: 0 0 auto;
   /* As tall as the screen gets with a phone browser's address bar tucked away, so the scene neither
-     falls short nor shifts as the bar comes and goes. Nothing in it is measured from the visible screen, which
-     changes with the bar: sizes are in lvh, lvmin and lvmax, and it keeps its layout to itself. */
-  height: 100lvh;
+     falls short nor shifts as the bar comes and goes. Some browsers shrink even lvh for the bar, so index.html
+     keeps the tallest the page has been in --scene-h. Everything in it is sized from the scene itself
+     (cqh, cqmin, cqmax), and it keeps its layout to itself. */
+  height: max(100lvh, var(--scene-h, 0px));
+  container-type: size;
   contain: strict;
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
   background: linear-gradient(var(--sky-top), var(--sky-bottom) 80%);
   /* Sizes are capped by width as well as height so the cast still fits side by side in portrait. */
-  --shop-h: min(32lvh, 18rem);
-  --tree-h: min(80lvh, 48rem);
-  --rainbow-r: min(65lvmin, 48vw);
+  --shop-h: min(32cqh, 18rem);
+  --tree-h: min(80cqh, 48rem);
+  --rainbow-r: min(65cqmin, 48vw);
 }
 .scene svg {
   position: absolute;
@@ -186,9 +201,9 @@ ol {
   position: absolute;
   left: 14%;
   top: 45%;
-  width: 135lvmax;
-  height: 135lvmax;
-  margin: -67.5lvmax 0 0 -67.5lvmax;
+  width: 135cqmax;
+  height: 135cqmax;
+  margin: -67.5cqmax 0 0 -67.5cqmax;
   scale: 2;
   background: repeating-conic-gradient(
     var(--ray-a) 0 9deg,
@@ -200,7 +215,7 @@ ol {
 .scene-rainbow {
   position: absolute;
   left: 50%;
-  bottom: 6lvh;
+  bottom: 6cqh;
   width: calc(var(--rainbow-r) * 2);
   height: var(--rainbow-r);
   margin-left: calc(var(--rainbow-r) * -1);
@@ -223,10 +238,10 @@ ol {
 .scene-hill {
   inset: auto 0 0;
   width: 100%;
-  height: 26lvh;
+  height: 26cqh;
 }
 .scene-hill.near {
-  height: 17lvh;
+  height: 17cqh;
 }
 .hill-far {
   fill: var(--hill-far);
@@ -238,7 +253,7 @@ ol {
 /* Santa, rising behind the workshop like a jolly, hypnotised sun. */
 .scene-santa {
   left: 0;
-  bottom: calc(8lvh + var(--shop-h) * 0.78);
+  bottom: calc(8cqh + var(--shop-h) * 0.78);
   height: calc(var(--shop-h) * 1.44);
   transform-origin: 50% 100%;
 }
@@ -259,7 +274,7 @@ ol {
 /* The workshop */
 .scene-shop {
   left: 1.5vw;
-  bottom: 8lvh;
+  bottom: 8cqh;
   height: var(--shop-h);
   transform-origin: 50% 100%;
 }
@@ -305,7 +320,7 @@ ol {
 
 /* The tree. It has a face now. */
 .scene-tree {
-  bottom: 4lvh;
+  bottom: 4cqh;
   right: 2vw;
   height: var(--tree-h);
   transform-origin: 50% 100%;
@@ -337,41 +352,41 @@ ol {
 
 /* Giant candy canes and a chorus line of gingerbread men. */
 .scene-cane {
-  bottom: 5lvh;
-  height: min(30lvh, 16rem);
+  bottom: 5cqh;
+  height: min(30cqh, 16rem);
   transform-origin: 30% 100%;
 }
 .scene-cane.one {
-  left: calc(50% - 20rem - 9lvh);
+  left: calc(50% - 20rem - 9cqh);
 }
 .scene-cane.two {
-  right: calc(50% - 20rem - 9lvh);
+  right: calc(50% - 20rem - 9cqh);
   scale: -1 1;
 }
 .scene-chorus {
   position: absolute;
-  inset: auto 0 0.5lvh;
+  inset: auto 0 0.5cqh;
   display: flex;
   justify-content: space-around;
   align-items: flex-end;
 }
 .scene-chorus svg {
   position: static;
-  height: min(11lvh, 5.5rem);
+  height: min(11cqh, 5.5rem);
   transform-origin: 50% 100%;
 }
 
 /* The sleigh crosses the sky on a rainbow and does a barrel roll halfway. */
 .scene-flight {
   position: absolute;
-  top: 11lvh;
+  top: 11cqh;
   left: 0;
-  translate: -60lvmin 0;
+  translate: -60cqmin 0;
 }
 .scene-sleigh {
   position: static !important;
   display: block;
-  height: max(9lvh, 4rem);
+  height: max(9cqh, 4rem);
 }
 
 /* Weather: two layers of snow, one of sweets. */
@@ -500,20 +515,20 @@ ol {
   }
   12%,
   30% {
-    transform: translateY(5lvh) rotate(0turn);
+    transform: translateY(5cqh) rotate(0turn);
   }
   20% {
-    transform: translateY(-3lvh) rotate(0turn);
+    transform: translateY(-3cqh) rotate(0turn);
   }
   58%,
   100% {
     transform: translateY(0) rotate(-1turn);
   }
   75% {
-    transform: translateY(6lvh) rotate(-1turn);
+    transform: translateY(6cqh) rotate(-1turn);
   }
   90% {
-    transform: translateY(-2lvh) rotate(-1turn);
+    transform: translateY(-2cqh) rotate(-1turn);
   }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -645,8 +660,8 @@ ol {
 @media (max-width: 71.99rem) {
   /* Workshop on the left, tree on the right, each kept to roughly half the width. */
   .scene {
-    --shop-h: min(24lvh, 40vw);
-    --tree-h: min(60lvh, 85vw);
+    --shop-h: min(24cqh, 40vw);
+    --tree-h: min(60cqh, 85vw);
   }
   .scene-burst {
     left: 50%;
@@ -662,7 +677,7 @@ ol {
 @media (max-width: 71.99rem) and (orientation: portrait) {
   /* Its feet are hidden behind the workshop and tree here, so lift the arc clear of them. */
   .scene-rainbow {
-    bottom: calc(8lvh + var(--shop-h) * 0.5);
+    bottom: calc(8cqh + var(--shop-h) * 0.5);
   }
 }
 
@@ -1259,8 +1274,7 @@ input[type='password'] {
   position: absolute;
   inset: -0.08em;
   border-radius: 0.2em;
-  background: var(--paper);
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n' x='0' y='0' width='1' height='1'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.35' numOctaves='3' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 7 -4.25'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 5.6em;
+  background: url('/images/coal-flecks-v1.webp') 0 0 / 5.6em;
 }
 
 /* Movie rows: raised tiles with the poster stuck on at a slight angle, a rank pinned to the corner
@@ -1338,10 +1352,10 @@ input[type='password'] {
   background:
     radial-gradient(7px 8px at 8px 11.5px, rgba(255, 214, 120, 0.14), transparent) 0 0 / 8px 100% no-repeat padding-box,
     radial-gradient(7px 8px at 0 11.5px, rgba(255, 214, 120, 0.14), transparent) 100% 0 / 8px 100% no-repeat padding-box,
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -5 96 34'%3E%3Cfilter id='f' filterUnits='userSpaceOnUse' x='-36' y='-20' width='168' height='64' color-interpolation-filters='sRGB'%3E%3CfeGaussianBlur in='SourceAlpha' stdDeviation='3' result='b'/%3E%3CfeFlood flood-color='%23ffd678' flood-opacity='.75'/%3E%3CfeComposite in2='b' operator='in'/%3E%3C/filter%3E%3Cuse href='%23a' filter='url(%23f)'/%3E%3Cg id='a'%3E%3Cpath fill='none' stroke='%2314402f' stroke-width='1.6' d='M-36 4Q-24 9 -12 4Q0 9 12 4Q24 9 36 4Q48 9 60 4Q72 9 84 4Q96 9 108 4Q120 9 132 4'/%3E%3Cg transform='rotate(10 12 4)'%3E%3Crect x='9.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%23ff3d5e' d='M9.4 8C6 11 7 17 12 21C17 17 18 11 14.6 8Z'/%3E%3Cellipse cx='10.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3Cg transform='rotate(8 60 4)'%3E%3Crect x='57.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%232fd673' d='M57.4 8C54 11 55 17 60 21C65 17 66 11 62.6 8Z'/%3E%3Cellipse cx='58.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") 0 0 / 96px 34px round no-repeat content-box;
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -5 96 34'%3E%3CradialGradient id='g'%3E%3Cstop offset='0.333' stop-color='%23ffd678' stop-opacity='0.348'/%3E%3Cstop offset='0.417' stop-color='%23ffd678' stop-opacity='0.274'/%3E%3Cstop offset='0.500' stop-color='%23ffd678' stop-opacity='0.195'/%3E%3Cstop offset='0.583' stop-color='%23ffd678' stop-opacity='0.124'/%3E%3Cstop offset='0.667' stop-color='%23ffd678' stop-opacity='0.067'/%3E%3Cstop offset='0.750' stop-color='%23ffd678' stop-opacity='0.031'/%3E%3Cstop offset='0.833' stop-color='%23ffd678' stop-opacity='0.012'/%3E%3Cstop offset='0.917' stop-color='%23ffd678' stop-opacity='0.003'/%3E%3Cstop offset='1.000' stop-color='%23ffd678' stop-opacity='0'/%3E%3C/radialGradient%3E%3Cg fill='none' stroke='%23ffd678'%3E%3Cdefs%3E%3Cpath id='w' d='M-36 4Q-24 9 -12 4Q0 9 12 4Q24 9 36 4Q48 9 60 4Q72 9 84 4Q96 9 108 4Q120 9 132 4'/%3E%3C/defs%3E%3Cuse href='%23w' stroke-width='18' stroke-opacity='.003'/%3E%3Cuse href='%23w' stroke-width='16' stroke-opacity='.004'/%3E%3Cuse href='%23w' stroke-width='14' stroke-opacity='.009'/%3E%3Cuse href='%23w' stroke-width='12' stroke-opacity='.015'/%3E%3Cuse href='%23w' stroke-width='10' stroke-opacity='.023'/%3E%3Cuse href='%23w' stroke-width='8' stroke-opacity='.030'/%3E%3Cuse href='%23w' stroke-width='6' stroke-opacity='.034'/%3E%3Cuse href='%23w' stroke-width='4' stroke-opacity='.031'/%3E%3Cuse href='%23w' stroke-width='2' stroke-opacity='.019'/%3E%3C/g%3E%3Cellipse transform='rotate(10 12 4)' cx='12' cy='12' rx='12' ry='17.4' fill='url(%23g)'/%3E%3Cellipse transform='rotate(8 60 4)' cx='60' cy='12' rx='12' ry='17.4' fill='url(%23g)'/%3E%3Cg%3E%3Cpath fill='none' stroke='%2314402f' stroke-width='1.6' d='M-36 4Q-24 9 -12 4Q0 9 12 4Q24 9 36 4Q48 9 60 4Q72 9 84 4Q96 9 108 4Q120 9 132 4'/%3E%3Cg transform='rotate(10 12 4)'%3E%3Crect x='9.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%23ff3d5e' d='M9.4 8C6 11 7 17 12 21C17 17 18 11 14.6 8Z'/%3E%3Cellipse cx='10.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3Cg transform='rotate(8 60 4)'%3E%3Crect x='57.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%232fd673' d='M57.4 8C54 11 55 17 60 21C65 17 66 11 62.6 8Z'/%3E%3Cellipse cx='58.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") 0 0 / 96px 34px round no-repeat content-box;
 }
 .lights::after {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -5 96 34'%3E%3Cfilter id='f' filterUnits='userSpaceOnUse' x='-36' y='-20' width='168' height='64' color-interpolation-filters='sRGB'%3E%3CfeGaussianBlur in='SourceAlpha' stdDeviation='3' result='b'/%3E%3CfeFlood flood-color='%23ffd678' flood-opacity='.75'/%3E%3CfeComposite in2='b' operator='in'/%3E%3C/filter%3E%3Cuse href='%23a' filter='url(%23f)'/%3E%3Cg id='a'%3E%3Cg transform='rotate(-9 36 4)'%3E%3Crect x='33.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%23ffc91a' d='M33.4 8C30 11 31 17 36 21C41 17 42 11 38.6 8Z'/%3E%3Cellipse cx='34.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3Cg transform='rotate(-11 84 4)'%3E%3Crect x='81.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%233d9bff' d='M81.4 8C78 11 79 17 84 21C89 17 90 11 86.6 8Z'/%3E%3Cellipse cx='82.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -5 96 34'%3E%3CradialGradient id='g'%3E%3Cstop offset='0.333' stop-color='%23ffd678' stop-opacity='0.348'/%3E%3Cstop offset='0.417' stop-color='%23ffd678' stop-opacity='0.274'/%3E%3Cstop offset='0.500' stop-color='%23ffd678' stop-opacity='0.195'/%3E%3Cstop offset='0.583' stop-color='%23ffd678' stop-opacity='0.124'/%3E%3Cstop offset='0.667' stop-color='%23ffd678' stop-opacity='0.067'/%3E%3Cstop offset='0.750' stop-color='%23ffd678' stop-opacity='0.031'/%3E%3Cstop offset='0.833' stop-color='%23ffd678' stop-opacity='0.012'/%3E%3Cstop offset='0.917' stop-color='%23ffd678' stop-opacity='0.003'/%3E%3Cstop offset='1.000' stop-color='%23ffd678' stop-opacity='0'/%3E%3C/radialGradient%3E%3Cellipse transform='rotate(-9 36 4)' cx='36' cy='12' rx='12' ry='17.4' fill='url(%23g)'/%3E%3Cellipse transform='rotate(-11 84 4)' cx='84' cy='12' rx='12' ry='17.4' fill='url(%23g)'/%3E%3Cg%3E%3Cg transform='rotate(-9 36 4)'%3E%3Crect x='33.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%23ffc91a' d='M33.4 8C30 11 31 17 36 21C41 17 42 11 38.6 8Z'/%3E%3Cellipse cx='34.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3Cg transform='rotate(-11 84 4)'%3E%3Crect x='81.5' y='3' width='5' height='5' rx='1.2' fill='%2314402f'/%3E%3Cpath fill='%233d9bff' d='M81.4 8C78 11 79 17 84 21C89 17 90 11 86.6 8Z'/%3E%3Cellipse cx='82.4' cy='12.5' rx='1.1' ry='2.4' fill='%23fff' opacity='.55'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
 /* Faded out, a layer leaves the unlit bulbs: no glow and a little darker, but still plainly bulbs. */
 @media (prefers-reduced-motion: no-preference) {
@@ -1380,8 +1394,7 @@ input[type='password'] {
   font: 700 1.0625rem/1.25 var(--font-display);
   overflow-wrap: anywhere;
 }
-/* The rank is a heart pinned to the tile's corner. The shape is drawn by ::before so the white
-   outline (a drop shadow on the whole badge) can follow it. */
+/* The rank is a heart pinned to the tile's corner. Its outline is the shape's own stroke. */
 .rank {
   position: absolute;
   top: -12px;
@@ -1396,18 +1409,16 @@ input[type='password'] {
   font: 800 0.8125rem/1 var(--font-display);
   font-variant-numeric: tabular-nums;
   rotate: -10deg;
-  filter: drop-shadow(1.5px 0 0 var(--surface)) drop-shadow(-1.5px 0 0 var(--surface))
-    drop-shadow(0 1.5px 0 var(--surface)) drop-shadow(0 -1.5px 0 var(--surface));
 }
-.rank::before {
-  content: '';
+.rank svg {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: var(--accent);
-  clip-path: path(
-    'M16 29C16 29 1 19 1 9.5C1 4.5 5 1 9.2 1C12.2 1 14.8 2.6 16 5C17.2 2.6 19.8 1 22.8 1C27 1 31 4.5 31 9.5C31 19 16 29 16 29Z'
-  );
+  overflow: visible;
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 3.4px;
+  paint-order: stroke;
 }
 .crown {
   font-size: 0.75rem;
@@ -1432,8 +1443,8 @@ input[type='password'] {
   scale: 1.25;
   color: #3b1030;
 }
-.champ .rank::before {
-  background: var(--star);
+.champ .rank svg {
+  fill: var(--star);
 }
 .tag {
   align-self: flex-start;
@@ -1446,6 +1457,8 @@ input[type='password'] {
 }
 .score {
   position: relative;
+  /* Keeps its picture behind the number but in front of the tile. */
+  isolation: isolate;
   flex: none;
   display: grid;
   place-content: center;
@@ -1458,79 +1471,41 @@ input[type='password'] {
   font: 800 1.375rem/1 var(--font-display);
   font-variant-numeric: tabular-nums;
 }
-.score,
-.glass {
-  border-radius: 50%;
-  /* A glass ball lit from the upper left: a sharp window glint, a broad sheen, then the body colour
-     falling off to a dark rim, with a little light bounced back up into the underside. */
-  background:
-    radial-gradient(ellipse 22% 13% at 30% 21%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 100%),
-    radial-gradient(ellipse 60% 30% at 50% 96%, color-mix(in srgb, var(--bauble) 55%, #fff) 0, transparent 100%),
-    radial-gradient(
-      circle at 36% 30%,
-      color-mix(in srgb, var(--bauble) 68%, #fff) 0,
-      var(--bauble) 42%,
-      color-mix(in srgb, var(--bauble) 58%, #000) 100%
-    );
-  box-shadow:
-    inset -3px -5px 9px rgba(0, 0, 0, 0.28),
-    inset 2px 3px 5px rgba(255, 255, 255, 0.22),
-    0 5px 7px -1px rgba(20, 5, 31, 0.35);
-}
 /* Baubles alternate red and green down the list. */
 .score {
   --bauble: var(--accent);
   --bauble-ink: var(--accent-ink);
+  --ball: var(--ball-red);
+  --cracked: var(--cracked-red);
 }
 .cards li:nth-child(even) .score {
   --bauble: var(--holly);
   --bauble-ink: var(--holly-ink);
+  --ball: var(--ball-green);
+  --cracked: var(--cracked-green);
 }
-/* The bauble's crimped brass cap, and the wire loop it hangs from. */
+/* A glass ball lit from the upper left, hung by a wire loop in its brass cap. It's a picture, shadow and all,
+   because drawing its sheen and shadows afresh for every tile made fast scrolling stutter. */
 .score::before {
   content: '';
   position: absolute;
-  top: -7px;
-  left: 50%;
-  width: 16px;
-  height: 9px;
-  margin-left: -8px;
-  border-radius: 2px 2px 1px 1px;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 2px, rgba(90, 55, 0, 0.3) 2px 3px),
-    linear-gradient(90deg, #a8770f, #ffe9a3 35%, #e0ac2c 60%, #8f6208);
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
-}
-.score::after {
-  content: '';
-  position: absolute;
-  top: -14px;
-  left: 50%;
-  width: 9px;
-  height: 9px;
-  margin-left: -4.5px;
-  border: 1.5px solid #c9982a;
-  border-radius: 50%;
+  z-index: -1;
+  inset: -16px -14px -26px;
+  background: var(--ball) 0 0 / 100% 100% no-repeat;
 }
 /* First place's score is on the gown of an angel tree topper instead. She leans into the tile's
    padding and gap, so on a phone the text beside her loses no room to her wings. */
 .score.angel {
-  /* Keeps her behind the number but in front of the tile. */
-  isolation: isolate;
   align-content: end;
   width: 88px;
   aspect-ratio: 100 / 116;
   margin: -6px -12px 0 -8px;
   padding-bottom: 9px;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
   color: #3b1030;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
   font-size: 1.25rem;
 }
-.score.angel::before,
-.score.angel::after {
+.score.angel::before {
   content: none;
 }
 .topper {
@@ -1584,54 +1559,28 @@ input[type='password'] {
   }
 }
 /* Not recommended: the ball has cracked in two. The top still hangs from the cap; the rest is dropping
-   away with the points on it. Both follow the same jagged line, so they'd fit back together. */
+   away with the points on it. */
 .score.broken {
   margin-bottom: 10px;
-  background: none;
-  box-shadow: none;
   font-size: 1.125rem;
 }
 .score.broken::before {
-  z-index: 1;
+  background-image: var(--cracked);
 }
 .champ .score.broken {
   margin-block: 16px 10px;
 }
+/* The points, at the tilt of the lower half and cut off along its break. */
 .half {
   position: absolute;
   inset: 0;
-  filter: drop-shadow(0 3px 3px rgba(20, 5, 31, 0.35));
-}
-.half.top {
-  --cut: polygon(-10% -10%, -10% 43%, 3% 45%, 12% 34%, 22% 46%, 33% 33%, 43% 42%, 53% 29%, 63% 43%, 74% 32%, 84% 44%, 93% 33%, 110% 37%, 110% -10%);
-  --lip: 1.5px;
-  transform-origin: 50% 0;
-  rotate: 4deg;
-}
-.half.bottom {
-  --cut: polygon(-10% 110%, -10% 43%, 3% 45%, 12% 34%, 22% 46%, 33% 33%, 43% 42%, 53% 29%, 63% 43%, 74% 32%, 84% 44%, 93% 33%, 110% 37%, 110% 110%);
-  --lip: -1.5px;
-  translate: -2px 8px;
-  rotate: -9deg;
-}
-/* The thickness of the glass, showing pale along the break. */
-.half::before,
-.glass {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  clip-path: var(--cut);
-}
-.half::before {
-  content: '';
-  translate: 0 var(--lip);
-  background: color-mix(in srgb, var(--bauble) 35%, #fff);
-}
-.glass {
   display: grid;
   place-content: end center;
   justify-items: center;
   padding-bottom: 8px;
+  translate: -2px 8px;
+  rotate: -9deg;
+  clip-path: polygon(-10% 110%, -10% 43%, 3% 45%, 12% 34%, 22% 46%, 33% 33%, 43% 42%, 53% 29%, 63% 43%, 74% 32%, 84% 44%, 93% 33%, 110% 37%, 110% 110%);
 }
 .sr-only {
   position: absolute;

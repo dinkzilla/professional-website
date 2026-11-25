@@ -1,11 +1,11 @@
 import { Component, booleanAttribute, computed, input, linkedSignal } from '@angular/core';
-import { safePoster } from './criteria';
+import { safePoster, thumbPoster } from './criteria';
 
 @Component({
   selector: 'app-poster',
   template: `
-    @if (src() && !broken()) {
-      <img [src]="src()" [alt]="title() + ' poster'" loading="lazy" (error)="broken.set(true)" />
+    @if (src()) {
+      <img [src]="src()" [alt]="title() + ' poster'" loading="lazy" (error)="failed()" />
     } @else {
       <span class="poster-blank" aria-hidden="true">{{ title().charAt(0) }}</span>
     }
@@ -20,7 +20,14 @@ export class Poster {
   readonly title = input('');
   /** Stamp it as not recommended. */
   readonly coal = input(false, { transform: booleanAttribute });
-  protected readonly src = computed(() => safePoster(this.url()));
-  /** Whether the picture failed to load. Starts over when another takes its place. */
-  protected readonly broken = linkedSignal({ source: () => this.src(), computation: () => false });
+  /** Use the smaller picture, as in lists. */
+  readonly thumb = input(false, { transform: booleanAttribute });
+  private readonly full = computed(() => safePoster(this.url()));
+  /** The picture showing, or '' if none could be loaded. Starts over when another takes its place. */
+  protected readonly src = linkedSignal(() => (this.thumb() ? thumbPoster(this.full()) : this.full()));
+
+  /** Not every poster has a smaller picture, so try the full one before giving up. */
+  protected failed() {
+    this.src.set(this.src() === this.full() ? '' : this.full());
+  }
 }

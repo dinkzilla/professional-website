@@ -97,7 +97,7 @@ import { Poster } from './poster';
               @for (h of hits(); track h.tmdbId) {
                 <li>
                   <button type="button" class="hit" (click)="addHit(h)" [disabled]="adding()">
-                    <app-poster [url]="h.poster" [title]="h.title" />
+                    <app-poster [url]="h.poster" [title]="h.title" thumb />
                     <span class="hit-text">
                       <strong>{{ h.title }}</strong>
                       <span class="muted">{{ h.year || 'Year unknown' }}</span>
@@ -113,7 +113,7 @@ import { Poster } from './poster';
             @for (m of toRate(); track m.id) {
               <li>
                 <button type="button" class="card" (click)="open(m)">
-                  <app-poster [url]="m.poster" [title]="m.title" [coal]="!m.recommend" />
+                  <app-poster [url]="m.poster" [title]="m.title" [coal]="!m.recommend" thumb />
                   <span class="card-text">
                     <strong>{{ m.title }}</strong>
                     <span class="muted">{{ meta(m) }}</span>
@@ -139,9 +139,9 @@ import { Poster } from './poster';
             <li>
               <button type="button" class="card" [class.champ]="sort() === 'score' && r.rank === 1" (click)="open(m)">
                 @if (sort() === 'score') {
-                  <span class="rank">{{ r.rank }}</span>
+                  <span class="rank"><svg viewBox="0 0 32 30" aria-hidden="true"><path d="M16 29C16 29 1 19 1 9.5C1 4.5 5 1 9.2 1C12.2 1 14.8 2.6 16 5C17.2 2.6 19.8 1 22.8 1C27 1 31 4.5 31 9.5C31 19 16 29 16 29Z" /></svg>{{ r.rank }}</span>
                 }
-                <app-poster [url]="m.poster" [title]="m.title" [coal]="!m.recommend" />
+                <app-poster [url]="m.poster" [title]="m.title" [coal]="!m.recommend" [thumb]="!(sort() === 'score' && r.rank === 1)" />
                 <span class="card-text">
                   @if (sort() === 'score' && r.rank === 1) {
                     <span class="crown">★ Top of the tree</span>
@@ -194,11 +194,7 @@ import { Poster } from './poster';
                   @if (m.recommend) {
                     {{ score(m) }}<small>pts</small>
                   } @else {
-                    <!-- Each half is the whole ball cut off along the break. The points are on the lower one. -->
-                    <span class="half top"><span class="glass"></span></span>
-                    <span class="half bottom">
-                      <span class="glass">{{ score(m) }}<small>pts</small></span>
-                    </span>
+                    <span class="half">{{ score(m) }}<small>pts</small></span>
                     <span class="sr-only">, not recommended</span>
                   }
                 </span>

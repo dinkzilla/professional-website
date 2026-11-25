@@ -50,7 +50,7 @@
                 "input": "public"
               },
               {
-                "glob": "*.jpg",
+                "glob": "**/*.jpg",
                 "input": "posters",
                 "output": "posters"
               },

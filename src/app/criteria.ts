@@ -216,6 +216,13 @@ export function safePoster(url: string): string {
   return /^https:\/\//.test(url) || /^(\/_blob\/|posters\/)[\w./-]+$/.test(url) ? url : '';
 }
 
+/** The smaller picture of a poster, sized for lists: TMDB's own, or the copy in posters/small. */
+export function thumbPoster(url: string): string {
+  return url
+    .replace(/^(https:\/\/image\.tmdb\.org\/t\/p\/)w342\//, '$1w185/')
+    .replace(/^posters\/([\w.-]+)$/, 'posters/small/$1');
+}
+
 /** The colour of a choice's heading: that of the chosen option, or grey until one is chosen. Unset for other criteria. */
 export function choiceColor(c: Criterion, v: number | null | undefined): string | undefined {
   return c.options && (c.options.find((o) => o.value === v)?.color ?? 'var(--muted)');
