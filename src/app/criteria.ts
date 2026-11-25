@@ -117,6 +117,8 @@ export interface MovieData {
   director: string;
   /** The two top-billed cast members. */
   stars: string[];
+  /** Kiki's own words about the movie, or '' */
+  notes: string;
   addedAt: string;
 }
 
@@ -136,6 +138,7 @@ export function blankMovie(title: string): MovieData {
     overview: '',
     director: '',
     stars: [],
+    notes: '',
     addedAt: new Date().toISOString(),
   };
 }
@@ -161,6 +164,7 @@ export function normalize(id: string, raw: Record<string, unknown> | undefined):
     overview: str(r['overview']),
     director: str(r['director']),
     stars: Array.isArray(r['stars']) ? r['stars'].filter((v) => typeof v === 'string') : [],
+    notes: str(r['notes']),
     addedAt: str(r['addedAt']),
   };
 }

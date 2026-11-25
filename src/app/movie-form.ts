@@ -93,6 +93,11 @@ import { MovieStore } from './movie-store';
           </section>
         }
 
+        <div class="field crit">
+          <label for="f-notes">Kiki’s Notes <span class="muted">(optional)</span></label>
+          <textarea id="f-notes" rows="4" [value]="d.notes" (input)="patch({ notes: $any($event.target).value })"></textarea>
+        </div>
+
         <div class="savebar">
           <p>
             <strong>{{ sum() }} pts</strong>
@@ -199,7 +204,7 @@ export class MovieForm implements OnInit {
     const d = this.draft();
     if (!d || this.saving()) return;
     this.saving.set(true);
-    const id = await this.store.save(this.id(), { ...d, title: d.title.trim(), network: d.network.trim(), watched: watchDates(d.watched) });
+    const id = await this.store.save(this.id(), { ...d, title: d.title.trim(), network: d.network.trim(), notes: d.notes.trim(), watched: watchDates(d.watched) });
     this.saving.set(false);
     if (id) this.store.go({ name: 'detail', id });
   }

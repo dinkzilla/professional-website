@@ -79,9 +79,12 @@ import { Poster } from './poster';
       </div>
 
       <ng-template #sortChips>
-        <div class="chips sort" role="group" aria-label="Sort">
-          <button type="button" class="chip" [class.on]="sort() === 'score'" (click)="sort.set('score')">Top score</button>
-          <button type="button" class="chip" [class.on]="sort() === 'date'" (click)="sort.set('date')">Latest watched</button>
+        <div class="tray sort" role="group" aria-labelledby="sort-label">
+          <span class="tray-tag" id="sort-label">Sort</span>
+          <div class="tray-keys">
+            <button type="button" class="chip" [class.on]="sort() === 'score'" [attr.aria-pressed]="sort() === 'score'" (click)="sort.set('score')">Top score</button>
+            <button type="button" class="chip" [class.on]="sort() === 'date'" [attr.aria-pressed]="sort() === 'date'" (click)="sort.set('date')">Latest watched</button>
+          </div>
         </div>
       </ng-template>
 
@@ -90,11 +93,14 @@ import { Poster } from './poster';
       @if (networks().length > 1 || sortBeside) {
         <div class="section-head">
           @if (networks().length > 1) {
-            <div class="chips" role="group" aria-label="Filter by network">
-              <button type="button" class="chip" [class.on]="!network()" (click)="network.set('')">All</button>
-              @for (n of networks(); track n) {
-                <button type="button" class="chip" [class.on]="network() === n" (click)="network.set(n)">{{ n }}</button>
-              }
+            <div class="tray" role="group" aria-labelledby="filter-label">
+              <span class="tray-tag" id="filter-label">Filter</span>
+              <div class="tray-keys">
+                <button type="button" class="chip" [class.on]="!network()" [attr.aria-pressed]="!network()" (click)="network.set('')">All</button>
+                @for (n of networks(); track n) {
+                  <button type="button" class="chip" [class.on]="network() === n" [attr.aria-pressed]="network() === n" (click)="network.set(n)">{{ n }}</button>
+                }
+              </div>
             </div>
           }
           @if (sortBeside) {

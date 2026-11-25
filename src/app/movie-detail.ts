@@ -84,6 +84,13 @@ import { Thermometer } from './thermometer';
           }
         </dl>
 
+        @if (m.notes) {
+          <section class="kiki-notes">
+            <h3>Kiki’s Notes</h3>
+            <p>{{ m.notes }}</p>
+          </section>
+        }
+
         @if (store.canWrite()) {
           <div class="actions">
             <button type="button" class="btn primary" (click)="store.go({ name: 'edit', id: m.id })">
