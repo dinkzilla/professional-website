@@ -1,0 +1,40 @@
+name: Deploy to Firebase
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time, so an older build can't land on top of a newer one.
+concurrency:
+  group: deploy
+
+permissions:
+  contents: read
+  id-token: write # lets the job prove to Google Cloud which repo and branch it is
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      # Keyless: trust is set up once by scripts/setup-github-deploy.sh. Neither value is secret.
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/842316071349/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deploy@yule-swoon.iam.gserviceaccount.com
+
+      - run: npx firebase deploy --only hosting,firestore:rules --project yule-swoon --non-interactive

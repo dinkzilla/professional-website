@@ -32,6 +32,9 @@ export class MovieStore {
   readonly error = signal('');
   readonly view = signal<View>({ name: onSignInPath() ? 'signin' : 'list' });
 
+  /** What's typed in the list's search box, kept here so it survives opening a movie and coming back. */
+  readonly search = signal('');
+
   private readonly db = firestore;
 
   constructor() {

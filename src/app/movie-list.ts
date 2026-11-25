@@ -1,12 +1,13 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { CRITERIA, Movie, answered, blankMovie, fmt, fmtDate, total, lastWatched } from './criteria';
+import { NgTemplateOutlet } from '@angular/common';
+import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
+import { CRITERIA, Movie, answered, blankMovie, fmt, fmtDate, matchesSearch, ranked, total, lastWatched } from './criteria';
 import { LookupHit, MovieLookup } from './movie-lookup';
 import { MovieStore } from './movie-store';
 import { Poster } from './poster';
 
 @Component({
   selector: 'app-movie-list',
-  imports: [Poster],
+  imports: [NgTemplateOutlet, Poster],
   template: `
     @if (store.canWrite()) {
       <form class="add" (submit)="addTyped($event)">
@@ -17,7 +18,7 @@ import { Poster } from './poster';
             type="text"
             autocomplete="off"
             enterkeyhint="done"
-            [placeholder]="lookup.ready ? 'Search by title' : 'Movie title'"
+            [placeholder]="lookup.ready ? 'Look up a title to add' : 'Movie title'"
             [value]="query()"
             (input)="onQuery($any($event.target).value)"
           />
@@ -50,18 +51,54 @@ import { Poster } from './poster';
       </p>
     } @else if (store.status() === 'unavailable') {
       <p class="empty">The ratings can’t be reached right now. Check your connection and reload the page.</p>
-    } @else if (!store.movies().length) {
+    } @else if (!listed().length) {
       <p class="empty">{{ store.canWrite() ? 'No movies yet. Add a title above, then tap it to rate it.' : 'No movies have been rated yet.' }}</p>
     } @else {
       @if (store.slow()) {
         <p class="note">This list may be out of date. Still reconnecting…</p>
       }
 
-      @if (networks().length > 1) {
-        <div class="chips" role="group" aria-label="Filter by network">
-          <button type="button" class="chip" [class.on]="!network()" (click)="network.set('')">All</button>
-          @for (n of networks(); track n) {
-            <button type="button" class="chip" [class.on]="network() === n" (click)="network.set(n)">{{ n }}</button>
+      <div class="find" role="search">
+        <div class="ice">
+          <input
+            #find
+            type="search"
+            autocomplete="off"
+            enterkeyhint="search"
+            placeholder="Search Movies"
+            aria-label="Search Movies"
+            [value]="store.search()"
+            (input)="store.search.set(find.value)"
+            (keydown.enter)="find.blur()"
+          />
+          @if (store.search()) {
+            <button type="button" class="clear" (click)="store.search.set(''); find.focus()">Clear</button>
+          }
+        </div>
+        <p class="muted" role="status">{{ found() }}</p>
+      </div>
+
+      <ng-template #sortChips>
+        <div class="chips sort" role="group" aria-label="Sort">
+          <button type="button" class="chip" [class.on]="sort() === 'score'" (click)="sort.set('score')">Top score</button>
+          <button type="button" class="chip" [class.on]="sort() === 'date'" (click)="sort.set('date')">Latest watched</button>
+        </div>
+      </ng-template>
+
+      <!-- Without the section headings, the sort sits across from the filter. -->
+      @let sortBeside = !store.canWrite() && rated().length > 0;
+      @if (networks().length > 1 || sortBeside) {
+        <div class="section-head">
+          @if (networks().length > 1) {
+            <div class="chips" role="group" aria-label="Filter by network">
+              <button type="button" class="chip" [class.on]="!network()" (click)="network.set('')">All</button>
+              @for (n of networks(); track n) {
+                <button type="button" class="chip" [class.on]="network() === n" (click)="network.set(n)">{{ n }}</button>
+              }
+            </div>
+          }
+          @if (sortBeside) {
+            <ng-container [ngTemplateOutlet]="sortChips" />
           }
         </div>
       }
@@ -88,23 +125,23 @@ import { Poster } from './poster';
 
       @if (rated().length) {
         <section>
-          <div class="section-head">
-            <h2>Rated <span class="count">{{ rated().length }}</span></h2>
-            <div class="chips" role="group" aria-label="Sort">
-              <button type="button" class="chip" [class.on]="sort() === 'score'" (click)="sort.set('score')">Top score</button>
-              <button type="button" class="chip" [class.on]="sort() === 'date'" (click)="sort.set('date')">Latest watched</button>
+          @if (store.canWrite()) {
+            <div class="section-head">
+              <h2>Rated <span class="count">{{ rated().length }}</span></h2>
+              <ng-container [ngTemplateOutlet]="sortChips" />
             </div>
-          </div>
+          }
           <ol class="cards">
-            @for (m of rated(); track m.id; let i = $index) {
+            @for (r of rated(); track r.movie.id) {
+              @let m = r.movie;
               <li>
-                <button type="button" class="card" [class.champ]="sort() === 'score' && i === 0" (click)="open(m)">
+                <button type="button" class="card" [class.champ]="sort() === 'score' && r.rank === 1" (click)="open(m)">
                   @if (sort() === 'score') {
-                    <span class="rank">{{ i + 1 }}</span>
+                    <span class="rank">{{ r.rank }}</span>
                   }
                   <app-poster [url]="m.poster" [title]="m.title" />
                   <span class="card-text">
-                    @if (sort() === 'score' && i === 0) {
+                    @if (sort() === 'score' && r.rank === 1) {
                       <span class="crown">★ Top of the tree</span>
                     }
                     <strong>{{ m.title }}</strong>
@@ -125,7 +162,11 @@ export class MovieList {
   protected readonly lookup = inject(MovieLookup);
 
   protected readonly sort = signal<'score' | 'date'>('score');
-  protected readonly network = signal('');
+  /** The network picked as a filter, dropped if signing out takes its chip away. */
+  protected readonly network = linkedSignal<string[], string>({
+    source: () => this.networks(),
+    computation: (networks, prev) => (prev && networks.length > 1 && networks.includes(prev.value) ? prev.value : ''),
+  });
   protected readonly query = signal('');
   protected readonly hits = signal<LookupHit[]>([]);
   protected readonly searchNote = signal('');
@@ -134,26 +175,41 @@ export class MovieList {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private abort: AbortController | undefined;
 
+  /** Every movie for the editor; everyone else only sees the fully rated ones. */
+  protected readonly listed = computed(() =>
+    this.store.canWrite() ? this.store.movies() : this.store.movies().filter((m) => answered(m.scores) === CRITERIA.length),
+  );
+
   protected readonly networks = computed(() =>
-    [...new Set(this.store.movies().map((m) => m.network).filter(Boolean))].sort(),
+    [...new Set(this.listed().map((m) => m.network).filter(Boolean))].sort(),
   );
 
   private readonly visible = computed(() => {
     const n = this.network();
-    return this.store.movies().filter((m) => !n || m.network === n);
+    return this.listed().filter((m) => !n || m.network === n);
   });
 
   protected readonly toRate = computed(() =>
     this.visible()
-      .filter((m) => answered(m.scores) < CRITERIA.length)
+      .filter((m) => answered(m.scores) < CRITERIA.length && matchesSearch(m, this.store.search()))
       .sort((a, b) => b.addedAt.localeCompare(a.addedAt)),
   );
 
   protected readonly rated = computed(() => {
-    const done = this.visible().filter((m) => answered(m.scores) === CRITERIA.length);
-    return this.sort() === 'score'
-      ? done.sort((a, b) => total(b.scores) - total(a.scores) || a.title.localeCompare(b.title))
-      : done.sort((a, b) => (lastWatched(b) || '0').localeCompare(lastWatched(a) || '0'));
+    const done = ranked(this.visible());
+    if (this.sort() === 'date') done.sort((a, b) => (lastWatched(b) || '0').localeCompare(lastWatched(a) || '0'));
+    // Ranked before searching, so a movie found by search keeps its place in the full list.
+    return done.map((movie, i) => ({ movie, rank: i + 1 })).filter((r) => matchesSearch(r.movie, this.store.search()));
+  });
+
+  /** How many movies the search turned up, or '' when nothing is being searched for. */
+  protected readonly found = computed(() => {
+    const q = this.store.search().trim();
+    if (!q) return '';
+    const n = this.toRate().length + this.rated().length;
+    const kind = this.network() ? this.network() + ' ' : '';
+    if (!n) return `No ${kind}movies match “${q}”.`;
+    return n === 1 ? `1 ${kind}movie found` : `${n} ${kind}movies found`;
   });
 
   protected score(m: Movie) {

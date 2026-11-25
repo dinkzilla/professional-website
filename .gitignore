@@ -49,3 +49,6 @@ public/tmdb-key.txt
 # Firebase
 .firebase/
 *-debug.log
+
+# Short-lived Google credentials the deploy workflow writes
+gha-creds-*.json

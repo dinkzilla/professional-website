@@ -1,5 +1,5 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
-import { CRITERIA, Criterion, answered, fmt, fmtDate, groupStart, total } from './criteria';
+import { CRITERIA, Criterion, answered, fmt, fmtDate, groupStart, ranked, total } from './criteria';
 import { MovieStore } from './movie-store';
 import { Poster } from './poster';
 import { RatingIcons } from './rating-icons';
@@ -13,13 +13,36 @@ import { Thermometer } from './thermometer';
       <article class="detail">
         <header class="detail-head">
           <app-poster [url]="m.poster" [title]="m.title" />
-          <div class="detail-text">
-            <h2>{{ m.title }}</h2>
-            <p class="muted">{{ meta() }}</p>
-            <p class="big-score">
-              {{ score() }}<small>{{ complete() ? 'pts' : 'pts so far' }}</small>
-            </p>
-          </div>
+          <h2>{{ m.title }}</h2>
+          <dl class="facts">
+            <div>
+              <dt>Total Score</dt>
+              <dd class="big-stat">{{ score() }} <small>{{ complete() ? 'pts' : 'pts so far' }}</small></dd>
+            </div>
+            <div>
+              <dt>Current Ranking</dt>
+              @if (ranking(); as r) {
+                <dd class="big-stat place" [class.first]="r.place === 1">#{{ r.place }} <small>of {{ r.of }}</small></dd>
+              } @else {
+                <dd class="unset">Not ranked yet</dd>
+              }
+            </div>
+            @if (m.viewers.length) {
+              <div><dt>Watched By</dt><dd>{{ m.viewers.join(' and ') }}</dd></div>
+            }
+            @if (m.watched.length) {
+              <div>
+                <dt>Watched On</dt>
+                <dd>
+                  <ul class="dates">
+                    @for (w of m.watched; track w) {
+                      <li>{{ date(w) }}</li>
+                    }
+                  </ul>
+                </dd>
+              </div>
+            }
+          </dl>
         </header>
 
         @if (m.network || m.director || m.stars.length || m.released) {
@@ -95,12 +118,11 @@ export class MovieDetail {
   protected readonly movie = computed(() => this.store.byId(this.id()));
   protected readonly score = computed(() => fmt(total(this.movie()?.scores ?? {})));
   protected readonly complete = computed(() => answered(this.movie()?.scores ?? {}) === CRITERIA.length);
-  protected readonly meta = computed(() => {
-    const m = this.movie();
-    if (!m) return '';
-    return [m.watched.length && 'Watched ' + m.watched.map(fmtDate).join(', '), m.viewers.join(' and ')]
-      .filter(Boolean)
-      .join(' · ');
+  /** Its place among all the fully rated movies, whatever the list is filtered to. Unset until it is fully rated. */
+  protected readonly ranking = computed(() => {
+    const all = ranked(this.store.movies());
+    const place = all.findIndex((m) => m.id === this.id()) + 1;
+    return place ? { place, of: all.length } : undefined;
   });
 
   protected date(iso: string) {

@@ -37,6 +37,16 @@ Ratings for holiday romance movies. Anyone can view them; only Kiki can add, rat
 
 8. Hosting → Add custom domain, and add the DNS records it shows. Then check the domain is listed under Authentication → Settings → Authorized domains, or sign-in will be refused there.
 
+## Deploys
+
+Every push to `main` builds the site and deploys it and `firestore.rules` (`.github/workflows/deploy.yml`). It can also be run by hand from the repo's Actions tab.
+
+GitHub signs in to Google Cloud without a stored key. To set that up, once, or to move to a different repo:
+
+```bash
+scripts/setup-github-deploy.sh <google-account> <github-owner>/<repo>
+```
+
 ## Development
 
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.31.

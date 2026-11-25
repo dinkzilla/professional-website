@@ -165,12 +165,36 @@ export function normalize(id: string, raw: Record<string, unknown> | undefined):
   };
 }
 
+/** Lower case with accents and punctuation dropped, so "Noël's" is found by typing "noels". */
+function searchable(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f'’]/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+/** True when every word typed appears in the movie's title, network, director, stars or release year. */
+export function matchesSearch(m: Movie, query: string): boolean {
+  const words = searchable(query).split(' ').filter(Boolean);
+  const text = searchable([m.title, m.network, m.director, ...m.stars, m.released.slice(0, 4)].join(' '));
+  return words.every((w) => text.includes(w));
+}
+
 export function answered(scores: Scores): number {
   return CRITERIA.filter((c) => scores[c.key] != null).length;
 }
 
 export function total(scores: Scores): number {
   return CRITERIA.reduce((sum, c) => sum + (scores[c.key] ?? 0), 0);
+}
+
+/** Every fully rated movie, best score first, ties by title. A movie's ranking is its place in this order. */
+export function ranked<T extends MovieData>(movies: T[]): T[] {
+  return movies
+    .filter((m) => answered(m.scores) === CRITERIA.length)
+    .sort((a, b) => total(b.scores) - total(a.scores) || a.title.localeCompare(b.title));
 }
 
 export function fmt(n: number): string {
