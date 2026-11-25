@@ -7,6 +7,13 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="icon" href="favicon.ico" sizes="48x48 32x32 16x16" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <script>
+      // The theme remembered by theme.ts, set before the first paint so it doesn't flash the device's own.
+      try {
+        var theme = localStorage.getItem('yule-swoon-theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+      } catch (e) {}
+    </script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400..700&family=Sansita+Swashed:wght@800&family=Yellowtail&display=swap" />
   </head>
   <body>

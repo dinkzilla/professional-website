@@ -1,6 +1,6 @@
 /* Layout: one narrow phone-first column; posters lead every row, the score closes it. */
 :root {
-  --bg: #fbdcdc;
+  --bg: #dcf3df;
   --surface: #ffffff;
   --ink: #14302a;
   --muted: #5a6f67;
@@ -1635,18 +1635,23 @@ input[type='password'] {
   font: 800 2.5rem/1 var(--font-display);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-  color: var(--accent);
+  /* The score and ranking match, in whichever of red and green stands out from the theme's page. */
+  color: light-dark(var(--accent), var(--holly));
 }
 .big-stat small {
   font: 600 0.875rem var(--font-body);
   letter-spacing: 0;
   color: var(--muted);
 }
-.facts .place {
-  color: var(--holly);
-}
 .facts .first {
-  color: var(--gold);
+  color: light-dark(#ffd21a, var(--gold));
+  /* Bright yellow needs an edge to be read on the light theme's pale page. */
+  -webkit-text-stroke: 3px light-dark(#7a4d00, transparent);
+  paint-order: stroke fill;
+  stroke-linejoin: round;
+}
+.facts .first small {
+  -webkit-text-stroke: 0;
 }
 .dates li {
   display: flex;
@@ -2615,4 +2620,40 @@ app-emoji-burst app-rating-icons img {
   gap: 4px;
   font-size: 0.875rem;
   color: var(--muted);
+}
+
+/* The light/dark switch: pinned to the bottom of the screen, just right of the page's slab. */
+.theme-switch {
+  position: fixed;
+  left: min(50% + 20rem + 12px, 100% - 50px - env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 15;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 2px solid var(--edge);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 3px 0 var(--edge);
+}
+/* With no room beside the slab it lies over the edge, high enough to clear the form's save bar. */
+@media (max-width: 47.74rem) {
+  .theme-switch {
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+}
+.theme-switch:active {
+  translate: 0 3px;
+  box-shadow: 0 0 0 var(--edge);
+}
+.theme-switch svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }

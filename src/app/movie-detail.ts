@@ -23,7 +23,7 @@ import { Thermometer } from './thermometer';
             <div>
               <dt>Current Ranking</dt>
               @if (ranking(); as r) {
-                <dd class="big-stat place" [class.first]="r.place === 1">#{{ r.place }} <small>of {{ r.of }}</small></dd>
+                <dd class="big-stat" [class.first]="r.place === 1">#{{ r.place }} <small>of {{ r.of }}</small></dd>
               } @else {
                 <dd class="unset">Not ranked yet</dd>
               }
