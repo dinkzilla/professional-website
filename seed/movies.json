@@ -1,0 +1,230 @@
+[
+  {
+    "id": "winter-wonderlanes",
+    "title": "Winter Wonderlanes",
+    "network": "Hallmark",
+    "watched": "",
+    "viewers": [
+      "Kiki"
+    ],
+    "scores": {
+      "decor": 5,
+      "traditions": 5,
+      "originality": 4,
+      "cheese": 4,
+      "couples": 1,
+      "kisses": null,
+      "better": null,
+      "accents": null,
+      "celebrity": null,
+      "saved": null,
+      "horny": null,
+      "soundtrack": null
+    },
+    "poster": "posters/winter-wonderlanes.jpg",
+    "released": "2026-10-23",
+    "overview": "Restaurateur Audrey returns home for Thanksgiving to news that her grandfather’s bowling alley is for sale. To drum up publicity for one last tournament, Audrey teams up with a local news reporter Jason, her high school boyfriend. Working side by side the embers of their past start flickering, rekindling feelings they thought they left behind.",
+    "director": "Max McGuire",
+    "stars": [
+      "Franco Lo Presti",
+      "Ashley Newbrough"
+    ],
+    "addedAt": "2026-11-10T00:00:00.000Z"
+  },
+  {
+    "id": "a-danish-christmas",
+    "title": "A Danish Christmas",
+    "network": "Hallmark",
+    "watched": "2026-11-14",
+    "viewers": [
+      "Kiki",
+      "Matt"
+    ],
+    "scores": {
+      "decor": 4,
+      "traditions": 5,
+      "originality": 3,
+      "cheese": 3,
+      "couples": 2,
+      "kisses": 1,
+      "better": 2,
+      "accents": 2,
+      "celebrity": 0,
+      "saved": 1,
+      "horny": -1,
+      "soundtrack": 1
+    },
+    "poster": "posters/a-danish-christmas.jpg",
+    "released": "2026-11-01",
+    "overview": "Marie helps her family's Copenhagen inn at Christmas when Ryan arrives, and she mistakes him for a travel writer. She curates a tour in search of hygge and the two find a connection as well.",
+    "director": "Colin Theys",
+    "stars": [
+      "Emilie Ullerup",
+      "Corey Sevier"
+    ],
+    "addedAt": "2026-11-11T00:00:00.000Z"
+  },
+  {
+    "id": "a-cinderella-christmas-ball",
+    "title": "A Cinderella Christmas Ball",
+    "network": "Netflix",
+    "watched": "2026-11-15",
+    "viewers": [
+      "Kiki",
+      "Matt"
+    ],
+    "scores": {
+      "decor": 4,
+      "traditions": 2,
+      "originality": 5,
+      "cheese": 3,
+      "couples": 1,
+      "kisses": 1,
+      "better": 3,
+      "accents": 1,
+      "celebrity": 1,
+      "saved": 0,
+      "horny": 1,
+      "soundtrack": 1
+    },
+    "poster": "posters/a-cinderella-christmas-ball.jpg",
+    "released": "2024-11-29",
+    "overview": "Chelsea Jones, a Chicago-based dance instructor whose adoptive parents have long since passed, travels to the small European country of Havenshire over Christmas break in search of her heritage… and maybe even family. Discovering that the only way to get access to information she needs on her quest is via the royal family, she accepts an offer to teach a very reluctant Prince a special Waltz for the traditional Royal Christmas Ball.",
+    "director": "Don McBrearty",
+    "stars": [
+      "Danica McKellar",
+      "Oliver Rice"
+    ],
+    "addedAt": "2026-11-12T00:00:00.000Z"
+  },
+  {
+    "id": "holiday-touchdown-a-bears-love-story",
+    "title": "Holiday Touchdown: A Bears Love Story",
+    "network": "Hallmark",
+    "watched": "",
+    "viewers": [
+      "Kiki",
+      "Matt"
+    ],
+    "scores": {
+      "decor": 4,
+      "traditions": 5,
+      "originality": 5,
+      "cheese": 5,
+      "couples": 2,
+      "kisses": 1,
+      "better": 0,
+      "accents": 1,
+      "celebrity": 7,
+      "saved": 0,
+      "horny": 0,
+      "soundtrack": 0
+    },
+    "poster": "posters/holiday-touchdown-a-bears-love-story.jpg",
+    "released": "2026-10-17",
+    "overview": "When ambitious freelance reporter Avery Clark returns to Chicago to spend Christmas with her mom and new stepdad, she's hoping for a little holiday downtime before her next assignment. Instead, she lands a feel-good story profiling Darlene Donnelly, a beloved Chicago Bears superfan about to celebrate an incredible milestone: attending her 500th game. There's just one catch: Avery knows next to nothing about football or Chicago. Enter Darlene's handsome grandson Matt, a Chicago firefighter and die-hard Bears fan who, with a little gentle nudging from Darlene, agrees to show Avery what being a part of Bears Nation is all about.",
+    "director": "Dustin Rikert",
+    "stars": [
+      "Lyndsy Fonseca",
+      "Robert Buckley"
+    ],
+    "addedAt": "2026-11-13T00:00:00.000Z"
+  },
+  {
+    "id": "guarding-stars",
+    "title": "Guarding Stars",
+    "network": "Netflix",
+    "watched": "2026-11-18",
+    "viewers": [
+      "Kiki",
+      "Matt"
+    ],
+    "scores": {
+      "decor": 5,
+      "traditions": 5,
+      "originality": 5,
+      "cheese": 2,
+      "couples": 2,
+      "kisses": 1.5,
+      "better": 0,
+      "accents": 0.5,
+      "celebrity": 4,
+      "saved": 0,
+      "horny": -1,
+      "soundtrack": 3
+    },
+    "poster": "posters/guarding-stars.jpg",
+    "released": "2026-11-18",
+    "overview": "When a no-nonsense bodyguard is assigned to protect a charming action star over the holidays, sparks fly, secrets unravel, and Christmas gets a whole lot more complicated.",
+    "director": "Elizabeth Allen Rosenbaum",
+    "stars": [
+      "Leighton Meester",
+      "Jared Padalecki"
+    ],
+    "addedAt": "2026-11-14T00:00:00.000Z"
+  },
+  {
+    "id": "the-nights-before-christmas",
+    "title": "The Nights Before Christmas",
+    "network": "Hallmark",
+    "watched": "2026-11-19",
+    "viewers": [
+      "Kiki"
+    ],
+    "scores": {
+      "decor": 3,
+      "traditions": 2,
+      "originality": 3,
+      "cheese": 2,
+      "couples": 3,
+      "kisses": 1,
+      "better": -1,
+      "accents": 0,
+      "celebrity": 0,
+      "saved": 0,
+      "horny": -1,
+      "soundtrack": 0
+    },
+    "poster": "posters/the-nights-before-christmas.jpg",
+    "released": "2026-11-14",
+    "overview": "When a magical wish traps him in an endless Christmas Eve, a man makes the most of his extra time while trying to win the heart of a woman who forgets him each morning.",
+    "director": "Lucie Guest",
+    "stars": [
+      "Tyler Hynes",
+      "Laci J. Mailey"
+    ],
+    "addedAt": "2026-11-15T00:00:00.000Z"
+  },
+  {
+    "id": "what-if-christmas",
+    "title": "What If Christmas",
+    "network": "Hallmark",
+    "watched": "2026-11-19",
+    "viewers": [
+      "Kiki"
+    ],
+    "scores": {
+      "decor": 4,
+      "traditions": 1,
+      "originality": 2,
+      "cheese": 1,
+      "couples": 1,
+      "kisses": 1,
+      "better": 0,
+      "accents": 0,
+      "celebrity": 2,
+      "saved": 0,
+      "horny": 0,
+      "soundtrack": 0
+    },
+    "poster": "posters/what-if-christmas.jpg",
+    "released": "2026-10-25",
+    "overview": "Erin has always supported her husband Adam, a heart surgeon, by organizing the hospitals' Christmas charity galas. However, when he moves to a new hospital, her help is no longer needed. Feeling lost and without a purpose back in New York City, her long-suppressed regrets over giving up her dream of pursuing fashion design start bubbling up. When Erin is given a peculiar heart-shaped Christmas ornament, she wakes up in an alternate reality where she's a world-famous fashion designer. As she \"meets\" and attends Christmas events with alternate-universe Adam, she realizes that while her fashion dreams came true, it's lonely at the top. While working on a way to bring more charity and heart to her fashion empire, she learns that her dream life and love were always right in front of her – if only she finds the heart and courage to ask.",
+    "director": "Jerry Ciccoritti",
+    "stars": [
+      "Lori Loughlin",
+      "Tom Cavanagh"
+    ],
+    "addedAt": "2026-11-16T00:00:00.000Z"
+  }
+]

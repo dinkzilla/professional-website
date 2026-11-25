@@ -1,0 +1,1368 @@
+/* Layout: one narrow phone-first column; posters lead every row, the score closes it. */
+:root {
+  --bg: #f1f5f3;
+  --surface: #ffffff;
+  --ink: #14302a;
+  --muted: #5a6f67;
+  --line: #d5dfda;
+  --pine: #1d5745;
+  --pine-ink: #f1f7f4;
+  --accent: #b01e3a;
+  --accent-ink: #ffffff;
+  --accent-soft: #f8e3e7;
+  --gold: #9a6410;
+  --sky-top: #ffbfe0;
+  --sky-bottom: #bff5e4;
+  --ray-a: rgba(255, 255, 255, 0.6);
+  --ray-b: rgba(255, 221, 87, 0.5);
+  --hill-far: #e6f0ff;
+  --hill-near: #fbfdff;
+  --tree: #2fae6b;
+  --tree-alt: #1f9459;
+  --trunk: #8a5a35;
+  --tree-snow: #ffffff;
+  --star: #ffc21a;
+  --flake: #ffffff;
+  --flake-edge: rgba(150, 60, 120, 0.2);
+  --scene-ink: #3b1030;
+  --veil: 88%;
+  --font-display: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Figtree', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0e1b18;
+    --surface: #162622;
+    --ink: #e8f1ed;
+    --muted: #98aea5;
+    --line: #2a403a;
+    --pine: #12332a;
+    --pine-ink: #e8f1ed;
+    --accent: #f26b82;
+    --accent-ink: #2b0710;
+    --accent-soft: #3a1820;
+    --gold: #e9b85c;
+    --sky-top: #1c083d;
+    --sky-bottom: #06403f;
+    --ray-a: rgba(255, 60, 200, 0.24);
+    --ray-b: rgba(60, 255, 220, 0.2);
+    --hill-far: #2a2a5c;
+    --hill-near: #3b3f7a;
+    --tree: #19a05c;
+    --tree-alt: #128048;
+    --trunk: #4a3020;
+    --tree-snow: #e6ecff;
+    --star: #ffd84a;
+    --flake: #ffffff;
+    --flake-edge: transparent;
+    --scene-ink: #14051f;
+    --veil: 84%;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #0e1b18;
+  --surface: #162622;
+  --ink: #e8f1ed;
+  --muted: #98aea5;
+  --line: #2a403a;
+  --pine: #12332a;
+  --pine-ink: #e8f1ed;
+  --accent: #f26b82;
+  --accent-ink: #2b0710;
+  --accent-soft: #3a1820;
+  --gold: #e9b85c;
+  --sky-top: #1c083d;
+  --sky-bottom: #06403f;
+  --ray-a: rgba(255, 60, 200, 0.24);
+  --ray-b: rgba(60, 255, 220, 0.2);
+  --hill-far: #2a2a5c;
+  --hill-near: #3b3f7a;
+  --tree: #19a05c;
+  --tree-alt: #128048;
+  --trunk: #4a3020;
+  --tree-snow: #e6ecff;
+  --star: #ffd84a;
+  --flake: #ffffff;
+  --flake-edge: transparent;
+  --scene-ink: #14051f;
+  --veil: 84%;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.45 var(--font-body);
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  background: var(--pine);
+}
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+dl,
+dd {
+  margin: 0;
+  padding: 0;
+}
+ul,
+ol {
+  list-style: none;
+}
+.wrap {
+  max-width: 40rem;
+  margin-inline: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.muted {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* Background scene: Santa's workshop, heavily over-sugared. Purely decorative. */
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(var(--sky-top), var(--sky-bottom) 80%);
+}
+.scene svg {
+  position: absolute;
+  overflow: visible;
+}
+.scene-defs {
+  width: 0;
+  height: 0;
+}
+
+/* Sky: a rotating sunburst centred on Santa, and a rainbow over the hills. */
+.scene-burst {
+  position: absolute;
+  left: 14%;
+  top: 45%;
+  width: 135vmax;
+  height: 135vmax;
+  margin: -67.5vmax 0 0 -67.5vmax;
+  scale: 2;
+  background: repeating-conic-gradient(
+    var(--ray-a) 0 9deg,
+    transparent 9deg 18deg,
+    var(--ray-b) 18deg 27deg,
+    transparent 27deg 36deg
+  );
+}
+.scene-rainbow {
+  position: absolute;
+  left: 50%;
+  bottom: 6vh;
+  width: 130vmin;
+  height: 65vmin;
+  margin-left: -65vmin;
+  transform-origin: 50% 100%;
+  opacity: 0.85;
+  background: radial-gradient(
+    circle 65vmin at 50% 100%,
+    transparent 0 76%,
+    #b05cff 76% 80%,
+    #3d9bff 80% 84%,
+    #35d97a 84% 88%,
+    #ffe14a 88% 92%,
+    #ff9a3d 92% 96%,
+    #ff4d6d 96% 100%,
+    transparent 100%
+  );
+}
+
+/* Ground */
+.scene-hill {
+  inset: auto 0 0;
+  width: 100%;
+  height: 26vh;
+}
+.scene-hill.near {
+  height: 17vh;
+}
+.hill-far {
+  fill: var(--hill-far);
+}
+.hill-near {
+  fill: var(--hill-near);
+}
+
+/* Santa, rising behind the workshop like a jolly, hypnotised sun. */
+.scene-santa {
+  left: 0;
+  bottom: 33vh;
+  height: min(46vh, 26rem);
+  transform-origin: 50% 100%;
+}
+.santa-eye,
+.tree-pupil,
+.tree-star,
+.santa-pom {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.santa-spiral {
+  fill: none;
+  stroke: var(--scene-ink);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+/* The workshop */
+.scene-shop {
+  left: 1.5vw;
+  bottom: 8vh;
+  height: min(32vh, 18rem);
+  transform-origin: 50% 100%;
+}
+.shop-window {
+  fill: #ffe14a;
+  stroke: #fff;
+  stroke-width: 4;
+}
+.scene-pole {
+  fill: none;
+  stroke: #fff;
+  stroke-linecap: round;
+}
+.scene-stripe {
+  fill: none;
+  stroke: #e8173f;
+  stroke-dasharray: 14 14;
+}
+.bulb:nth-child(4n + 1) {
+  fill: #ff4d6d;
+}
+.bulb:nth-child(4n + 2) {
+  fill: #ffe14a;
+}
+.bulb:nth-child(4n + 3) {
+  fill: #35d97a;
+}
+.bulb:nth-child(4n) {
+  fill: #3d9bff;
+}
+.puff {
+  fill: #ff8ad8;
+  opacity: 0.85;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.puff:nth-child(2) {
+  fill: #7ae7ff;
+}
+.puff:nth-child(3) {
+  fill: #ffe14a;
+}
+
+/* The tree. It has a face now. */
+.scene-tree {
+  bottom: 4vh;
+  left: 50%;
+  height: min(80vh, 48rem);
+  margin-left: calc(min(80vh, 48rem) * -0.318);
+  transform-origin: 50% 100%;
+}
+.tree-a {
+  fill: var(--tree);
+}
+.tree-b {
+  fill: var(--tree-alt);
+}
+.tree-trunk {
+  fill: var(--trunk);
+}
+.tree-snow {
+  fill: none;
+  stroke: var(--tree-snow);
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+.tree-star {
+  fill: var(--star);
+}
+.tree-face {
+  fill: none;
+  stroke: var(--scene-ink);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+/* Giant candy canes and a chorus line of gingerbread men. */
+.scene-cane {
+  bottom: 5vh;
+  height: min(30vh, 16rem);
+  transform-origin: 30% 100%;
+}
+.scene-cane.one {
+  left: calc(50% - 20rem - 9vh);
+}
+.scene-cane.two {
+  right: calc(50% - 20rem - 9vh);
+  scale: -1 1;
+}
+.scene-chorus {
+  position: absolute;
+  inset: auto 0 0.5vh;
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+}
+.scene-chorus svg {
+  position: static;
+  height: min(11vh, 5.5rem);
+  transform-origin: 50% 100%;
+}
+
+/* The sleigh crosses the sky on a rainbow and does a barrel roll halfway. */
+.scene-flight {
+  position: absolute;
+  top: 11vh;
+  left: 0;
+  translate: -60vmin 0;
+}
+.scene-sleigh {
+  position: static !important;
+  display: block;
+  height: max(9vh, 4rem);
+}
+
+/* Weather: two layers of snow, one of sweets. */
+.snow {
+  --tile: 300px;
+  --r: 2px;
+  --flake-dot: var(--flake) 0 var(--r), var(--flake-edge) calc(var(--r) + 0.5px), transparent calc(var(--r) + 1.5px);
+  position: absolute;
+  inset: calc(-1 * var(--tile)) -30px 0;
+  background-image:
+    radial-gradient(circle at 12% 18%, var(--flake-dot)),
+    radial-gradient(circle at 38% 64%, var(--flake-dot)),
+    radial-gradient(circle at 57% 31%, var(--flake-dot)),
+    radial-gradient(circle at 73% 82%, var(--flake-dot)),
+    radial-gradient(circle at 91% 47%, var(--flake-dot)),
+    radial-gradient(circle at 24% 93%, var(--flake-dot));
+  background-size: var(--tile) var(--tile);
+}
+.snow.far {
+  --tile: 190px;
+  --r: 1.2px;
+  opacity: 0.7;
+}
+.snow.sweets {
+  --tile: 430px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='430' height='430'%3E%3Cg id='m'%3E%3Ccircle cx='60' cy='80' r='13' fill='white' stroke='crimson' stroke-width='2'/%3E%3Cg fill='crimson'%3E%3Cpath id='w' d='M60 80V67a13 13 0 0 1 9.2 3.8z'/%3E%3Cuse href='%23w' transform='rotate(90 60 80)'/%3E%3Cuse href='%23w' transform='rotate(180 60 80)'/%3E%3Cuse href='%23w' transform='rotate(270 60 80)'/%3E%3C/g%3E%3C/g%3E%3Cg transform='rotate(-14 300 200)'%3E%3Crect x='288' y='192' width='26' height='22' rx='2' fill='limegreen'/%3E%3Crect x='298' y='192' width='6' height='22' fill='gold'/%3E%3Crect x='286' y='187' width='30' height='7' rx='2' fill='deeppink'/%3E%3Cpath d='M301 187c-10-12-16 0 0 0c16 0 10-12 0 0z' fill='gold'/%3E%3C/g%3E%3Cpath d='M180 316l4.5 9.5 10.5 1.3-7.7 7.2 2 10.3-9.3-5.1-9.3 5.1 2-10.3-7.7-7.2 10.5-1.3z' fill='gold'/%3E%3Cg transform='rotate(25 370 60)' fill='none' stroke-linecap='round' stroke-width='7'%3E%3Cpath d='M370 80V52a9 9 0 0 1 18 0v4' stroke='white'/%3E%3Cpath d='M370 80V52a9 9 0 0 1 18 0v4' stroke='crimson' stroke-dasharray='6 6' stroke-linecap='butt'/%3E%3C/g%3E%3Ccircle cx='110' cy='250' r='7' fill='deeppink'/%3E%3Ccircle cx='390' cy='340' r='6' fill='deepskyblue'/%3E%3Ccircle cx='230' cy='110' r='6' fill='gold'/%3E%3C/svg%3E");
+}
+
+@keyframes snow-fall {
+  to {
+    translate: 0 var(--tile);
+  }
+}
+@keyframes snow-sway {
+  from {
+    transform: translateX(-14px);
+  }
+  to {
+    transform: translateX(14px);
+  }
+}
+@keyframes spin {
+  to {
+    rotate: 1turn;
+  }
+}
+@keyframes hue {
+  to {
+    filter: hue-rotate(1turn);
+  }
+}
+@keyframes wobble {
+  from {
+    transform: rotate(-4deg) scaleY(0.97);
+  }
+  to {
+    transform: rotate(4deg) scaleY(1.04);
+  }
+}
+@keyframes squash {
+  from {
+    transform: scale(1.04, 0.95);
+  }
+  to {
+    transform: scale(0.96, 1.06);
+  }
+}
+@keyframes peek {
+  from {
+    transform: translateY(42%) rotate(-7deg);
+  }
+  to {
+    transform: translateY(-2%) rotate(7deg);
+  }
+}
+@keyframes throb {
+  from {
+    transform: scale(0.92);
+  }
+  to {
+    transform: scale(1.06);
+  }
+}
+@keyframes boogie {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-14deg);
+  }
+  25%,
+  75% {
+    transform: translateY(-22%) rotate(0deg);
+  }
+  50% {
+    transform: translateY(0) rotate(14deg);
+  }
+}
+@keyframes puff {
+  from {
+    transform: translateY(0) scale(0.3);
+    opacity: 0.9;
+  }
+  to {
+    transform: translate(26px, -110px) scale(2.2);
+    opacity: 0;
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes barber {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+@keyframes fly {
+  to {
+    translate: 110vw 0;
+  }
+}
+@keyframes barrel-roll {
+  0%,
+  38% {
+    transform: translateY(0) rotate(0turn);
+  }
+  12%,
+  30% {
+    transform: translateY(5vh) rotate(0turn);
+  }
+  20% {
+    transform: translateY(-3vh) rotate(0turn);
+  }
+  58%,
+  100% {
+    transform: translateY(0) rotate(-1turn);
+  }
+  75% {
+    transform: translateY(6vh) rotate(-1turn);
+  }
+  90% {
+    transform: translateY(-2vh) rotate(-1turn);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .snow {
+    animation:
+      snow-fall 22s linear infinite,
+      snow-sway 7s ease-in-out infinite alternate;
+    will-change: translate, transform;
+  }
+  .snow.far {
+    animation-duration: 36s, 11s;
+  }
+  .snow.sweets {
+    animation-duration: 13s, 4s;
+  }
+  .scene-burst {
+    animation:
+      spin 50s linear infinite,
+      hue 17s linear infinite;
+  }
+  .scene-rainbow {
+    animation:
+      throb 2.6s ease-in-out infinite alternate,
+      hue 9s linear infinite;
+  }
+  .scene-santa {
+    animation: peek 4.5s ease-in-out infinite alternate;
+  }
+  .santa-eye {
+    animation: spin 1.8s linear infinite;
+  }
+  .santa-eye.right {
+    animation-direction: reverse;
+  }
+  .santa-pom {
+    animation: throb 0.7s ease-in-out infinite alternate;
+  }
+  .scene-shop {
+    animation: squash 1.3s ease-in-out infinite alternate;
+  }
+  .shop-window,
+  .tree-baubles {
+    animation: hue 4s linear infinite;
+  }
+  .bulb {
+    animation: blink 1.4s steps(1) infinite;
+  }
+  .bulb:nth-child(even) {
+    animation-delay: -0.7s;
+  }
+  .puff {
+    animation: puff 3.3s ease-out infinite;
+  }
+  .puff:nth-child(2) {
+    animation-delay: -1.1s;
+  }
+  .puff:nth-child(3) {
+    animation-delay: -2.2s;
+  }
+  .scene-stripe {
+    animation: barber 0.9s linear infinite;
+  }
+  .scene-tree {
+    animation: wobble 2.2s ease-in-out infinite alternate;
+  }
+  .tree-pupil {
+    animation: spin 2.4s linear infinite;
+  }
+  .tree-pupil.right {
+    animation-duration: 1.7s;
+    animation-direction: reverse;
+  }
+  .tree-star {
+    animation: spin 3s linear infinite;
+  }
+  .scene-cane {
+    animation: wobble 1.9s ease-in-out infinite alternate;
+  }
+  .scene-cane.two {
+    animation-delay: -0.9s;
+  }
+  .scene-chorus svg {
+    animation: boogie 1.2s ease-in-out infinite;
+  }
+  .scene-chorus svg:nth-child(even) {
+    animation-delay: -0.6s;
+  }
+  .scene-flight {
+    animation: fly 16s linear infinite;
+  }
+  .scene-sleigh {
+    animation: barrel-roll 16s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No motion: park the sleigh mid-sky rather than leave it off-screen. */
+  .scene-flight {
+    translate: 12vw 0;
+  }
+}
+@media (min-width: 72rem) {
+  /* Room beside the column: workshop in the left gutter, tree in the right. */
+  .scene-tree {
+    left: auto;
+    right: 2vw;
+    margin-left: 0;
+  }
+}
+@media (max-width: 71.99rem) {
+  .scene-burst {
+    left: 50%;
+  }
+  .scene-santa {
+    height: 34vh;
+    bottom: 26vh;
+  }
+  .scene-shop {
+    height: 24vh;
+  }
+  .scene-cane,
+  .scene-chorus svg:nth-child(n + 5) {
+    display: none;
+  }
+}
+
+/* Header */
+.top {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 9;
+  background: var(--pine);
+  color: var(--pine-ink);
+}
+.top .wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block: 12px;
+}
+.top h1 {
+  font: 800 1.375rem/1.1 var(--font-display);
+  letter-spacing: -0.01em;
+}
+.top h1 span {
+  font-weight: 500;
+  opacity: 0.75;
+}
+.back {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  color: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+main.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-block: 20px 32px;
+  /* A veil of page colour keeps text readable where it sits over the scene. */
+  background: color-mix(in srgb, var(--bg) var(--veil), transparent);
+  border-radius: 0 0 16px 16px;
+}
+app-movie-list,
+section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+app-movie-list {
+  gap: 20px;
+}
+
+h2 {
+  font: 700 1.125rem/1.2 var(--font-display);
+  text-wrap: balance;
+}
+.count {
+  color: var(--muted);
+  font-weight: 500;
+}
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Controls */
+label,
+.label {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+input[type='text'],
+input[type='date'],
+input[type='password'] {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.btn {
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-weight: 700;
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn.danger {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn.quiet {
+  background: none;
+  color: var(--muted);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.chip.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+.note,
+.error,
+.empty {
+  font-size: 0.9375rem;
+  color: var(--muted);
+}
+.error {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.empty {
+  padding-block: 24px;
+  text-align: center;
+}
+
+/* Add a movie */
+.add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.add-row {
+  display: flex;
+  gap: 8px;
+}
+.hits {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.hits li + li {
+  border-top: 1px solid var(--line);
+}
+.hit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.hit .poster {
+  width: 36px;
+}
+.hit-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Posters */
+.poster {
+  display: block;
+  flex: none;
+  width: 64px;
+  aspect-ratio: 2 / 3;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--pine);
+}
+.poster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.poster-blank {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--pine-ink);
+  font: 800 1.5rem var(--font-display);
+  opacity: 0.8;
+}
+
+/* Movie rows */
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: left;
+}
+.card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.card-text strong {
+  font: 700 1.0625rem/1.25 var(--font-display);
+  overflow-wrap: anywhere;
+}
+.rank {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.tag {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font: 800 1.75rem/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.score small,
+.big-score small {
+  font: 600 0.75rem var(--font-body);
+  color: var(--muted);
+}
+
+/* Detail */
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.detail-head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.detail-head .poster {
+  width: 108px;
+}
+.detail-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.detail-text h2 {
+  font-size: 1.5rem;
+  overflow-wrap: anywhere;
+}
+.big-score {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font: 800 2.75rem/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.overview {
+  max-width: 65ch;
+  color: var(--muted);
+}
+.credits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+}
+.credits dt {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.credits dd {
+  font-weight: 600;
+}
+.breakdown {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.row dt {
+  min-width: 0;
+}
+/* A bonus row sits directly under the criterion it belongs to, with no line between them. */
+.row:has(+ .row.sub) {
+  padding-bottom: 2px;
+  border-bottom: 0;
+}
+.row.sub {
+  padding-top: 2px;
+}
+.row.sub dt {
+  padding-left: 14px;
+  color: var(--muted);
+}
+/* A named group: a small heading row, then its rows indented beneath it. */
+.row.group-head {
+  padding-bottom: 6px;
+  border-bottom: 0;
+}
+.group-head dt,
+h3.group-head {
+  font: 700 0.75rem/1.2 var(--font-body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.row.grouped {
+  margin-left: 14px;
+}
+.row.grouped:has(+ .row:not(.grouped)) {
+  border-bottom: 0;
+}
+.row.grouped + .row:not(.grouped) {
+  border-top: 1px solid var(--line);
+}
+.row dd {
+  flex: none;
+  max-width: 55%;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.canes app-rating-icons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
+}
+app-rating-icons img {
+  object-fit: contain;
+}
+app-rating-icons .half {
+  clip-path: inset(0 0 0 50%);
+}
+app-rating-icons svg,
+app-rating-icons img {
+  flex: none;
+  width: 24px;
+  height: 22px;
+}
+app-rating-icons svg.off {
+  filter: grayscale(1);
+  opacity: 0.28;
+}
+app-rating-icons .cane {
+  fill: none;
+  transform: scaleX(-1) rotate(12deg);
+}
+app-rating-icons .star {
+  fill: #f5b301;
+  stroke: #b9770a;
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+app-rating-icons .cane-edge {
+  stroke: #8f1128;
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+app-rating-icons .cane-body {
+  stroke: #ffffff;
+  stroke-width: 3.6;
+  stroke-linecap: round;
+}
+app-rating-icons .cane-stripe {
+  stroke: #d21f3c;
+  stroke-width: 3.6;
+  stroke-dasharray: 2.4 2.6;
+  stroke-dashoffset: -1.2;
+}
+/* Thermometer: a choice score drawn as a candy cane lying on its side, hook at the cold end, striped up to a marker at the chosen level. */
+.row.thermo-row {
+  flex-direction: column;
+  gap: 10px;
+}
+/* The cane speaks for itself; the label stays for screen readers only. */
+.row.thermo-row dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.row.thermo-row dd {
+  max-width: none;
+  text-align: left;
+  font-weight: 400;
+}
+app-thermometer {
+  position: relative;
+  display: block;
+}
+.cane-meter {
+  position: absolute;
+  inset: 0 0 auto;
+  width: 100%;
+  height: 46px;
+  overflow: visible;
+}
+/* The hook hangs in a 46px gutter to the left; the scale and its labels start after it, so the labels
+   can sit right under the shaft instead of below the hook. */
+.cane-scale {
+  left: 46px;
+  width: calc(100% - 46px);
+}
+.cm-edge {
+  stroke: #9aa8a2;
+  stroke-width: 20;
+}
+.cm-body,
+.cm-empty {
+  stroke: #ffffff;
+  stroke-width: 18;
+}
+/* Past the score the cane is bare: no stripes, and the page's line colour instead of white. */
+.cm-empty {
+  stroke: var(--line);
+}
+.cm-flat {
+  stroke-linecap: butt;
+}
+/* The shaft's stripes pick up where the hook's leave off (the hook is 46.7px long). */
+.cm-stripe {
+  stroke-width: 18;
+  stroke-linecap: butt;
+  stroke-dasharray: 9 9;
+  stroke-dashoffset: 6.7;
+}
+.cm-hook {
+  stroke: #2f7df6;
+  stroke-dashoffset: -4;
+}
+.cm-mark {
+  stroke: #14302a;
+  stroke-width: 3;
+}
+.thermo {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+  min-height: 46px;
+  margin: 0 0 0 46px;
+  padding: 0;
+  list-style: none;
+}
+.thermo li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: 34px;
+  text-align: center;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  color: var(--muted);
+}
+.thermo li::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 24px;
+  height: 6px;
+  border-left: 2px solid var(--line);
+}
+.thermo li.on {
+  color: var(--ink);
+  font-weight: 700;
+}
+.thermo li.on::before {
+  border-color: var(--ink);
+}
+.thermo b {
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+.unset {
+  color: var(--muted);
+  font-weight: 400 !important;
+}
+.actions,
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Rating form */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.date-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.date-row input {
+  flex: 1;
+  min-width: 0;
+}
+.add-date {
+  align-self: flex-start;
+}
+.field,
+.crit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.crit {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+h3.group-head {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+h3.group-head + .crit {
+  padding-top: 0;
+  border-top: 0;
+}
+.crit.grouped {
+  margin-left: 14px;
+}
+.crit.sub {
+  margin-top: 0;
+  padding-top: 0;
+  padding-left: 14px;
+  border-top: 0;
+}
+h3 {
+  font: 700 1.0625rem/1.25 var(--font-display);
+  text-wrap: balance;
+}
+/* Five icons across the full width. */
+.scale {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+/* What a 1 and a 5 mean, as two callouts: each hangs from a rule dropped from the middle of its icon
+   (the first and the last), the low one grey like an unlit icon, the high one in the accent colour. */
+.notes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 18px;
+  margin: -4px calc((100% - 32px) / 10 - 1px) 0;
+}
+.note {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 8px 0 2px 10px;
+  border-left: 2px solid var(--line);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  color: var(--muted);
+  text-wrap: balance;
+}
+.note b {
+  font: 800 1rem/1 var(--font-display);
+}
+.note.high {
+  align-items: flex-end;
+  padding: 8px 10px 2px 0;
+  border-left: 0;
+  border-right: 2px solid var(--accent);
+  text-align: right;
+}
+.note.high b {
+  color: var(--accent);
+}
+.scale button,
+.stepper button:not(.clear) {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font: 700 1.125rem var(--font-display);
+}
+.scale button.on,
+.choices button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+/* Scale buttons are the criterion's icon itself, with no button box: lit up to the chosen score, greyed after it. */
+.scale button,
+.scale button.on {
+  min-height: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+.scale app-rating-icons {
+  display: flex;
+  justify-content: center;
+}
+.scale app-rating-icons svg {
+  width: 48px;
+  height: 46px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .scale button {
+    transition: transform 0.12s;
+  }
+  .scale button:active {
+    transform: scale(0.88);
+  }
+}
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.choices button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: left;
+}
+.choices b {
+  font-variant-numeric: tabular-nums;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stepper button:not(.clear) {
+  width: 56px;
+}
+.stepper output {
+  width: 64px;
+  text-align: center;
+  font: 800 1.5rem var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+.clear {
+  border: 0;
+  background: none;
+  padding: 8px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-decoration: underline;
+}
+.savebar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline: -8px;
+  padding: 10px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+.savebar p {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.savebar strong {
+  font: 800 1.25rem/1.1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card,
+  .chip,
+  .btn {
+    transition: border-color 0.15s, background-color 0.15s;
+  }
+}
