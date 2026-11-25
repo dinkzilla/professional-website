@@ -18,7 +18,7 @@ import { MovieStore } from './movie-store';
         <button type="button" class="btn quiet" (click)="auth.signOut()">Sign out</button>
       } @else {
         <p class="muted">Sign in to add and rate movies. Everyone else can only look.</p>
-        <button type="button" class="btn primary" [disabled]="auth.busy()" (click)="auth.signIn()">
+        <button type="button" class="btn primary" [disabled]="auth.busy()" (click)="signIn()">
           {{ auth.busy() ? 'Waiting for Google…' : 'Sign in with Google' }}
         </button>
       }
@@ -31,4 +31,9 @@ import { MovieStore } from './movie-store';
 export class SignIn {
   protected readonly auth = inject(AuthService);
   protected readonly store = inject(MovieStore);
+
+  /** A successful sign-in goes straight back to the movie list. */
+  protected async signIn() {
+    if (await this.auth.signIn()) this.store.go({ name: 'list' });
+  }
 }

@@ -28,7 +28,6 @@
     "@angular/build": "^21.2.31",
     "@angular/cli": "^21.2.31",
     "@angular/compiler-cli": "^21.2.0",
-    "firebase-admin": "^14.5.1",
     "firebase-tools": "^15.37.0",
     "prettier": "^3.8.1",
     "typescript": "~5.9.2"

@@ -1,6 +1,10 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { Auth, GoogleAuthProvider, getAuth, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { Auth, GoogleAuthProvider, User, getAuth, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { EDITOR_EMAIL, firebaseApp } from './firebase';
+
+function isEditorUser(user: User | null): boolean {
+  return !!user?.emailVerified && user.email?.toLowerCase() === EDITOR_EMAIL;
+}
 
 /**
  * Google sign-in. Only EDITOR_EMAIL stays signed in; any other account is
@@ -24,7 +28,7 @@ export class AuthService {
   constructor() {
     if (!this.auth) return;
     onAuthStateChanged(this.auth, (user) => {
-      const allowed = !!user?.emailVerified && user.email?.toLowerCase() === EDITOR_EMAIL;
+      const allowed = isEditorUser(user);
       if (user && !allowed) {
         this.error.set(`${user.email ?? 'That account'} can’t edit this list. Sign in with Kiki’s Google account.`);
         void signOut(this.auth!);
@@ -35,14 +39,16 @@ export class AuthService {
     });
   }
 
-  async signIn() {
-    if (!this.auth || this.busy()) return;
+  /** Opens the Google sign-in window. Resolves true when the editor ends up signed in. */
+  async signIn(): Promise<boolean> {
+    if (!this.auth || this.busy()) return false;
     this.error.set('');
     this.busy.set(true);
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ login_hint: EDITOR_EMAIL, prompt: 'select_account' });
-      await signInWithPopup(this.auth, provider);
+      const { user } = await signInWithPopup(this.auth, provider);
+      return isEditorUser(user);
     } catch (e: any) {
       const code = String(e?.code ?? '');
       if (code === 'auth/popup-blocked') {
@@ -52,6 +58,7 @@ export class AuthService {
       } else if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
         this.error.set('Couldn’t sign in. Check your connection and try again.');
       }
+      return false;
     } finally {
       this.busy.set(false);
     }

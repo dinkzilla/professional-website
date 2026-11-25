@@ -26,7 +26,6 @@ Ratings for holiday romance movies. Anyone can view them; only Kiki can add, rat
 6. Load the starter movies and the TMDB key (from `public/tmdb-key.txt`, if present):
 
    ```bash
-   gcloud auth application-default login
    npm run seed -- <project-id>
    ```
 

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <path id="heart" d="M16 29C16 29 2.5 20.5 2.5 11.2A6.9 6.9 0 0 1 16 8.6A6.9 6.9 0 0 1 29.500 11.200C29.500 20.500 16 29 16 29Z" />
+    <pattern id="stripes" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <rect width="16" height="16" fill="#fff" />
+      <rect width="8.800" height="16" fill="#e8173f" />
+    </pattern>
+  </defs>
+  <use href="#heart" fill="url(#stripes)" stroke="#c40f35" stroke-width="3" stroke-linejoin="round" />
+</svg>
