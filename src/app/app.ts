@@ -13,7 +13,7 @@ import { SignIn } from './sign-in';
     <header class="top" [class.sub]="view().name !== 'list'">
       <div class="wrap">
         @if (view().name !== 'list') {
-          <button type="button" class="back" (click)="store.go({ name: 'list' })">‹ All movies</button>
+          <button type="button" class="back" (click)="store.go({ name: 'list' })">‹<span class="back-text"> All movies</span></button>
         }
         <h1><span class="kikis">Kiki’s</span> Yule <span>Swoon</span></h1>
       </div>

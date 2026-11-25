@@ -682,19 +682,22 @@ ol {
   /* Finer than the name's edge, in keeping with the smaller script. */
   -webkit-text-stroke-width: 0.16em;
 }
-/* Inside a movie the name shrinks to a corner badge and makes room for the way back. */
+/* Inside a movie the name shrinks but stays centred, between the way back and an empty column to match. */
 .top.sub .wrap {
-  flex-direction: row;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   padding-block: calc(14px + env(safe-area-inset-top, 0px)) 12px;
 }
 .top.sub h1 {
+  grid-column: 2;
   margin-top: 0.1em;
   font-size: 1.875rem;
   -webkit-text-stroke-width: 6px;
   filter: drop-shadow(0 3px 0 rgba(59, 16, 48, 0.28));
 }
 .back {
+  justify-self: start;
+  min-width: 38px;
   min-height: 38px;
   padding: 0 14px 0 10px;
   border: 2px solid var(--edge);
@@ -703,6 +706,23 @@ ol {
   box-shadow: 0 3px 0 var(--edge);
   font-weight: 700;
   font-size: 0.875rem;
+  white-space: nowrap;
+}
+/* On a phone there's no room for the words beside a centred name, so only the arrow shows. */
+@media (max-width: 31.99rem) {
+  .back {
+    position: relative;
+    padding: 0 0 2px;
+    font-size: 1.375rem;
+    line-height: 1;
+  }
+  .back-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
 }
 .back:active {
   translate: 0 3px;
@@ -1108,18 +1128,19 @@ input[type='password'] {
 
 /* Posters */
 .poster {
+  position: relative;
   display: block;
   flex: none;
   width: 64px;
   aspect-ratio: 2 / 3;
   border-radius: 6px;
-  overflow: hidden;
   background: var(--pine);
 }
 .poster img {
   display: block;
   width: 100%;
   height: 100%;
+  border-radius: inherit;
   object-fit: cover;
 }
 .poster-blank {
@@ -1130,6 +1151,53 @@ input[type='password'] {
   color: var(--pine-ink);
   font: 800 1.5rem var(--font-display);
   opacity: 0.8;
+}
+
+/* Not recommended: rubber-stamped in red on a paper label stuck across the poster, scaled to the poster's width.
+   It lies over the poster and hangs a little past it, and takes no room of its own. */
+.stamp {
+  position: absolute;
+  inset: 0;
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: 100%;
+  align-items: center;
+  pointer-events: none;
+}
+/* Paper and ink are the same in both themes, and the label is nearly as wide as the poster. */
+.stamp span {
+  --paper: #fff8e8;
+  position: relative;
+  justify-self: center;
+  padding: 0.18em 0.4em 0.24em;
+  border: 0.08em solid #b01e3a;
+  border-radius: 0.2em;
+  background: var(--paper);
+  box-shadow: 0 0.07em 0.19em rgba(20, 5, 31, 0.4);
+  color: #b01e3a;
+  font: 800 27cqi / 1 var(--font-display);
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+  rotate: -8deg;
+}
+/* The inner of the stamp's two lines. */
+.stamp span::before {
+  content: '';
+  position: absolute;
+  inset: 0.05em;
+  border: 0.03em solid;
+  border-radius: 0.11em;
+}
+/* Patchy ink: flecks of bare paper over the lettering and both lines. */
+.stamp span::after {
+  content: '';
+  position: absolute;
+  inset: -0.08em;
+  border-radius: 0.2em;
+  background: var(--paper);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n' x='0' y='0' width='1' height='1'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.35' numOctaves='3' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 7 -4.25'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 5.6em;
 }
 
 /* Movie rows: raised tiles with the poster stuck on at a slight angle, a rank pinned to the corner
@@ -1493,6 +1561,8 @@ input[type='password'] {
 
 /* Detail */
 .detail {
+  /* On a phone, wide enough that the poster stands as tall as the facts beside it. */
+  --poster-col: clamp(112px, 56vw - 60px, 160px);
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -1500,13 +1570,15 @@ input[type='password'] {
 /* On a phone the title runs across the top so it isn't squeezed beside the poster. */
 .detail-head {
   display: grid;
-  grid-template: 'title title' auto 'poster facts' auto / clamp(112px, 36vw, 144px) 1fr;
+  grid-template: 'title title' auto 'poster facts' auto / var(--poster-col) 1fr;
   gap: 18px 20px;
   align-items: start;
 }
 .detail-head .poster {
   grid-area: poster;
-  width: 100%;
+  /* Set in by as much as the tilt and the white edge stick out, so it keeps to the text's left margin. */
+  width: calc(100% - 7px);
+  margin-left: 7px;
   rotate: -2deg;
 }
 .detail-head h2 {
@@ -1519,7 +1591,10 @@ input[type='password'] {
 .facts {
   grid-area: facts;
   display: grid;
-  gap: 14px 24px;
+  /* The columns are only as wide as their facts and gather in the middle of the space, clear of the poster. */
+  grid-template-columns: auto;
+  justify-content: center;
+  gap: 14px;
   min-width: 0;
 }
 .facts dd {
@@ -1562,50 +1637,27 @@ input[type='password'] {
   background: var(--accent);
   translate: 0 -2px;
 }
+/* Wider, the title joins the facts beside the poster, centred over them and level with its top. */
 @media (min-width: 36rem) {
+  .detail {
+    --poster-col: 184px;
+  }
   .detail-head {
-    grid-template: 'poster title' auto 'poster facts' 1fr / 188px 1fr;
-    gap: 20px 28px;
+    grid-template: 'poster title' auto 'poster facts' 1fr / var(--poster-col) 1fr;
+    gap: 0 28px;
+  }
+  .detail-head .poster {
+    /* Moved in a little further, towards the facts. */
+    width: calc(100% - 23px);
+    margin: 4px 0 6px 23px;
+  }
+  .detail-head h2 {
+    margin-bottom: 24px;
+    text-align: center;
   }
   .facts {
-    grid-template-columns: auto 1fr;
-    gap: 20px 36px;
-  }
-}
-/* Rubber-stamped in red beside the poster, under the facts, as large as the column allows. */
-.detail-head:has(.stamp) {
-  grid-template: 'title title' auto 'poster facts' auto 'poster stamp' 1fr / clamp(112px, 36vw, 144px) 1fr;
-}
-.stamp {
-  grid-area: stamp;
-  container-type: inline-size;
-  min-width: 0;
-  padding-block: 10px;
-}
-.stamp span {
-  display: block;
-  width: fit-content;
-  padding: 0.22em 0.4em 0.28em;
-  border: 0.13em solid;
-  border-radius: 0.3em;
-  outline: 0.05em solid;
-  outline-offset: -0.26em;
-  color: var(--accent);
-  font: 800 min(10.5cqi, 2.5rem) / 1 var(--font-display);
-  letter-spacing: 0.02em;
-  text-align: center;
-  text-transform: uppercase;
-  rotate: -7deg;
-  /* Patchy ink. */
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n' x='0' y='0' width='1' height='1'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.35' numOctaves='3' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -7 4.9'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-.stamp b {
-  display: block;
-  font-weight: 800;
-}
-@media (min-width: 36rem) {
-  .detail-head:has(.stamp) {
-    grid-template: 'poster title' auto 'poster facts' auto 'poster stamp' 1fr / 188px 1fr;
+    grid-template-columns: auto auto;
+    gap: 26px 36px;
   }
 }
 .overview {
@@ -1616,6 +1668,19 @@ input[type='password'] {
   display: flex;
   flex-wrap: wrap;
   gap: 12px 28px;
+}
+/* At full width the credits get columns: the poster's, then three that reach the far margin. Long names
+   break onto a second line rather than push a credit onto a row of its own. */
+@media (min-width: 43rem) {
+  .credits {
+    display: grid;
+    /* The gap is 20px here and 28px in the header, so the first column makes up the difference. */
+    grid-template-columns: calc(var(--poster-col) + 8px) minmax(0, 1fr) 96px 96px;
+    gap: 12px 20px;
+  }
+  .credits dd {
+    text-wrap: balance;
+  }
 }
 .facts dt,
 .credits dt {

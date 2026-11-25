@@ -13,7 +13,7 @@ import { Thermometer } from './thermometer';
     @if (movie(); as m) {
       <article class="detail">
         <header class="detail-head">
-          <app-poster [url]="m.poster" [title]="m.title" />
+          <app-poster [url]="m.poster" [title]="m.title" [coal]="!m.recommend" />
           <h2>{{ m.title }}</h2>
           <dl class="facts">
             <div>
@@ -44,9 +44,6 @@ import { Thermometer } from './thermometer';
               </div>
             }
           </dl>
-          @if (!m.recommend) {
-            <p class="stamp"><span>Not <b>Recommended</b></span></p>
-          }
         </header>
 
         @if (m.network || m.director || m.stars.length || m.released) {

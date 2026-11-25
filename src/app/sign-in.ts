@@ -7,7 +7,6 @@ import { MovieStore } from './movie-store';
   selector: 'app-sign-in',
   template: `
     <section class="signin">
-      <h2>Kiki’s door</h2>
       @if (!auth.enabled) {
         <p class="muted">Sign-in isn’t set up yet. Add the Firebase settings in src/app/firebase.ts.</p>
       } @else if (!auth.checked()) {
@@ -21,9 +20,8 @@ import { MovieStore } from './movie-store';
         <button type="button" class="btn primary" (click)="store.go({ name: 'list' })">Go to the movies</button>
         <button type="button" class="btn quiet" (click)="auth.preview(false)">Stop previewing</button>
       } @else {
-        <p class="muted">Sign in to add and rate movies. Everyone else can only look.</p>
         <button type="button" class="btn primary" [disabled]="auth.busy()" (click)="signIn()">
-          {{ auth.busy() ? 'Waiting for Google…' : 'Sign in with Google' }}
+          {{ auth.busy() ? 'Waiting for Google…' : 'Kiki’s Door' }}
         </button>
         @if (auth.canPreview) {
           <button type="button" class="btn quiet" (click)="preview()">Preview as Kiki (local only)</button>

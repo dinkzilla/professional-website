@@ -110,7 +110,7 @@ import { Poster } from './poster';
             @for (m of toRate(); track m.id) {
               <li>
                 <button type="button" class="card" (click)="open(m)">
-                  <app-poster [url]="m.poster" [title]="m.title" />
+                  <app-poster [url]="m.poster" [title]="m.title" [coal]="!m.recommend" />
                   <span class="card-text">
                     <strong>{{ m.title }}</strong>
                     <span class="muted">{{ meta(m) }}</span>
@@ -136,7 +136,7 @@ import { Poster } from './poster';
                   @if (sort() === 'score') {
                     <span class="rank">{{ r.rank }}</span>
                   }
-                  <app-poster [url]="m.poster" [title]="m.title" />
+                  <app-poster [url]="m.poster" [title]="m.title" [coal]="!m.recommend" />
                   <span class="card-text">
                     @if (sort() === 'score' && r.rank === 1) {
                       <span class="crown">★ Top of the tree</span>
