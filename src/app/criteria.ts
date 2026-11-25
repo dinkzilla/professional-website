@@ -85,10 +85,11 @@ export const CRITERIA: Criterion[] = [
     key: 'horny',
     label: 'Horny Meter',
     kind: 'choice',
+    // \u00AD is a soft hyphen: where a long word may break under the thermometer on a phone.
     options: [
-      { value: -1, label: 'Not horny. Disappointed.', color: '#2f7df6' },
-      { value: 0, label: 'Appropriately horny.', color: 'var(--holly)' },
-      { value: 1, label: 'Pleasantly more horny than expected.', color: 'var(--bonus)' },
+      { value: -1, label: 'Not horny. Disap\u00ADpointed.', color: '#2f7df6' },
+      { value: 0, label: 'Appro\u00ADpriately horny.', color: 'var(--holly)' },
+      { value: 1, label: 'Pleas\u00ADantly more horny than ex\u00ADpected.', color: 'var(--bonus)' },
       { value: -2, label: 'Cool it mister! Too horny.', color: '#ff9a1f' },
     ],
   },
