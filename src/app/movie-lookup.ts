@@ -25,7 +25,7 @@ const IMG = 'https://image.tmdb.org/t/p/w342';
  * Movie search backed by The Movie Database (TMDB), for the editor only.
  * With Firebase set up, the TMDB API key is the "key" field of the Firestore
  * document private/tmdb, which only the signed-in editor can read. Without
- * Firebase it comes from public/tmdb-key.txt (git-ignored, never deployed).
+ * Firebase, or when previewing the editor's side, it comes from public/tmdb-key.txt (git-ignored, never deployed).
  */
 @Injectable({ providedIn: 'root' })
 export class MovieLookup {
@@ -34,7 +34,7 @@ export class MovieLookup {
 
   constructor() {
     if (!firestore) void this.loadKeyFile();
-    else effect(() => void this.loadKeyDoc(this.auth.email()));
+    else effect(() => void (this.auth.previewing() ? this.loadKeyFile() : this.loadKeyDoc(this.auth.email())));
   }
 
   get ready(): boolean {

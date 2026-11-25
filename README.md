@@ -1,6 +1,6 @@
 # Yule Swoon
 
-Ratings for holiday romance movies. Anyone can view them; only Kiki can add, rate, edit or delete, after signing in with Google at `/kiki`.
+Ratings for holiday romance movies. Anyone can view them; only Kiki can add, rate, edit or delete, after signing in with Google at `/kiki`. Each movie's scores have their own address, `/movie/<id>`, where `<id>` is its Firestore document id.
 
 ## How access works
 
@@ -60,6 +60,8 @@ ng serve
 ```
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+
+To see Kiki's side without signing in, open `/kiki` on the local server and choose **Preview as Kiki**. It shows the live movies with all her controls, but changes stay in the page and go away on reload. It lasts until you stop it or close the tab, and the production build turns it off. Movie search uses the key in `public/tmdb-key.txt`.
 
 ## Code scaffolding
 

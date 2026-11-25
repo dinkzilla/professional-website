@@ -1,17 +1,15 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { AuthService } from './auth';
 import { Movie, MovieData, normalize } from './criteria';
 import { firestore } from './firebase';
-
-export type View = { name: 'list' | 'signin' } | { name: 'detail' | 'edit'; id: string };
+import { View, urlFor, viewFor } from './routes';
 
 const LOCAL_KEY = 'holiday-romance-movies';
 const SEEDED_KEY = 'holiday-romance-seeded';
 
-/** True when the address bar is on the sign-in page, /kiki. */
-function onSignInPath(): boolean {
-  return /\/kiki\/?$/.test(location.pathname);
+function viewFromAddress(): View {
+  return viewFor(location.pathname, document.baseURI);
 }
 
 /**
@@ -24,13 +22,25 @@ function onSignInPath(): boolean {
 export class MovieStore {
   private readonly auth = inject(AuthService);
 
-  readonly movies = signal<Movie[]>([]);
+  private readonly saved = signal<Movie[]>([]);
+  /** What's been changed while previewing the editor's side: each movie by id, or null if deleted. Never saved anywhere. */
+  private readonly pretend = signal<ReadonlyMap<string, Movie | null>>(new Map());
+  readonly movies = computed<Movie[]>(() => {
+    const saved = this.saved();
+    if (!this.auth.previewing()) return saved;
+    const pretend = this.pretend();
+    const ids = new Set(saved.map((m) => m.id));
+    return [
+      ...saved.map((m) => (pretend.has(m.id) ? pretend.get(m.id)! : m)),
+      ...[...pretend].filter(([id]) => !ids.has(id)).map(([, m]) => m),
+    ].filter((m): m is Movie => !!m);
+  });
   readonly status = signal<'loading' | 'ready' | 'unavailable'>('loading');
   readonly slow = signal(false);
   /** Whether to show the add, edit and delete controls. */
   readonly canWrite = this.auth.isEditor;
   readonly error = signal('');
-  readonly view = signal<View>({ name: onSignInPath() ? 'signin' : 'list' });
+  readonly view = signal<View>(viewFromAddress());
 
   /** What's typed in the list's search box, kept here so it survives opening a movie and coming back. */
   readonly search = signal('');
@@ -38,15 +48,22 @@ export class MovieStore {
   private readonly db = firestore;
 
   constructor() {
+    // The browser's back and forward buttons.
+    window.addEventListener('popstate', () => {
+      this.error.set('');
+      this.view.set(viewFromAddress());
+    });
     void this.init();
   }
 
-  go(view: View) {
+  /** Shows a view and puts its address in the address bar. With replace, Back skips the view being left. */
+  go(view: View, replace = this.view().name === 'signin') {
     this.error.set('');
     this.view.set(view);
-    // Keep the address bar on /kiki only while the sign-in page is showing.
-    if ((view.name === 'signin') !== onSignInPath()) {
-      history.replaceState(null, '', new URL(view.name === 'signin' ? 'kiki' : '.', document.baseURI));
+    const url = urlFor(view, document.baseURI);
+    if (url !== location.pathname) {
+      if (replace) history.replaceState(null, '', url);
+      else history.pushState(null, '', url);
     }
     window.scrollTo(0, 0);
   }
@@ -81,7 +98,7 @@ export class MovieStore {
         if (seed.length) this.markSeeded();
       }
       if (seed.length) this.writeLocal(merged);
-      else this.movies.set(merged);
+      else this.saved.set(merged);
       this.status.set('ready');
       return;
     }
@@ -89,7 +106,7 @@ export class MovieStore {
     onSnapshot(
       collection(db, 'movies'),
       (snap) => {
-        this.movies.set(snap.docs.map((d) => normalize(d.id, d.data())));
+        this.saved.set(snap.docs.map((d) => normalize(d.id, d.data())));
         this.status.set('ready');
         if (!snap.metadata.fromCache) {
           clearTimeout(timer);
@@ -115,6 +132,11 @@ export class MovieStore {
       this.writeLocal([...rest, { ...data, id: newId }]);
       return newId;
     }
+    if (this.auth.previewing()) {
+      const newId = id ?? 'm' + Date.now().toString(36);
+      this.setPretend(newId, { ...data, id: newId });
+      return newId;
+    }
     try {
       return await this.withRetry(async () => {
         if (id) {
@@ -136,6 +158,10 @@ export class MovieStore {
       this.writeLocal(this.movies().filter((m) => m.id !== id));
       return true;
     }
+    if (this.auth.previewing()) {
+      this.setPretend(id, null);
+      return true;
+    }
     try {
       await this.withRetry(() => deleteDoc(doc(db, 'movies', id)));
       return true;
@@ -143,6 +169,10 @@ export class MovieStore {
       this.fail(e, 'delete');
       return false;
     }
+  }
+
+  private setPretend(id: string, movie: Movie | null) {
+    this.pretend.update((p) => new Map(p).set(id, movie));
   }
 
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
@@ -180,7 +210,7 @@ export class MovieStore {
     } catch {}
   }
 
-  /** The starter list served beside the app when it runs outside claude.ai. */
+  /** The starter list served beside the app. */
   private async fetchSeed(): Promise<Movie[]> {
     try {
       const rows = await (await fetch('seed/movies.json')).json();
@@ -200,7 +230,7 @@ export class MovieStore {
   }
 
   private writeLocal(movies: Movie[]) {
-    this.movies.set(movies);
+    this.saved.set(movies);
     try {
       localStorage.setItem(LOCAL_KEY, JSON.stringify(movies));
     } catch {

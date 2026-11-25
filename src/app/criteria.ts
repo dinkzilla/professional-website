@@ -1,14 +1,12 @@
 export interface Criterion {
   key: string;
   label: string;
+  /** A stepper is a bonus: it moves by half points and can go below zero. */
   kind: 'scale' | 'stepper' | 'choice';
   hint?: string;
   /** scale: what a 1 and a 5 mean */
   low?: string;
   high?: string;
-  /** stepper */
-  step?: number;
-  min?: number;
   /** choice */
   options?: { value: number; label: string }[];
   /** Key of the criterion this one is a bonus to; it is shown attached to that one. */
@@ -46,7 +44,6 @@ export const CRITERIA: Criterion[] = [
     label: 'Bonus: Did It Better',
     kind: 'stepper',
     hint: 'Not original, but a better version. Not full points, just a bonus.',
-    step: 1,
     bonusOf: 'originality',
   },
   {
@@ -62,28 +59,22 @@ export const CRITERIA: Criterion[] = [
     label: 'Successful Relationships',
     kind: 'stepper',
     hint: '1 pt for every couple at the end of the movie',
-    step: 1,
-    min: 0,
   },
   {
     key: 'kisses',
     group: BONUS,
     label: 'Max People That 1 Person Gets to Kiss',
     kind: 'stepper',
-    step: 0.5,
-    min: 0,
   },
-  { key: 'accents', group: BONUS, label: 'Accents', kind: 'stepper', step: 0.5, min: 0 },
-  { key: 'celebrity', group: BONUS, label: 'Legit Celebrity', kind: 'stepper', step: 1, min: 0 },
+  { key: 'accents', group: BONUS, label: 'Accents', kind: 'stepper' },
+  { key: 'celebrity', group: BONUS, label: 'Legit Celebrity', kind: 'stepper' },
   {
     key: 'saved',
     group: BONUS,
     label: 'Saved a Nice/Thwarted a Naughty Business',
     kind: 'stepper',
-    step: 1,
-    min: 0,
   },
-  { key: 'soundtrack', group: BONUS, label: 'Soundtrack', kind: 'stepper', step: 1, min: 0 },
+  { key: 'soundtrack', group: BONUS, label: 'Soundtrack', kind: 'stepper' },
   {
     key: 'horny',
     label: 'Horny?',
@@ -117,8 +108,8 @@ export interface MovieData {
   director: string;
   /** The two top-billed cast members. */
   stars: string[];
-  /** Kiki's own words about the movie, or '' */
-  notes: string;
+  /** On unless Kiki has said not to bother with it. */
+  recommend: boolean;
   addedAt: string;
 }
 
@@ -138,7 +129,7 @@ export function blankMovie(title: string): MovieData {
     overview: '',
     director: '',
     stars: [],
-    notes: '',
+    recommend: true,
     addedAt: new Date().toISOString(),
   };
 }
@@ -164,7 +155,8 @@ export function normalize(id: string, raw: Record<string, unknown> | undefined):
     overview: str(r['overview']),
     director: str(r['director']),
     stars: Array.isArray(r['stars']) ? r['stars'].filter((v) => typeof v === 'string') : [],
-    notes: str(r['notes']),
+    // Movies saved before this was asked count as recommended.
+    recommend: r['recommend'] !== false,
     addedAt: str(r['addedAt']),
   };
 }

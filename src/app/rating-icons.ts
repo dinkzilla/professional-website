@@ -19,6 +19,7 @@ const ICONS: Record<string, 'wreath' | 'star' | 'mouse' | 'lips' | 'heart' | 'ch
 /**
  * A 1–5 rating drawn as five icons, the unearned ones greyed out.
  * The stepper scores drawn here are the exception: they have no maximum, so one icon per point and half an icon for a half.
+ * Zero and negative scores have no icons; show those as a number instead.
  * The mouse face, Santa hat, kiss mark, heart, sunglasses, placard and musical note are from Microsoft Fluent Emoji (MIT licence).
  */
 @Component({
@@ -41,7 +42,7 @@ const ICONS: Record<string, 'wreath' | 'star' | 'mouse' | 'lips' | 'heart' | 'ch
         } @else if (icon() === 'chef') {
           <img class="chef" [class.half]="n === 1 && value() % 1 !== 0" [src]="chefKiss" alt="" />
         } @else if (icon() === 'sign') {
-          <svg class="sign" viewBox="0 0 32 32" aria-hidden="true">
+          <svg class="sign" [class.half]="n === 1 && value() % 1 !== 0" viewBox="0 0 32 32" aria-hidden="true">
             <path d="M13 5C13 3.34 14.34 2 16 2C17.65 2 19 3.34 19 5V27C19 28.65 17.65 30 16 30C14.34 30 13 28.65 13 27V5Z" fill="#F3AD61" />
             <path d="M5 7.5C5 6.11 6.11 5 7.5 5H24.5C25.88 5 27 6.11 27 7.5V16.5C27 17.88 25.88 19 24.5 19H7.5C6.11 19 5 17.88 5 16.5V7.5Z" fill="#CDC4D6" />
             <path d="M11 8.5C11 8.22 11.22 8 11.5 8H20.5C20.77 8 21 8.22 21 8.5C21 8.77 20.77 9 20.5 9H11.5C11.22 9 11 8.77 11 8.5Z" fill="#998EA4" />
@@ -49,15 +50,15 @@ const ICONS: Record<string, 'wreath' | 'star' | 'mouse' | 'lips' | 'heart' | 'ch
             <path d="M12.5 14C12.22 14 12 14.22 12 14.5C12 14.77 12.22 15 12.5 15H19.5C19.77 15 20 14.77 20 14.5C20 14.22 19.77 14 19.5 14H12.5Z" fill="#998EA4" />
           </svg>
         } @else if (icon() === 'note') {
-          <svg class="note" viewBox="0 0 32 32" aria-hidden="true">
+          <svg class="note" [class.half]="n === 1 && value() % 1 !== 0" viewBox="0 0 32 32" aria-hidden="true">
             <path d="M29.41 2.86C29.41 2.33 28.95 1.93 28.43 2.00L11.46 4.20C11.03 4.26 10.7 4.63 10.7 5.07V18.68C10.11 18.48 9.47 18.36 8.81 18.36C5.6 18.36 3 20.97 3 24.18C3 27.39 5.6 29.99 8.81 29.99C12.02 29.99 14.62 27.39 14.62 24.18C14.62 24.06 14.61 23.93 14.61 23.81V9.91C14.61 9.52 14.9 9.20 15.28 9.15L24.63 7.94C25.09 7.88 25.5 8.24 25.5 8.70V15.23C24.9 15.02 24.26 14.91 23.6 14.91C20.39 14.91 17.79 17.51 17.79 20.72C17.79 23.93 20.39 26.53 23.6 26.53C26.81 26.53 29.41 23.93 29.41 20.72C29.41 20.71 29.41 20.71 29.41 20.70V2.86Z" fill="#e0263f" />
           </svg>
         } @else if (icon() === 'bonus-star') {
-          <svg class="star" viewBox="0 0 24 24" aria-hidden="true">
+          <svg class="star" [class.half]="n === 1 && value() % 1 !== 0" viewBox="0 0 24 24" aria-hidden="true">
             <polygon points="12.0,2.1 14.6,9.0 22.0,9.4 16.2,14.0 18.2,21.1 12.0,17.0 5.8,21.1 7.8,14.0 2.0,9.4 9.4,9.0" />
           </svg>
         } @else if (icon() === 'shades') {
-          <svg class="shades" viewBox="1 1 30 30" aria-hidden="true">
+          <svg class="shades" [class.half]="n === 1 && value() % 1 !== 0" viewBox="1 1 30 30" aria-hidden="true">
             <path d="M15.99 29.99C25.33 29.99 29.99 23.73 29.99 15.99C29.99 8.26 25.33 2 15.99 2C6.66 2 2 8.26 2 15.99C2 23.73 6.66 29.99 15.99 29.99Z" fill="#FFB02E" />
             <path d="M11.83 18.45C11.54 17.99 10.93 17.86 10.46 18.15C10.00 18.44 9.85 19.06 10.15 19.53L10.15 19.53L10.15 19.53L10.15 19.53L10.15 19.54L10.16 19.55C10.17 19.56 10.18 19.57 10.19 19.58C10.20 19.61 10.23 19.65 10.26 19.69C10.32 19.77 10.41 19.87 10.52 19.99C10.75 20.23 11.08 20.54 11.55 20.84C12.49 21.44 13.93 22 16 22C18.06 22 19.50 21.44 20.44 20.84C20.91 20.54 21.24 20.23 21.47 19.99C21.58 19.87 21.67 19.77 21.73 19.69C21.76 19.65 21.79 19.61 21.80 19.58C21.81 19.57 21.82 19.56 21.83 19.55L21.84 19.54L21.84 19.53L21.84 19.53L21.84 19.53L21.84 19.53C22.14 19.06 21.99 18.44 21.53 18.15C21.06 17.86 20.45 17.99 20.16 18.45C20.15 18.45 20.15 18.46 20.14 18.48C20.12 18.51 20.07 18.56 20.01 18.62C19.89 18.76 19.68 18.95 19.36 19.15C18.74 19.55 17.68 20 16 20C14.31 20 13.25 19.55 12.63 19.15C12.31 18.95 12.10 18.76 11.98 18.62C11.92 18.56 11.87 18.51 11.85 18.48C11.84 18.46 11.84 18.45 11.83 18.45Z" fill="#402A32" />
             <path d="M11 5H5C2.79 5 1 6.79 1 9V9.67C1 12.32 2.49 14.74 4.86 15.93L5.80 16.40C7.20 17.10 8.84 17.19 10.32 16.66C13.11 15.67 15 13.02 15 10.06V9C15 6.79 13.20 5 11 5Z" fill="#321B41" />

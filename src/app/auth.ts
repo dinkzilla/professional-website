@@ -2,6 +2,19 @@ import { Injectable, computed, signal } from '@angular/core';
 import { Auth, GoogleAuthProvider, User, getAuth, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { EDITOR_EMAIL, firebaseApp } from './firebase';
 
+// Set by the Angular build: false in production.
+declare const ngDevMode: unknown;
+
+const PREVIEW_KEY = 'yule-swoon-preview';
+
+function rememberedPreview(): boolean {
+  try {
+    return sessionStorage.getItem(PREVIEW_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
 function isEditorUser(user: User | null): boolean {
   return !!user?.emailVerified && user.email?.toLowerCase() === EDITOR_EMAIL;
 }
@@ -21,7 +34,11 @@ export class AuthService {
   readonly checked = signal(!firebaseApp);
   readonly busy = signal(false);
   readonly error = signal('');
-  readonly isEditor = computed(() => !this.enabled || !!this.email());
+  /** Whether this build can show the editor's side without signing in: only `ng serve`, never the deployed site. */
+  readonly canPreview = (typeof ngDevMode === 'undefined' || !!ngDevMode) && !!firebaseApp;
+  /** True while showing the editor's side without being signed in. Changes made then never leave the page. */
+  readonly previewing = signal(this.canPreview && rememberedPreview());
+  readonly isEditor = computed(() => !this.enabled || !!this.email() || this.previewing());
 
   private readonly auth: Auth | null = firebaseApp ? getAuth(firebaseApp) : null;
 
@@ -34,9 +51,20 @@ export class AuthService {
         void signOut(this.auth!);
         return;
       }
+      if (allowed) this.preview(false);
       this.email.set(allowed ? user!.email! : '');
       this.checked.set(true);
     });
+  }
+
+  /** Starts or stops showing the editor's side without signing in. Lasts as long as this tab, reloads included. */
+  preview(on: boolean) {
+    if (!this.canPreview) return;
+    this.previewing.set(on);
+    try {
+      if (on) sessionStorage.setItem(PREVIEW_KEY, '1');
+      else sessionStorage.removeItem(PREVIEW_KEY);
+    } catch {}
   }
 
   /** Opens the Google sign-in window. Resolves true when the editor ends up signed in. */

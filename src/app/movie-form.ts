@@ -1,12 +1,13 @@
 import { Component, OnInit, computed, inject, input, signal, viewChild } from '@angular/core';
 import { CRITERIA, Criterion, DEFAULT_NETWORKS, MovieData, PEOPLE, answered, fmt, total, groupStart, watchDates } from './criteria';
 import { EmojiBurst } from './emoji-burst';
+import { OrnamentCheck } from './ornament-check';
 import { RatingIcons } from './rating-icons';
 import { MovieStore } from './movie-store';
 
 @Component({
   selector: 'app-movie-form',
-  imports: [RatingIcons, EmojiBurst],
+  imports: [RatingIcons, EmojiBurst, OrnamentCheck],
   template: `
     @if (draft(); as d) {
       <form class="form" (submit)="save($event)">
@@ -93,16 +94,12 @@ import { MovieStore } from './movie-store';
           </section>
         }
 
-        <div class="field crit">
-          <label for="f-notes">Kiki’s Notes <span class="muted">(optional)</span></label>
-          <textarea id="f-notes" rows="4" [value]="d.notes" (input)="patch({ notes: $any($event.target).value })"></textarea>
-        </div>
-
         <div class="savebar">
           <p>
             <strong>{{ sum() }} pts</strong>
             <span class="muted">{{ count() }} of {{ criteria.length }} scored</span>
           </p>
+          <app-ornament-check [checked]="d.recommend" (checkedChange)="patch({ recommend: $event })" />
           <button type="button" class="btn quiet" (click)="cancel()">Cancel</button>
           <button type="submit" class="btn primary" [disabled]="saving() || !d.title.trim()">
             {{ saving() ? 'Saving…' : 'Save' }}
@@ -183,9 +180,8 @@ export class MovieForm implements OnInit {
     const d = this.draft();
     if (!d) return;
     const cur = d.scores[c.key];
-    const size = c.step ?? 1;
-    let next = cur == null ? (dir > 0 ? size : 0) : cur + dir * size;
-    if (c.min != null) next = Math.max(c.min, next);
+    // The first tap on minus records a zero; from there it goes negative.
+    const next = cur == null ? (dir > 0 ? 0.5 : 0) : cur + dir * 0.5;
     this.patch({ scores: { ...d.scores, [c.key]: Math.round(next * 2) / 2 } });
   }
 
@@ -204,7 +200,7 @@ export class MovieForm implements OnInit {
     const d = this.draft();
     if (!d || this.saving()) return;
     this.saving.set(true);
-    const id = await this.store.save(this.id(), { ...d, title: d.title.trim(), network: d.network.trim(), notes: d.notes.trim(), watched: watchDates(d.watched) });
+    const id = await this.store.save(this.id(), { ...d, title: d.title.trim(), network: d.network.trim(), watched: watchDates(d.watched) });
     this.saving.set(false);
     if (id) this.store.go({ name: 'detail', id });
   }

@@ -31,7 +31,8 @@
   --edge: color-mix(in srgb, var(--line) 70%, var(--ink));
   --font-display: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'Figtree', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-hand: 'Caveat', 'Segoe Print', 'Bradley Hand', cursive;
+  --font-title: 'Sansita Swashed', 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+  --font-script: 'Yellowtail', 'Snell Roundhand', 'Segoe Script', cursive;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -62,7 +63,7 @@
     --flake: #ffffff;
     --flake-edge: transparent;
     --scene-ink: #14051f;
-    --veil: 84%;
+    --veil: 90%;
     color-scheme: dark;
   }
 }
@@ -94,7 +95,7 @@
   --flake: #ffffff;
   --flake-edge: transparent;
   --scene-ink: #14051f;
-  --veil: 84%;
+  --veil: 90%;
   color-scheme: dark;
 }
 
@@ -118,8 +119,7 @@ body::before {
   background: var(--sky-top);
 }
 button,
-input,
-textarea {
+input {
   font: inherit;
   color: inherit;
 }
@@ -641,11 +641,13 @@ ol {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding-block: calc(22px + env(safe-area-inset-top, 0px)) 16px;
+  padding-block: calc(16px + env(safe-area-inset-top, 0px)) 24px;
 }
 .top h1 {
-  font: 800 clamp(2.75rem, 15vw, 4.25rem) / 0.95 var(--font-display);
-  letter-spacing: -0.03em;
+  position: relative;
+  /* Room for the signature, which rises above the name. */
+  margin-top: 0.2em;
+  font: 800 clamp(2.75rem, 15vw, 4.25rem) / 0.95 var(--font-title);
   color: #e8173f;
   -webkit-text-stroke: 10px #fff;
   paint-order: stroke fill;
@@ -656,6 +658,30 @@ ol {
 .top h1 span {
   color: #1f9459;
 }
+/* "Kiki's" is signed over the name in the scorecard's script, nestled between the Y and the S. The ink (.kikis) lies over the letters and
+   its white backing (::before) under them, so both words share one sticker edge and one shadow. */
+.top h1 .kikis,
+.top h1::before {
+  position: absolute;
+  top: -0.32em;
+  left: -.8em;
+  font: 400 0.66em/1 var(--font-script);
+  white-space: nowrap;
+  rotate: -23deg;
+  pointer-events: none;
+}
+.top h1 .kikis {
+  z-index: 1;
+  color: #14051f;
+  -webkit-text-stroke: 0.014em #14051f;
+}
+.top h1::before {
+  content: 'Kiki’s' / '';
+  z-index: -1;
+  color: #fff;
+  /* Finer than the name's edge, in keeping with the smaller script. */
+  -webkit-text-stroke-width: 0.16em;
+}
 /* Inside a movie the name shrinks to a corner badge and makes room for the way back. */
 .top.sub .wrap {
   flex-direction: row;
@@ -663,6 +689,7 @@ ol {
   padding-block: calc(14px + env(safe-area-inset-top, 0px)) 12px;
 }
 .top.sub h1 {
+  margin-top: 0.1em;
   font-size: 1.875rem;
   -webkit-text-stroke-width: 6px;
   filter: drop-shadow(0 3px 0 rgba(59, 16, 48, 0.28));
@@ -742,10 +769,7 @@ h2 {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 14px 8px;
-}
-app-movie-list .section-head h2 {
-  align-self: center;
+  gap: 14px 12px;
 }
 /* The filter and the sort are boxes of candy: striped like a cane, named by a tag tied on with a bow. */
 .tray {
@@ -771,8 +795,8 @@ app-movie-list .section-head h2 {
 .tray-keys {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 12px 8px 9px;
+  gap: 6px 4px;
+  padding: 12px 6px 9px;
   border-radius: 16px;
   background: color-mix(in srgb, var(--tone) 14%, var(--surface));
 }
@@ -803,9 +827,12 @@ app-movie-list .section-head h2 {
   height: 26px;
   background: var(--bow) center / contain no-repeat;
 }
+/* Snug enough for three sort chips on one line, even on a phone. */
 .tray .chip {
   position: relative;
   flex: 1 0 auto;
+  padding: 0 8px;
+  font-size: 0.8125rem;
   --edge: color-mix(in srgb, var(--tone) 45%, var(--surface));
 }
 /* The chosen candy is pushed in, sugar-glossed and sparkling. */
@@ -824,13 +851,26 @@ app-movie-list .section-head h2 {
   background: var(--star);
   clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
 }
-@media (max-width: 37.99rem) {
+/* Side by side, the filter and the sort take half the row each and match heights. */
+@media (min-width: 43rem) {
+  .tray:has(+ .tray),
+  .tray + .tray {
+    display: grid;
+    flex: 1 1 0;
+    min-width: 0;
+    align-self: stretch;
+  }
+  .tray:has(+ .tray) .tray-keys,
+  .tray + .tray .tray-keys {
+    align-content: center;
+  }
+}
+@media (max-width: 42.99rem) {
   .tray {
     flex: 1 0 100%;
   }
   .tray .chip {
     min-height: 40px;
-    padding: 0 8px;
   }
 }
 @media (hover: hover) {
@@ -884,8 +924,7 @@ label,
 }
 input[type='text'],
 input[type='date'],
-input[type='password'],
-textarea {
+input[type='password'] {
   width: 100%;
   min-width: 0;
   min-height: 46px;
@@ -894,9 +933,6 @@ textarea {
   border-radius: 14px;
   background: var(--surface);
   box-shadow: inset 0 3px 0 color-mix(in srgb, var(--ink) 9%, transparent);
-}
-textarea {
-  resize: vertical;
 }
 .btn {
   min-height: 46px;
@@ -1243,10 +1279,6 @@ textarea {
 .champ .rank::before {
   background: var(--star);
 }
-.champ .score {
-  width: 68px;
-  font-size: 1.625rem;
-}
 .tag {
   align-self: flex-start;
   margin-top: 4px;
@@ -1265,6 +1297,13 @@ textarea {
   width: 58px;
   aspect-ratio: 1;
   margin-top: 10px;
+  color: var(--bauble-ink);
+  text-shadow: 0 1px 1px color-mix(in srgb, var(--bauble) 40%, #000);
+  font: 800 1.375rem/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+.score,
+.glass {
   border-radius: 50%;
   /* A glass ball lit from the upper left: a sharp window glint, a broad sheen, then the body colour
      falling off to a dark rim, with a little light bounced back up into the underside. */
@@ -1281,10 +1320,6 @@ textarea {
     inset -3px -5px 9px rgba(0, 0, 0, 0.28),
     inset 2px 3px 5px rgba(255, 255, 255, 0.22),
     0 5px 7px -1px rgba(20, 5, 31, 0.35);
-  color: var(--bauble-ink);
-  text-shadow: 0 1px 1px color-mix(in srgb, var(--bauble) 40%, #000);
-  font: 800 1.375rem/1 var(--font-display);
-  font-variant-numeric: tabular-nums;
 }
 /* Baubles alternate red and green down the list. */
 .score {
@@ -1320,6 +1355,135 @@ textarea {
   margin-left: -4.5px;
   border: 1.5px solid #c9982a;
   border-radius: 50%;
+}
+/* First place's score is on the gown of an angel tree topper instead. She leans into the tile's
+   padding and gap, so on a phone the text beside her loses no room to her wings. */
+.score.angel {
+  /* Keeps her behind the number but in front of the tile. */
+  isolation: isolate;
+  align-content: end;
+  width: 88px;
+  aspect-ratio: 100 / 116;
+  margin: -6px -12px 0 -8px;
+  padding-bottom: 9px;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: #3b1030;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  font-size: 1.25rem;
+}
+.score.angel::before,
+.score.angel::after {
+  content: none;
+}
+.topper {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 3px 4px rgba(20, 5, 31, 0.3));
+}
+/* On a phone the title runs on above the angel, with only the small print beside her. */
+@media (max-width: 35.99rem) {
+  .card.champ {
+    display: grid;
+    grid-template:
+      'poster crown crown' auto
+      'poster title title' auto
+      'poster meta score' 1fr / auto minmax(0, 1fr) auto;
+    gap: 2px 12px;
+    align-items: start;
+  }
+  .champ .card-text {
+    display: contents;
+  }
+  .champ .poster {
+    grid-area: poster;
+    align-self: center;
+    width: 76px;
+  }
+  .champ .crown {
+    grid-area: crown;
+  }
+  .champ .card-text strong {
+    grid-area: title;
+  }
+  .champ .card-text .muted {
+    grid-area: meta;
+  }
+  .champ .score {
+    grid-area: score;
+    align-self: end;
+    margin-top: 4px;
+  }
+}
+@media (min-width: 36rem) {
+  .score.angel {
+    width: 112px;
+    margin: -10px 0 -6px;
+    padding-bottom: 13px;
+    font-size: 1.625rem;
+  }
+}
+/* Not recommended: the ball has cracked in two. The top still hangs from the cap; the rest is dropping
+   away with the points on it. Both follow the same jagged line, so they'd fit back together. */
+.score.broken {
+  margin-bottom: 10px;
+  background: none;
+  box-shadow: none;
+  font-size: 1.125rem;
+}
+.score.broken::before {
+  z-index: 1;
+}
+.champ .score.broken {
+  margin-block: 16px 10px;
+}
+.half {
+  position: absolute;
+  inset: 0;
+  filter: drop-shadow(0 3px 3px rgba(20, 5, 31, 0.35));
+}
+.half.top {
+  --cut: polygon(-10% -10%, -10% 43%, 3% 45%, 12% 34%, 22% 46%, 33% 33%, 43% 42%, 53% 29%, 63% 43%, 74% 32%, 84% 44%, 93% 33%, 110% 37%, 110% -10%);
+  --lip: 1.5px;
+  transform-origin: 50% 0;
+  rotate: 4deg;
+}
+.half.bottom {
+  --cut: polygon(-10% 110%, -10% 43%, 3% 45%, 12% 34%, 22% 46%, 33% 33%, 43% 42%, 53% 29%, 63% 43%, 74% 32%, 84% 44%, 93% 33%, 110% 37%, 110% 110%);
+  --lip: -1.5px;
+  translate: -2px 8px;
+  rotate: -9deg;
+}
+/* The thickness of the glass, showing pale along the break. */
+.half::before,
+.glass {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  clip-path: var(--cut);
+}
+.half::before {
+  content: '';
+  translate: 0 var(--lip);
+  background: color-mix(in srgb, var(--bauble) 35%, #fff);
+}
+.glass {
+  display: grid;
+  place-content: end center;
+  justify-items: center;
+  padding-bottom: 8px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .score small {
   font: 600 0.625rem var(--font-body);
@@ -1408,6 +1572,42 @@ textarea {
     gap: 20px 36px;
   }
 }
+/* Rubber-stamped in red beside the poster, under the facts, as large as the column allows. */
+.detail-head:has(.stamp) {
+  grid-template: 'title title' auto 'poster facts' auto 'poster stamp' 1fr / clamp(112px, 36vw, 144px) 1fr;
+}
+.stamp {
+  grid-area: stamp;
+  container-type: inline-size;
+  min-width: 0;
+  padding-block: 10px;
+}
+.stamp span {
+  display: block;
+  width: fit-content;
+  padding: 0.22em 0.4em 0.28em;
+  border: 0.13em solid;
+  border-radius: 0.3em;
+  outline: 0.05em solid;
+  outline-offset: -0.26em;
+  color: var(--accent);
+  font: 800 min(10.5cqi, 2.5rem) / 1 var(--font-display);
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: uppercase;
+  rotate: -7deg;
+  /* Patchy ink. */
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n' x='0' y='0' width='1' height='1'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.35' numOctaves='3' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -7 4.9'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.stamp b {
+  display: block;
+  font-weight: 800;
+}
+@media (min-width: 36rem) {
+  .detail-head:has(.stamp) {
+    grid-template: 'poster title' auto 'poster facts' auto 'poster stamp' 1fr / 188px 1fr;
+  }
+}
 .overview {
   max-width: 65ch;
   color: var(--muted);
@@ -1427,6 +1627,15 @@ textarea {
 }
 .credits dd {
   font-weight: 600;
+}
+.scorecard-title {
+  /* The script's baseline sits well above the bottom of its line box, so room is taken away below
+     to sit it with the scores it heads. */
+  margin: 2px 0 -0.35em;
+  font: 400 clamp(2.5rem, 11vw, 3.25rem) / 1.2 var(--font-script);
+  text-align: center;
+  /* Black would vanish into the dark theme's page. */
+  color: light-dark(#000, var(--ink));
 }
 .breakdown {
   display: flex;
@@ -1643,13 +1852,6 @@ app-thermometer {
 .unset {
   color: var(--muted);
   font-weight: 400 !important;
-}
-.kiki-notes p {
-  max-width: 65ch;
-  margin-top: 6px;
-  font: 500 1.625rem/1.25 var(--font-hand);
-  white-space: pre-line;
-  overflow-wrap: anywhere;
 }
 .actions,
 .confirm {
@@ -1872,6 +2074,93 @@ h3 {
   font-size: 0.875rem;
   text-decoration: underline;
 }
+/* Recommend: a checkbox that's a glass ball. Unchecking it smashes the ball; checking it hangs a new one. */
+.ornament {
+  position: relative;
+  display: block;
+  border-radius: 14px;
+  -webkit-tap-highlight-color: transparent;
+}
+.ornament input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.ornament:has(:focus-visible) {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.ornament svg {
+  display: block;
+  width: 62px;
+  height: 79px;
+  overflow: visible;
+  pointer-events: none;
+}
+.oc-glass {
+  stroke: #ffc4cd;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+.oc-ball,
+.oc-shard {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .oc-shard {
+    animation: shatter 1s both;
+  }
+  .flipped .oc-debris {
+    animation: settle 0.3s 0.55s ease-in both;
+  }
+  .flipped .oc-ball {
+    transform-origin: 50% 0;
+    animation: hang 0.5s ease-out;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .oc-shard {
+    display: none;
+  }
+}
+/* Burst outwards, then drop. */
+@keyframes shatter {
+  0% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0.1, 0.8, 0.4, 1);
+  }
+  40% {
+    opacity: 1;
+    transform: translate(var(--dx), var(--dy)) rotate(calc(var(--spin) * 0.5));
+    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--dx) * 1.35), calc(var(--dy) + 120px)) rotate(var(--spin));
+  }
+}
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(-24px);
+  }
+}
+@keyframes hang {
+  0% {
+    transform: scale(0.2);
+  }
+  45% {
+    transform: scale(1.06) rotate(9deg);
+  }
+  70% {
+    transform: rotate(-5deg);
+  }
+}
 .savebar {
   position: sticky;
   bottom: 0;
@@ -1879,15 +2168,19 @@ h3 {
   align-items: center;
   gap: 8px;
   margin-inline: -8px;
-  padding: 10px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--line);
   background: var(--bg);
 }
 .savebar p {
   display: flex;
   flex-direction: column;
-  flex: 1;
   min-width: 0;
+}
+/* Beside the points, with the buttons pushed to the far end. */
+.savebar app-ornament-check {
+  flex: none;
+  margin-right: auto;
 }
 .savebar strong {
   font: 800 1.25rem/1.1 var(--font-display);

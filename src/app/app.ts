@@ -15,7 +15,7 @@ import { SignIn } from './sign-in';
         @if (view().name !== 'list') {
           <button type="button" class="back" (click)="store.go({ name: 'list' })">‹ All movies</button>
         }
-        <h1>Yule <span>Swoon</span></h1>
+        <h1><span class="kikis">Kiki’s</span> Yule <span>Swoon</span></h1>
       </div>
     </header>
     <main class="wrap">
@@ -40,6 +40,11 @@ import { SignIn } from './sign-in';
         <p class="whoami">
           Signed in as {{ auth.email() }}
           <button type="button" class="btn quiet" (click)="auth.signOut()">Sign out</button>
+        </p>
+      } @else if (auth.previewing() && v.name === 'list') {
+        <p class="whoami">
+          Previewing as Kiki
+          <button type="button" class="btn quiet" (click)="auth.preview(false)">Stop</button>
         </p>
       }
     </main>

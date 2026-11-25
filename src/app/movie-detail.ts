@@ -1,4 +1,5 @@
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
+import { AuthService } from './auth';
 import { CRITERIA, Criterion, answered, fmt, fmtDate, groupStart, ranked, total } from './criteria';
 import { MovieStore } from './movie-store';
 import { Poster } from './poster';
@@ -43,6 +44,9 @@ import { Thermometer } from './thermometer';
               </div>
             }
           </dl>
+          @if (!m.recommend) {
+            <p class="stamp"><span>Not <b>Recommended</b></span></p>
+          }
         </header>
 
         @if (m.network || m.director || m.stars.length || m.released) {
@@ -66,6 +70,7 @@ import { Thermometer } from './thermometer';
           <p class="overview">{{ m.overview }}</p>
         }
 
+        <h3 class="scorecard-title">Kiki’s Scorecard</h3>
         <dl class="breakdown">
           @for (c of criteria; track c.key) {
             @if (groupStart($index); as g) {
@@ -84,13 +89,6 @@ import { Thermometer } from './thermometer';
           }
         </dl>
 
-        @if (m.notes) {
-          <section class="kiki-notes">
-            <h3>Kiki’s Notes</h3>
-            <p>{{ m.notes }}</p>
-          </section>
-        }
-
         @if (store.canWrite()) {
           <div class="actions">
             <button type="button" class="btn primary" (click)="store.go({ name: 'edit', id: m.id })">
@@ -108,6 +106,12 @@ import { Thermometer } from './thermometer';
           </div>
         }
       </article>
+    } @else if (store.status() === 'unavailable') {
+      <p class="empty">The ratings can’t be reached right now. Check your connection and reload the page.</p>
+    } @else if (store.status() === 'loading' || (found() && !auth.checked())) {
+      <p class="empty">{{ store.slow() ? 'Still trying to reach the ratings…' : 'Loading the rating…' }}</p>
+    } @else if (found()) {
+      <p class="empty">This movie hasn’t been fully rated yet.</p>
     } @else {
       <p class="empty">That movie isn’t in the list any more.</p>
     }
@@ -115,14 +119,21 @@ import { Thermometer } from './thermometer';
 })
 export class MovieDetail {
   protected readonly store = inject(MovieStore);
+  protected readonly auth = inject(AuthService);
   readonly id = input.required<string>();
 
   protected readonly criteria = CRITERIA;
   protected readonly groupStart = groupStart;
-  protected readonly confirming = signal(false);
+  /** Whether Delete is asking to be confirmed. Starts over when Back or Forward swaps in another movie. */
+  protected readonly confirming = linkedSignal({ source: () => this.id(), computation: () => false });
   protected readonly busy = signal(false);
 
-  protected readonly movie = computed(() => this.store.byId(this.id()));
+  protected readonly found = computed(() => this.store.byId(this.id()));
+  /** The movie to show. As in the list, only the editor sees one that isn't fully rated. */
+  protected readonly movie = computed(() => {
+    const m = this.found();
+    return m && (this.store.canWrite() || answered(m.scores) === CRITERIA.length) ? m : undefined;
+  });
   protected readonly score = computed(() => fmt(total(this.movie()?.scores ?? {})));
   protected readonly complete = computed(() => answered(this.movie()?.scores ?? {}) === CRITERIA.length);
   /** Its place among all the fully rated movies, whatever the list is filtered to. Unset until it is fully rated. */
@@ -149,6 +160,6 @@ export class MovieDetail {
     this.busy.set(true);
     const ok = await this.store.remove(id);
     this.busy.set(false);
-    if (ok) this.store.go({ name: 'list' });
+    if (ok) this.store.go({ name: 'list' }, true);
   }
 }

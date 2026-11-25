@@ -1,13 +1,12 @@
-import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
-import { CRITERIA, Movie, answered, blankMovie, fmt, fmtDate, matchesSearch, ranked, total, lastWatched } from './criteria';
+import { CRITERIA, Movie, answered, blankMovie, fmt, matchesSearch, ranked, total, lastWatched } from './criteria';
 import { LookupHit, MovieLookup } from './movie-lookup';
 import { MovieStore } from './movie-store';
 import { Poster } from './poster';
 
 @Component({
   selector: 'app-movie-list',
-  imports: [NgTemplateOutlet, Poster],
+  imports: [Poster],
   template: `
     @if (store.canWrite()) {
       <form class="add" (submit)="addTyped($event)">
@@ -78,19 +77,7 @@ import { Poster } from './poster';
         <p class="muted" role="status">{{ found() }}</p>
       </div>
 
-      <ng-template #sortChips>
-        <div class="tray sort" role="group" aria-labelledby="sort-label">
-          <span class="tray-tag" id="sort-label">Sort</span>
-          <div class="tray-keys">
-            <button type="button" class="chip" [class.on]="sort() === 'score'" [attr.aria-pressed]="sort() === 'score'" (click)="sort.set('score')">Top score</button>
-            <button type="button" class="chip" [class.on]="sort() === 'date'" [attr.aria-pressed]="sort() === 'date'" (click)="sort.set('date')">Latest watched</button>
-          </div>
-        </div>
-      </ng-template>
-
-      <!-- Without the section headings, the sort sits across from the filter. -->
-      @let sortBeside = !store.canWrite() && rated().length > 0;
-      @if (networks().length > 1 || sortBeside) {
+      @if (networks().length > 1 || rated().length) {
         <div class="section-head">
           @if (networks().length > 1) {
             <div class="tray" role="group" aria-labelledby="filter-label">
@@ -103,15 +90,22 @@ import { Poster } from './poster';
               </div>
             </div>
           }
-          @if (sortBeside) {
-            <ng-container [ngTemplateOutlet]="sortChips" />
+          @if (rated().length) {
+            <div class="tray sort" role="group" aria-labelledby="sort-label">
+              <span class="tray-tag" id="sort-label">Sort</span>
+              <div class="tray-keys">
+                <button type="button" class="chip" [class.on]="sort() === 'score'" [attr.aria-pressed]="sort() === 'score'" (click)="sort.set('score')">Top score</button>
+                <button type="button" class="chip" [class.on]="sort() === 'date'" [attr.aria-pressed]="sort() === 'date'" (click)="sort.set('date')">Latest</button>
+                <button type="button" class="chip" [class.on]="sort() === 'watches'" [attr.aria-pressed]="sort() === 'watches'" (click)="sort.set('watches')">Most watched</button>
+              </div>
+            </div>
           }
         </div>
       }
 
       @if (toRate().length) {
         <section>
-          <h2>To rate <span class="count">{{ toRate().length }}</span></h2>
+          <h2>To Rate <span class="count">{{ toRate().length }}</span></h2>
           <ul class="cards">
             @for (m of toRate(); track m.id) {
               <li>
@@ -132,10 +126,7 @@ import { Poster } from './poster';
       @if (rated().length) {
         <section>
           @if (store.canWrite()) {
-            <div class="section-head">
-              <h2>Rated <span class="count">{{ rated().length }}</span></h2>
-              <ng-container [ngTemplateOutlet]="sortChips" />
-            </div>
+            <h2>Rated <span class="count">{{ rated().length }}</span></h2>
           }
           <ol class="cards">
             @for (r of rated(); track r.movie.id) {
@@ -153,7 +144,59 @@ import { Poster } from './poster';
                     <strong>{{ m.title }}</strong>
                     <span class="muted">{{ meta(m) }}</span>
                   </span>
-                  <span class="score">{{ score(m) }}<small>pts</small></span>
+                  @let angel = sort() === 'score' && r.rank === 1 && m.recommend;
+                  <span class="score" [class.angel]="angel" [class.broken]="!m.recommend">
+                    @if (angel) {
+                      <svg class="topper" viewBox="0 0 100 116" aria-hidden="true">
+                        <defs>
+                          <linearGradient id="topper-gown" x1="0" x2="1">
+                            <stop offset="0" stop-color="#f0b429" />
+                            <stop offset="0.4" stop-color="#ffe9a3" />
+                            <stop offset="1" stop-color="#e09a1a" />
+                          </linearGradient>
+                        </defs>
+                        <g fill="#fffdf6" stroke="#c9982a" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+                          <path d="M44 48C34 26 16 17 4 20C1 30 3 38 8 43C5 49 8 56 14 59C14 65 20 70 27 70C35 70 41 62 44 54Z" />
+                          <path d="M56 48C66 26 84 17 96 20C99 30 97 38 92 43C95 49 92 56 86 59C86 65 80 70 73 70C65 70 59 62 56 54Z" />
+                          <path fill="none" d="M8 43C18 46 30 47 41 50M14 59C23 60 33 58 41 54M92 43C82 46 70 47 59 50M86 59C77 60 67 58 59 54" />
+                        </g>
+                        <path
+                          d="M42 46Q50 41 58 46C62 56 86 66 90 106Q81.5 114 75.3 108.5Q69 116 62.7 110Q56.3 117 50 110.5Q43.7 117 37.3 110Q31 116 24.7 108.5Q18.5 114 10 106C14 66 38 56 42 46Z"
+                          fill="url(#topper-gown)"
+                          stroke="#a8770f"
+                          stroke-width="1.6"
+                          stroke-linejoin="round"
+                        />
+                        <g stroke="#a8770f" stroke-width="1.4" stroke-linejoin="round">
+                          <path fill="#ffe9a3" d="M43 46C36 48 32 56 32 63Q37 67 41 64L50 59L48 54L42 56Z" />
+                          <path fill="#ffe9a3" d="M57 46C64 48 68 56 68 63Q63 67 59 64L50 59L52 54L58 56Z" />
+                        </g>
+                        <ellipse cx="50" cy="56.5" rx="3.6" ry="4" fill="#f3c19c" />
+                        <path fill="#7a4522" d="M50 17C39 17 35 25 36 33C36 39 33 42 35 46Q42 48 50 46Q58 48 65 46C67 42 64 39 64 33C65 25 61 17 50 17Z" />
+                        <ellipse cx="50" cy="33" rx="10.5" ry="11.5" fill="#f3c19c" />
+                        <path fill="#7a4522" d="M39 32C40 24 45 20 50 20C55 20 60 24 61 32C57 30 53 28 50 24C47 28 43 30 39 32Z" />
+                        <g fill="none" stroke="#3b1030" stroke-width="1.4" stroke-linecap="round">
+                          <path d="M43.5 34Q45.2 35.8 47 34M53 34Q54.8 35.8 56.5 34M47 39Q50 41.5 53 39" />
+                        </g>
+                        <g fill="#f2798f" opacity="0.6">
+                          <circle cx="43" cy="37.5" r="1.8" />
+                          <circle cx="57" cy="37.5" r="1.8" />
+                        </g>
+                        <ellipse cx="50" cy="10" rx="14" ry="4.5" fill="none" stroke="#c9982a" stroke-width="4" />
+                        <ellipse cx="50" cy="10" rx="14" ry="4.5" fill="none" stroke="#ffd84a" stroke-width="2.2" />
+                      </svg>
+                    }
+                    @if (m.recommend) {
+                      {{ score(m) }}<small>pts</small>
+                    } @else {
+                      <!-- Each half is the whole ball cut off along the break. The points are on the lower one. -->
+                      <span class="half top"><span class="glass"></span></span>
+                      <span class="half bottom">
+                        <span class="glass">{{ score(m) }}<small>pts</small></span>
+                      </span>
+                      <span class="sr-only">, not recommended</span>
+                    }
+                  </span>
                 </button>
               </li>
             }
@@ -167,7 +210,7 @@ export class MovieList {
   protected readonly store = inject(MovieStore);
   protected readonly lookup = inject(MovieLookup);
 
-  protected readonly sort = signal<'score' | 'date'>('score');
+  protected readonly sort = signal<'score' | 'date' | 'watches'>('score');
   /** The network picked as a filter, dropped if signing out takes its chip away. */
   protected readonly network = linkedSignal<string[], string>({
     source: () => this.networks(),
@@ -204,6 +247,8 @@ export class MovieList {
   protected readonly rated = computed(() => {
     const done = ranked(this.visible());
     if (this.sort() === 'date') done.sort((a, b) => (lastWatched(b) || '0').localeCompare(lastWatched(a) || '0'));
+    // A rated movie with no dates was still watched once. Movies watched equally often stay in score order.
+    if (this.sort() === 'watches') done.sort((a, b) => Math.max(1, b.watched.length) - Math.max(1, a.watched.length));
     // Ranked before searching, so a movie found by search keeps its place in the full list.
     return done.map((movie, i) => ({ movie, rank: i + 1 })).filter((r) => matchesSearch(r.movie, this.store.search()));
   });
@@ -228,7 +273,10 @@ export class MovieList {
   }
 
   protected meta(m: Movie) {
-    return [m.network, fmtDate(lastWatched(m)) + (m.watched.length > 1 ? ` (watched ${m.watched.length} times)` : ''), m.viewers.join(' and ')].filter(Boolean).join(' · ');
+    const times = m.watched.length > 1 ? ` (${m.watched.length} times)` : '';
+    // Viewers are saved with Kiki first; here it reads "Matt and Kiki".
+    const watchedBy = m.viewers.length ? `Watched by: ${[...m.viewers].reverse().join(' and ')}${times}` : '';
+    return [m.network, watchedBy].filter(Boolean).join(' · ');
   }
 
   protected open(m: Movie) {
