@@ -1,6 +1,6 @@
 import { Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
 import { AuthService } from './auth';
-import { CRITERIA, Criterion, answered, fmt, fmtDate, groupStart, ranked, total } from './criteria';
+import { BASE, CRITERIA, Criterion, answered, choiceColor, fmt, fmtDate, groupStart, ranked, total } from './criteria';
 import { MovieStore } from './movie-store';
 import { Poster } from './poster';
 import { RatingIcons } from './rating-icons';
@@ -71,10 +71,10 @@ import { Thermometer } from './thermometer';
         <dl class="breakdown">
           @for (c of criteria; track c.key) {
             @if (groupStart($index); as g) {
-              <div class="row group-head"><dt>{{ g }}</dt></div>
+              <div class="row group-head"><dt class="divider" [class.base]="g === base">{{ g }}</dt></div>
             }
-            <div class="row" [class.sub]="c.bonusOf" [class.grouped]="c.group" [class.thermo-row]="c.kind === 'choice' && m.scores[c.key] != null">
-              <dt>{{ c.label }}</dt>
+            <div class="row" [class.sub]="c.bonusOf" [class.thermo-row]="c.kind === 'choice'">
+              <dt [class.divider]="c.kind === 'choice'" [style.color]="choiceColor(c, m.scores[c.key])">@if (c.bonusOf) {<b class="bonus">BONUS:</b>&ngsp;}{{ c.label }}</dt>
               @if (c.kind === 'choice' && m.scores[c.key] != null) {
                 <dd><app-thermometer [options]="c.options ?? []" [value]="m.scores[c.key]!" /></dd>
               } @else if (m.scores[c.key] != null && (c.kind === 'scale' || (['kisses', 'couples', 'accents', 'celebrity', 'saved', 'soundtrack', 'better'].includes(c.key) && m.scores[c.key]! > 0))) {
@@ -95,13 +95,15 @@ import { Thermometer } from './thermometer';
               <button type="button" class="btn quiet" (click)="confirming.set(true)">Delete</button>
             } @else {
               <span class="confirm">
-                Delete this movie and its scores?
+                Delete this movie, its scores and any audio reviews?
                 <button type="button" class="btn danger" [disabled]="busy()" (click)="remove(m.id)">Delete</button>
                 <button type="button" class="btn quiet" (click)="confirming.set(false)">Keep</button>
               </span>
             }
           </div>
         }
+
+        <button type="button" class="back" (click)="store.go({ name: 'list' })">‹ All Movies</button>
       </article>
     } @else if (store.status() === 'unavailable') {
       <p class="empty">The ratings can’t be reached right now. Check your connection and reload the page.</p>
@@ -121,6 +123,8 @@ export class MovieDetail {
 
   protected readonly criteria = CRITERIA;
   protected readonly groupStart = groupStart;
+  protected readonly base = BASE;
+  protected readonly choiceColor = choiceColor;
   /** Whether Delete is asking to be confirmed. Starts over when Back or Forward swaps in another movie. */
   protected readonly confirming = linkedSignal({ source: () => this.id(), computation: () => false });
   protected readonly busy = signal(false);

@@ -1,13 +1,15 @@
 import { Component, OnInit, computed, inject, input, signal, viewChild } from '@angular/core';
-import { CRITERIA, Criterion, DEFAULT_NETWORKS, MovieData, PEOPLE, answered, fmt, total, groupStart, watchDates } from './criteria';
+import { AudioReviews } from './audio-reviews';
+import { BASE, CRITERIA, Criterion, DEFAULT_NETWORKS, MovieData, PEOPLE, answered, choiceColor, fmt, total, groupStart, watchDates } from './criteria';
 import { EmojiBurst } from './emoji-burst';
 import { OrnamentCheck } from './ornament-check';
 import { RatingIcons } from './rating-icons';
 import { MovieStore } from './movie-store';
+import { ReviewStore } from './review-store';
 
 @Component({
   selector: 'app-movie-form',
-  imports: [RatingIcons, EmojiBurst, OrnamentCheck],
+  imports: [AudioReviews, RatingIcons, EmojiBurst, OrnamentCheck],
   template: `
     @if (draft(); as d) {
       <form class="form" (submit)="save($event)">
@@ -52,10 +54,10 @@ import { MovieStore } from './movie-store';
 
         @for (c of criteria; track c.key) {
           @if (groupStart($index); as g) {
-            <h3 class="group-head">{{ g }}</h3>
+            <h3 class="divider" [class.base]="g === base">{{ g }}</h3>
           }
-          <section class="crit" [class.sub]="c.bonusOf" [class.grouped]="c.group" role="group" [attr.aria-label]="c.label">
-            <h3>{{ c.label }}</h3>
+          <section class="crit" [class.sub]="c.bonusOf" role="group" [attr.aria-label]="c.label">
+            <h3 [class.divider]="c.kind === 'choice'" [style.color]="choiceColor(c, d.scores[c.key])">@if (c.bonusOf) {<b class="bonus">BONUS:</b>&ngsp;}{{ c.label }}</h3>
             @if (c.hint) {
               <p class="muted">{{ c.hint }}</p>
             }
@@ -94,14 +96,16 @@ import { MovieStore } from './movie-store';
           </section>
         }
 
+        <app-audio-reviews [movieId]="id()" />
+
         <div class="savebar">
+          <app-ornament-check [checked]="d.recommend" (checkedChange)="patch({ recommend: $event })" />
           <p>
             <strong>{{ sum() }} pts</strong>
-            <span class="muted">{{ count() }} of {{ criteria.length }} scored</span>
+            <span class="muted">{{ reviews.recording() ? 'Stop recording first' : count() + ' of ' + criteria.length + ' scored' }}</span>
           </p>
-          <app-ornament-check [checked]="d.recommend" (checkedChange)="patch({ recommend: $event })" />
-          <button type="button" class="btn quiet" (click)="cancel()">Cancel</button>
-          <button type="submit" class="btn primary" [disabled]="saving() || !d.title.trim()">
+          <button type="button" class="btn quiet" [disabled]="reviews.recording()" (click)="cancel()">Cancel</button>
+          <button type="submit" class="btn primary" [disabled]="saving() || reviews.recording() || !d.title.trim()">
             {{ saving() ? 'Saving…' : 'Save' }}
           </button>
         </div>
@@ -114,9 +118,12 @@ import { MovieStore } from './movie-store';
 })
 export class MovieForm implements OnInit {
   protected readonly store = inject(MovieStore);
+  protected readonly reviews = inject(ReviewStore);
   readonly id = input.required<string>();
 
   protected readonly groupStart = groupStart;
+  protected readonly base = BASE;
+  protected readonly choiceColor = choiceColor;
   protected readonly criteria = CRITERIA;
   protected readonly people = PEOPLE;
   protected readonly draft = signal<MovieData | null>(null);
@@ -198,7 +205,7 @@ export class MovieForm implements OnInit {
   protected async save(event: Event) {
     event.preventDefault();
     const d = this.draft();
-    if (!d || this.saving()) return;
+    if (!d || this.saving() || this.reviews.recording()) return;
     this.saving.set(true);
     const id = await this.store.save(this.id(), { ...d, title: d.title.trim(), network: d.network.trim(), watched: watchDates(d.watched) });
     this.saving.set(false);

@@ -7,19 +7,21 @@ export interface Criterion {
   /** scale: what a 1 and a 5 mean */
   low?: string;
   high?: string;
-  /** choice */
-  options?: { value: number; label: string }[];
+  /** choice, coldest to hottest; each has its own colour on the thermometer */
+  options?: { value: number; label: string; color: string }[];
   /** Key of the criterion this one is a bonus to; it is shown attached to that one. */
   bonusOf?: string;
   /** Heading that consecutive criteria are gathered under. */
   group?: string;
 }
 
+export const BASE = 'Base Score';
 const BONUS = 'Bonus Points';
 
 export const CRITERIA: Criterion[] = [
   {
     key: 'decor',
+    group: BASE,
     label: 'Holiday Decorations and Scenery',
     kind: 'scale',
     low: 'Can barely tell it’s a holiday movie',
@@ -27,6 +29,7 @@ export const CRITERIA: Criterion[] = [
   },
   {
     key: 'traditions',
+    group: BASE,
     label: 'Holiday Traditions',
     kind: 'scale',
     low: 'Do these people even know it is a holiday?',
@@ -34,6 +37,7 @@ export const CRITERIA: Criterion[] = [
   },
   {
     key: 'originality',
+    group: BASE,
     label: 'Originality',
     kind: 'scale',
     low: 'No originality',
@@ -41,13 +45,15 @@ export const CRITERIA: Criterion[] = [
   },
   {
     key: 'better',
-    label: 'Bonus: Did It Better',
+    group: BASE,
+    label: 'Did It Better',
     kind: 'stepper',
     hint: 'Not original, but a better version. Not full points, just a bonus.',
     bonusOf: 'originality',
   },
   {
     key: 'cheese',
+    group: BASE,
     label: 'Cheese Factor',
     kind: 'scale',
     low: 'Hate it and not a good cheese',
@@ -77,13 +83,13 @@ export const CRITERIA: Criterion[] = [
   { key: 'soundtrack', group: BONUS, label: 'Soundtrack', kind: 'stepper' },
   {
     key: 'horny',
-    label: 'Horny?',
+    label: 'Horny Meter',
     kind: 'choice',
     options: [
-      { value: -1, label: 'No horny. Disappointed.' },
-      { value: 0, label: 'Appropriate horny.' },
-      { value: 1, label: 'Pleasantly more horny than expected.' },
-      { value: -2, label: 'Cool it mister! Too horny.' },
+      { value: -1, label: 'Not horny. Disappointed.', color: '#2f7df6' },
+      { value: 0, label: 'Appropriately horny.', color: 'var(--holly)' },
+      { value: 1, label: 'Pleasantly more horny than expected.', color: 'var(--bonus)' },
+      { value: -2, label: 'Cool it mister! Too horny.', color: '#ff9a1f' },
     ],
   },
 ];
@@ -207,6 +213,11 @@ export function fmtDate(iso: string): string {
 /** Only https and same-site image paths are ever used as a poster source. */
 export function safePoster(url: string): string {
   return /^https:\/\//.test(url) || /^(\/_blob\/|posters\/)[\w./-]+$/.test(url) ? url : '';
+}
+
+/** The colour of a choice's heading: that of the chosen option, or grey until one is chosen. Unset for other criteria. */
+export function choiceColor(c: Criterion, v: number | null | undefined): string | undefined {
+  return c.options && (c.options.find((o) => o.value === v)?.color ?? 'var(--muted)');
 }
 
 /** The group heading to show above the criterion at this position, if it starts a group. */

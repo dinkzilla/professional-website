@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Must match EDITOR_EMAIL in src/app/firebase.ts, and firestore.rules.
+    function isEditor() {
+      return request.auth != null
+        && request.auth.token.email == 'venablekd@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    // Audio reviews. Nobody else can hear them yet.
+    match /movies/{movie}/reviews/{review} {
+      allow read, delete: if isEditor();
+      allow create, update: if isEditor()
+        && request.resource.size < 75 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*');
+    }
+  }
+}

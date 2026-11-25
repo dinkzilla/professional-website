@@ -1,9 +1,10 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { AuthService } from './auth';
 import { MovieDetail } from './movie-detail';
 import { MovieForm } from './movie-form';
 import { MovieList } from './movie-list';
 import { MovieStore } from './movie-store';
+import { ReviewStore } from './review-store';
 import { SignIn } from './sign-in';
 
 @Component({
@@ -13,7 +14,7 @@ import { SignIn } from './sign-in';
     <header class="top" [class.sub]="view().name !== 'list'">
       <div class="wrap">
         @if (view().name !== 'list') {
-          <button type="button" class="back" (click)="store.go({ name: 'list' })">‹<span class="back-text"> All movies</span></button>
+          <button type="button" class="back" (click)="store.go({ name: 'list' })">‹<span class="back-text"> All Movies</span></button>
         }
         <h1><span class="kikis">Kiki’s</span> Yule <span>Swoon</span></h1>
       </div>
@@ -21,6 +22,12 @@ import { SignIn } from './sign-in';
     <main class="wrap">
       @if (store.error()) {
         <p class="error" role="alert">{{ store.error() }}</p>
+      }
+      @if (unsaved(); as u) {
+        <p class="error" role="alert">
+          A recording for {{ store.byId(u.movieId)?.title ?? 'a movie' }} couldn’t be saved.
+          <button type="button" class="clear" (click)="store.go({ name: 'edit', id: u.movieId })">Go to it</button>
+        </p>
       }
       @let v = view();
       @if (v.name === 'detail') {
@@ -54,4 +61,10 @@ export class App {
   protected readonly store = inject(MovieStore);
   protected readonly auth = inject(AuthService);
   protected readonly view = this.store.view;
+  private readonly reviews = inject(ReviewStore);
+  /** A recording that failed to save after its form was left. On the form, its own row says so. */
+  protected readonly unsaved = computed(() => {
+    const v = this.view();
+    return this.reviews.uploads().find((u) => u.problem && !(v.name === 'edit' && v.id === u.movieId));
+  });
 }

@@ -3,6 +3,7 @@ import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase
 import { AuthService } from './auth';
 import { Movie, MovieData, normalize } from './criteria';
 import { firestore } from './firebase';
+import { ReviewStore } from './review-store';
 import { View, urlFor, viewFor } from './routes';
 
 const LOCAL_KEY = 'holiday-romance-movies';
@@ -21,6 +22,7 @@ function viewFromAddress(): View {
 @Injectable({ providedIn: 'root' })
 export class MovieStore {
   private readonly auth = inject(AuthService);
+  private readonly reviews = inject(ReviewStore);
 
   private readonly saved = signal<Movie[]>([]);
   /** What's been changed while previewing the editor's side: each movie by id, or null if deleted. Never saved anywhere. */
@@ -151,9 +153,20 @@ export class MovieStore {
     }
   }
 
+  /** Deletes a movie and its audio reviews. Resolves false if that failed. */
   async remove(id: string): Promise<boolean> {
     this.error.set('');
     const db = this.db;
+    if (this.reviews.saving(id)) {
+      this.error.set('One of this movie’s recordings is still being saved. Try again when it’s done.');
+      return false;
+    }
+    try {
+      await this.withRetry(() => this.reviews.removeAll(id));
+    } catch (e: any) {
+      this.fail(e, 'delete');
+      return false;
+    }
     if (!db) {
       this.writeLocal(this.movies().filter((m) => m.id !== id));
       return true;
@@ -164,6 +177,7 @@ export class MovieStore {
     }
     try {
       await this.withRetry(() => deleteDoc(doc(db, 'movies', id)));
+      this.reviews.forget(id);
       return true;
     } catch (e: any) {
       this.fail(e, 'delete');
@@ -186,7 +200,7 @@ export class MovieStore {
   }
 
   private fail(e: any, verb: string) {
-    if (e?.code === 'permission-denied' || e?.code === 'unauthenticated') {
+    if (['permission-denied', 'unauthenticated', 'storage/unauthorized', 'storage/unauthenticated'].includes(e?.code)) {
       this.error.set('Only Kiki can change this list. Sign in again and retry.');
     } else if (e?.code === 'resource-exhausted') {
       this.error.set('The ratings database has hit its daily limit. Try again tomorrow.');

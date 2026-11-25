@@ -6,7 +6,8 @@ Ratings for holiday romance movies. Anyone can view them; only Kiki can add, rat
 
 - Movies live in the Firestore collection `movies`, read live by every visitor.
 - `firestore.rules` lets anyone read and only a verified `venablekd@gmail.com` Google sign-in write. That rule is the real protection; the app just hides the controls from everyone else.
-- To change the editor, update the email in both `firestore.rules` and `src/app/firebase.ts`, then redeploy.
+- Kiki's audio reviews are files in Cloud Storage at `movies/<id>/reviews/`, with their details in the Firestore subcollection `movies/<id>/reviews`. Only Kiki can read or change either (`storage.rules` and `firestore.rules`).
+- To change the editor, update the email in `firestore.rules`, `storage.rules` and `src/app/firebase.ts`, then redeploy.
 - The TMDB movie-search key is the `key` field of the Firestore document `private/tmdb`, readable only by the editor.
 - While `src/app/firebase.ts` has no settings, the app keeps everything in the browser's own storage and shows every control (handy for trying things out, useless for sharing).
 
@@ -15,7 +16,7 @@ Ratings for holiday romance movies. Anyone can view them; only Kiki can add, rat
 1. Create a project at <https://console.firebase.google.com> (no Analytics needed).
 2. Build → Authentication → Sign-in method: enable **Google**.
 3. Build → Firestore Database: create a database in production mode.
-4. Project settings → Your apps → add a **Web** app, and paste its `apiKey`, `authDomain`, `projectId` and `appId` into `src/app/firebase.ts`.
+4. Project settings → Your apps → add a **Web** app, and paste its `apiKey`, `authDomain`, `projectId`, `storageBucket` and `appId` into `src/app/firebase.ts`.
 5. Sign in and pick the project:
 
    ```bash
@@ -29,13 +30,14 @@ Ratings for holiday romance movies. Anyone can view them; only Kiki can add, rat
    npm run seed -- <project-id>
    ```
 
-7. Deploy the site and the rules:
+7. Storage → Get started: create the default bucket, which needs the pay-as-you-go (Blaze) plan. Pick `us-central1`, `us-east1` or `us-west1` for the free allowance. Until it exists, `npm run deploy` stops before publishing anything.
+8. Deploy the site and the rules:
 
    ```bash
    npm run deploy
    ```
 
-8. Hosting → Add custom domain, and add the DNS records it shows. Then check the domain is listed under Authentication → Settings → Authorized domains, or sign-in will be refused there.
+9. Hosting → Add custom domain, and add the DNS records it shows. Then check the domain is listed under Authentication → Settings → Authorized domains, or sign-in will be refused there.
 
 ## Deploys
 

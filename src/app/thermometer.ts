@@ -3,7 +3,7 @@ import { fmt } from './criteria';
 
 /**
  * A choice score as a thermometer shaped like a candy cane on its side. Options run coldest (the hook end)
- * to hottest; the striped part stops at a marker on the chosen one, fading blue, green, red, orange along the way, and every level shows its label and points.
+ * to hottest; the striped part stops at a marker on the chosen one, fading from each level's colour to the next along the way, and every level shows its label and points.
  */
 @Component({
   selector: 'app-thermometer',
@@ -23,10 +23,9 @@ import { fmt } from './criteria';
     <svg class="cane-meter cane-scale" aria-hidden="true">
       <defs>
         <linearGradient id="cm-fade" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100%" y2="0">
-          <stop offset="0.125" stop-color="#2f7df6" />
-          <stop offset="0.375" stop-color="#1fa85a" />
-          <stop offset="0.625" stop-color="#e0263f" />
-          <stop offset="0.875" stop-color="#ff9a1f" />
+          @for (o of options(); track o.value) {
+            <stop [attr.offset]="($index + 0.5) / $count" [style.stop-color]="o.color" />
+          }
         </linearGradient>
       </defs>
       <g fill="none" stroke-linecap="round">
@@ -46,7 +45,7 @@ import { fmt } from './criteria';
   `,
 })
 export class Thermometer {
-  readonly options = input.required<{ value: number; label: string }[]>();
+  readonly options = input.required<{ value: number; label: string; color: string }[]>();
   readonly value = input.required<number>();
 
   /** How far along the cane the red stripes run: to the middle of the chosen level. */
