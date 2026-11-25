@@ -105,7 +105,7 @@ import { Thermometer } from './thermometer';
       </article>
     } @else if (store.status() === 'unavailable') {
       <p class="empty">The ratings can’t be reached right now. Check your connection and reload the page.</p>
-    } @else if (store.status() === 'loading' || (found() && !auth.checked())) {
+    } @else if (store.status() === 'loading' || store.stale() || (found() && !auth.checked())) {
       <p class="empty">{{ store.slow() ? 'Still trying to reach the ratings…' : 'Loading the rating…' }}</p>
     } @else if (found()) {
       <p class="empty">This movie hasn’t been fully rated yet.</p>

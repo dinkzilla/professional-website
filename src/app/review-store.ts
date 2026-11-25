@@ -58,6 +58,8 @@ export class ReviewStore {
   readonly recording = signal(false);
   readonly uploads = signal<Upload[]>([]);
   readonly status = signal<'loading' | 'ready' | 'unavailable'>('loading');
+  /** True when the saved reviews are taking a long time to arrive. */
+  readonly slow = signal(false);
 
   private readonly inMemory = computed(() => !firestore || this.auth.previewing());
   private readonly memory = signal<ReadonlyMap<string, Review[]>>(new Map());
@@ -80,14 +82,34 @@ export class ReviewStore {
       return () => {};
     }
     this.status.set('loading');
-    return onSnapshot(
+    this.slow.set(false);
+    const timer = setTimeout(() => this.slow.set(true), 10_000);
+    let confirmed = false;
+    const stop = onSnapshot(
       collection(firestore!, 'movies', movieId, 'reviews'),
+      // Otherwise the server confirming there are none isn't reported.
+      { includeMetadataChanges: true },
       (snap) => {
+        if (!snap.metadata.fromCache) {
+          confirmed = true;
+          clearTimeout(timer);
+          this.slow.set(false);
+        }
+        // Offline, Firestore reports an empty list of its own, which doesn't mean there are none.
+        if (!confirmed && snap.empty) return;
         this.saved.set(snap.docs.map((d) => toReview(d.id, d.data())));
         this.status.set('ready');
       },
-      () => this.status.set('unavailable'),
+      () => {
+        clearTimeout(timer);
+        this.slow.set(false);
+        this.status.set('unavailable');
+      },
     );
+    return () => {
+      clearTimeout(timer);
+      stop();
+    };
   }
 
   /** A movie's saved reviews, newest first. */

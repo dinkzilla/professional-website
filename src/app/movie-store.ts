@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { AuthService } from './auth';
 import { Movie, MovieData, normalize } from './criteria';
 import { firestore } from './firebase';
@@ -8,6 +8,10 @@ import { View, urlFor, viewFor } from './routes';
 
 const LOCAL_KEY = 'holiday-romance-movies';
 const SEEDED_KEY = 'holiday-romance-seeded';
+/** The last list received from Firestore, shown on the next visit until the live one arrives. */
+const SNAPSHOT_KEY = 'yule-swoon-movies';
+/** How long a save waits to hear from the server before carrying on without it, in milliseconds. */
+const SYNC_WAIT = 2000;
 
 function viewFromAddress(): View {
   return viewFor(location.pathname, document.baseURI);
@@ -39,13 +43,21 @@ export class MovieStore {
   });
   readonly status = signal<'loading' | 'ready' | 'unavailable'>('loading');
   readonly slow = signal(false);
-  /** Whether to show the add, edit and delete controls. */
-  readonly canWrite = this.auth.isEditor;
+  /** True until the live list arrives. Until then, any list showing is one remembered from the last visit. */
+  readonly stale = signal(!!firestore);
+  /** True when changes have been waiting a while to reach the server. They are safe on this device meanwhile. */
+  readonly unsynced = signal(false);
+  private syncTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Whether to show the add, edit and delete controls. Never on a remembered list: saving an out-of-date movie would undo newer changes. */
+  readonly canWrite = computed(() => this.auth.isEditor() && !this.stale());
   readonly error = signal('');
   readonly view = signal<View>(viewFromAddress());
 
   /** What's typed in the list's search box, kept here so it survives opening a movie and coming back. */
   readonly search = signal('');
+  /** How the list is sorted, and the network it's filtered to or ''. Kept here for the same reason. */
+  readonly sort = signal<'score' | 'date' | 'watches'>('score');
+  readonly network = signal('');
 
   private readonly db = firestore;
 
@@ -77,7 +89,7 @@ export class MovieStore {
   private async init() {
     const db = this.db;
     if (!db) {
-      const saved = this.readLocal();
+      const saved = this.readMovies(LOCAL_KEY);
       const seed = await this.fetchSeed();
       const seedById = new Map(seed.map((m) => [m.id, m]));
       // Starter movies pick up details added to the seed file later; scores are never touched.
@@ -104,15 +116,27 @@ export class MovieStore {
       this.status.set('ready');
       return;
     }
+    const remembered = this.readMovies(SNAPSHOT_KEY);
+    if (remembered.length) {
+      this.saved.set(remembered);
+      this.status.set('ready');
+    }
     const timer = setTimeout(() => this.slow.set(true), 10_000);
     onSnapshot(
       collection(db, 'movies'),
+      // Otherwise the server confirming a list that hasn't changed isn't reported, nor a save reaching it.
+      { includeMetadataChanges: true },
       (snap) => {
+        this.watchSync(snap.metadata.hasPendingWrites);
+        if (!snap.metadata.fromCache) this.stale.set(false);
+        // Offline, Firestore reports an empty list of its own, which doesn't mean there are no movies.
+        if (this.stale() && snap.empty) return;
         this.saved.set(snap.docs.map((d) => normalize(d.id, d.data())));
         this.status.set('ready');
         if (!snap.metadata.fromCache) {
           clearTimeout(timer);
           this.slow.set(false);
+          this.remember(this.saved());
         }
       },
       () => {
@@ -124,33 +148,52 @@ export class MovieStore {
     );
   }
 
-  /** Creates (id null) or replaces a movie. Resolves with its id, or null if the save failed. */
-  async save(id: string | null, data: MovieData): Promise<string | null> {
+  /** Says so if changes are still waiting to reach the server after a while. */
+  private watchSync(pending: boolean) {
+    if (!pending) {
+      clearTimeout(this.syncTimer);
+      this.syncTimer = undefined;
+      this.unsynced.set(false);
+    } else if (this.syncTimer === undefined) {
+      this.syncTimer = setTimeout(() => this.unsynced.set(true), SYNC_WAIT);
+    }
+  }
+
+  /**
+   * Creates (id null) or replaces a movie. Resolves with its id, or null if the save was refused.
+   * Offline, Firestore keeps a change and sends it later rather than failing, so this doesn't wait
+   * long for the server: unsynced says when a change hasn't got there. Calls confirmed once it has.
+   */
+  async save(id: string | null, data: MovieData, confirmed?: () => void): Promise<string | null> {
     this.error.set('');
     const db = this.db;
     if (!db) {
       const newId = id ?? 'm' + Date.now().toString(36);
       const rest = this.movies().filter((m) => m.id !== newId);
       this.writeLocal([...rest, { ...data, id: newId }]);
+      confirmed?.();
       return newId;
     }
     if (this.auth.previewing()) {
       const newId = id ?? 'm' + Date.now().toString(36);
       this.setPretend(newId, { ...data, id: newId });
+      confirmed?.();
       return newId;
     }
-    try {
-      return await this.withRetry(async () => {
-        if (id) {
-          await setDoc(doc(db, 'movies', id), data);
-          return id;
-        }
-        return (await addDoc(collection(db, 'movies'), data)).id;
-      });
-    } catch (e: any) {
-      this.fail(e, 'save');
-      return null;
-    }
+    const ref = id ? doc(db, 'movies', id) : doc(collection(db, 'movies'));
+    const write = setDoc(ref, data).then(
+      () => {
+        confirmed?.();
+        return true;
+      },
+      (e: any) => {
+        // However long it took to be refused, and whatever is showing by then.
+        this.fail(e, `save “${data.title}”`);
+        return false;
+      },
+    );
+    const wait = new Promise<boolean>((resolve) => setTimeout(() => resolve(true), SYNC_WAIT));
+    return (await Promise.race([write, wait])) ? ref.id : null;
   }
 
   /** Deletes a movie and its audio reviews. Resolves false if that failed. */
@@ -234,9 +277,15 @@ export class MovieStore {
     }
   }
 
-  private readLocal(): Movie[] {
+  private remember(movies: Movie[]) {
     try {
-      const rows = JSON.parse(localStorage.getItem(LOCAL_KEY) ?? '[]');
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(movies));
+    } catch {}
+  }
+
+  private readMovies(key: string): Movie[] {
+    try {
+      const rows = JSON.parse(localStorage.getItem(key) ?? '[]');
       return Array.isArray(rows) ? rows.map((r) => normalize(String(r.id), r)) : [];
     } catch {
       return [];

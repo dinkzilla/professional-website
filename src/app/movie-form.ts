@@ -1,6 +1,8 @@
-import { Component, OnInit, computed, inject, input, signal, viewChild } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, input, signal, viewChild } from '@angular/core';
 import { AudioReviews } from './audio-reviews';
+import { AuthService } from './auth';
 import { BASE, CRITERIA, Criterion, DEFAULT_NETWORKS, MovieData, PEOPLE, answered, choiceColor, fmt, total, groupStart, watchDates } from './criteria';
+import { clearDraft, keepDraft, readDraft } from './drafts';
 import { EmojiBurst } from './emoji-burst';
 import { OrnamentCheck } from './ornament-check';
 import { RatingIcons } from './rating-icons';
@@ -13,6 +15,9 @@ import { ReviewStore } from './review-store';
   template: `
     @if (draft(); as d) {
       <form class="form" (submit)="save($event)">
+        @if (restored()) {
+          <p class="note" role="status">Your unsaved changes are back. Cancel drops them.</p>
+        }
         <div class="field">
           <label for="f-title">Title</label>
           <input id="f-title" type="text" required [value]="d.title" (input)="patch({ title: $any($event.target).value })" />
@@ -54,7 +59,7 @@ import { ReviewStore } from './review-store';
 
         @for (c of criteria; track c.key) {
           @if (groupStart($index); as g) {
-            <h3 class="divider" [class.base]="g === base">{{ g }}</h3>
+            <h3 class="divider" [class.base]="g === baseGroup">{{ g }}</h3>
           }
           <section class="crit" [class.sub]="c.bonusOf" role="group" [attr.aria-label]="c.label">
             <h3 [class.divider]="c.kind === 'choice'" [style.color]="choiceColor(c, d.scores[c.key])">@if (c.bonusOf) {<b class="bonus">BONUS:</b>&ngsp;}{{ c.label }}</h3>
@@ -116,18 +121,26 @@ import { ReviewStore } from './review-store';
     }
   `,
 })
-export class MovieForm implements OnInit {
+export class MovieForm implements OnInit, OnDestroy {
+  private readonly auth = inject(AuthService);
   protected readonly store = inject(MovieStore);
   protected readonly reviews = inject(ReviewStore);
   readonly id = input.required<string>();
 
   protected readonly groupStart = groupStart;
-  protected readonly base = BASE;
+  protected readonly baseGroup = BASE;
   protected readonly choiceColor = choiceColor;
   protected readonly criteria = CRITERIA;
   protected readonly people = PEOPLE;
   protected readonly draft = signal<MovieData | null>(null);
   protected readonly saving = signal(false);
+  /** Whether it opened with changes left unsaved earlier. */
+  protected readonly restored = signal(false);
+  /** Where this form's unsaved changes are kept, the movie as it was when the form opened, and what's kept now. */
+  private draftKey = '';
+  private base = '';
+  private kept = '';
+  private destroyed = false;
   private readonly bursts = viewChild(EmojiBurst);
 
   protected readonly sum = computed(() => fmt(total(this.draft()?.scores ?? {})));
@@ -139,10 +152,24 @@ export class MovieForm implements OnInit {
   ngOnInit() {
     const m = this.store.byId(this.id());
     if (m) {
-      const { id: _id, ...data } = m;
+      const { id, ...data } = m;
+      // Changes made while previewing are kept apart, so they can't turn up in the real form.
+      this.draftKey = `yule-swoon-${this.auth.previewing() ? 'preview-' : ''}draft-${id}`;
+      this.base = JSON.stringify(data);
+      const left = readDraft(this.draftKey, this.base);
+      if (left) {
+        this.kept = left.text;
+        this.restored.set(true);
+        this.draft.set(left.draft);
+        return;
+      }
       // Always offer one date box, even before anything has been watched.
       this.draft.set({ ...data, watched: data.watched.length ? [...data.watched] : [''], viewers: [...data.viewers], scores: { ...data.scores } });
     }
+  }
+
+  ngOnDestroy() {
+    this.destroyed = true;
   }
 
   protected num(n: number) {
@@ -150,7 +177,11 @@ export class MovieForm implements OnInit {
   }
 
   protected patch(change: Partial<MovieData>) {
-    this.draft.update((d) => (d ? { ...d, ...change } : d));
+    const d = this.draft();
+    if (!d) return;
+    const draft = { ...d, ...change };
+    this.draft.set(draft);
+    this.kept = keepDraft(this.draftKey, { base: this.base, draft });
   }
 
   protected setDate(i: number, value: string) {
@@ -198,6 +229,8 @@ export class MovieForm implements OnInit {
   }
 
   protected cancel() {
+    // A save under way may yet be refused, and then they're wanted.
+    if (!this.saving()) clearDraft(this.draftKey, this.kept);
     const rated = answered(this.store.byId(this.id())?.scores ?? {}) > 0;
     this.store.go(rated ? { name: 'detail', id: this.id() } : { name: 'list' });
   }
@@ -207,8 +240,10 @@ export class MovieForm implements OnInit {
     const d = this.draft();
     if (!d || this.saving() || this.reviews.recording()) return;
     this.saving.set(true);
-    const id = await this.store.save(this.id(), { ...d, title: d.title.trim(), network: d.network.trim(), watched: watchDates(d.watched) });
+    const { draftKey, kept } = this;
+    const data = { ...d, title: d.title.trim(), network: d.network.trim(), watched: watchDates(d.watched) };
+    const id = await this.store.save(this.id(), data, () => clearDraft(draftKey, kept));
     this.saving.set(false);
-    if (id) this.store.go({ name: 'detail', id });
+    if (id && !this.destroyed) this.store.go({ name: 'detail', id });
   }
 }

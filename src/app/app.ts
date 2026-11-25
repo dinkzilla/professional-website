@@ -21,8 +21,24 @@ import { ThemeService } from './theme';
       </div>
     </header>
     <main class="wrap">
+      @if (view().name === 'list') {
+        @let label = theme.dark() ? 'Switch to light mode' : 'Switch to dark mode';
+        <button type="button" class="theme-switch" [attr.aria-label]="label" [title]="label" (click)="theme.toggle()">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            @if (!theme.dark()) {
+              <circle cx="8" cy="8" r="3" />
+              <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3 3l1.1 1.1M11.9 11.9L13 13M3 13l1.1-1.1M11.9 4.1L13 3" />
+            } @else {
+              <path d="M13.5 9.6A6 6 0 1 1 6.4 2.5a4.8 4.8 0 0 0 7.1 7.1Z" />
+            }
+          </svg>
+        </button>
+      }
       @if (store.error()) {
         <p class="error" role="alert">{{ store.error() }}</p>
+      }
+      @if (store.unsynced() && auth.isEditor()) {
+        <p class="note" role="status">Saved on this device, not synced yet. It will sync when the connection is back.</p>
       }
       @if (unsaved(); as u) {
         <p class="error" role="alert">
@@ -61,17 +77,6 @@ import { ThemeService } from './theme';
         <button type="button" class="back" (click)="store.go({ name: 'list' })"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8H2.5M7.5 3l-5 5 5 5" /></svg>All Movies</button>
       </footer>
     }
-    @let label = theme.dark() ? 'Switch to light mode' : 'Switch to dark mode';
-    <button type="button" class="theme-switch" [attr.aria-label]="label" [title]="label" (click)="theme.toggle()">
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        @if (!theme.dark()) {
-          <circle cx="8" cy="8" r="3" />
-          <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3 3l1.1 1.1M11.9 11.9L13 13M3 13l1.1-1.1M11.9 4.1L13 3" />
-        } @else {
-          <path d="M13.5 9.6A6 6 0 1 1 6.4 2.5a4.8 4.8 0 0 0 7.1 7.1Z" />
-        }
-      </svg>
-    </button>
   `,
 })
 export class App {
@@ -80,9 +85,11 @@ export class App {
   protected readonly theme = inject(ThemeService);
   protected readonly view = this.store.view;
   private readonly reviews = inject(ReviewStore);
-  /** A recording that failed to save after its form was left. On the form, its own row says so. */
-  protected readonly unsaved = computed(() => {
-    const v = this.view();
-    return this.reviews.uploads().find((u) => u.problem && !(v.name === 'edit' && v.id === u.movieId));
-  });
+  /**
+   * A recording that failed to save after its form was left. Not mentioned on any form: its own has a row for
+   * it, and going to it from another movie's would swap the movie out from under what's been filled in.
+   */
+  protected readonly unsaved = computed(() =>
+    this.view().name === 'edit' ? undefined : this.reviews.uploads().find((u) => u.problem),
+  );
 }

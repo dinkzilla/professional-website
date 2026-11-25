@@ -1,6 +1,19 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { Auth, GoogleAuthProvider, User, getAuth, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import {
+  Auth,
+  GoogleAuthProvider,
+  User,
+  browserLocalPersistence,
+  browserPopupRedirectResolver,
+  browserSessionPersistence,
+  indexedDBLocalPersistence,
+  initializeAuth,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from 'firebase/auth';
 import { EDITOR_EMAIL, firebaseApp } from './firebase';
+import { viewFor } from './routes';
 
 // Set by the Angular build: false in production.
 declare const ngDevMode: unknown;
@@ -13,6 +26,20 @@ function rememberedPreview(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * What getAuth() sets up, except that only the sign-in page gets the pop-up helper up front. On phones
+ * the helper loads Google's script and an iframe before sign-in state is known, and Firestore waits for
+ * that, so elsewhere it would hold up the movie list. The sign-in page needs it loaded before the button
+ * is tapped, or Safari may block the pop-up.
+ */
+function startAuth(app: NonNullable<typeof firebaseApp>): Auth {
+  const signingIn = viewFor(location.pathname, document.baseURI).name === 'signin';
+  return initializeAuth(app, {
+    persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
+    popupRedirectResolver: signingIn ? browserPopupRedirectResolver : undefined,
+  });
 }
 
 function isEditorUser(user: User | null): boolean {
@@ -40,7 +67,7 @@ export class AuthService {
   readonly previewing = signal(this.canPreview && rememberedPreview());
   readonly isEditor = computed(() => !this.enabled || !!this.email() || this.previewing());
 
-  private readonly auth: Auth | null = firebaseApp ? getAuth(firebaseApp) : null;
+  private readonly auth: Auth | null = firebaseApp ? startAuth(firebaseApp) : null;
 
   constructor() {
     if (!this.auth) return;
@@ -75,7 +102,7 @@ export class AuthService {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ login_hint: EDITOR_EMAIL, prompt: 'select_account' });
-      const { user } = await signInWithPopup(this.auth, provider);
+      const { user } = await signInWithPopup(this.auth, provider, browserPopupRedirectResolver);
       return isEditorUser(user);
     } catch (e: any) {
       const code = String(e?.code ?? '');

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { initializeFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 
 /**
  * The Firebase web app's settings. Paste them from the Firebase console:
@@ -21,4 +21,10 @@ export const EDITOR_EMAIL = 'venablekd@gmail.com';
 export const firebaseReady = !!firebaseConfig.apiKey && !!firebaseConfig.projectId;
 
 export const firebaseApp = firebaseReady ? initializeApp(firebaseConfig) : null;
-export const firestore = firebaseApp ? initializeFirestore(firebaseApp, { ignoreUndefinedProperties: true }) : null;
+/** Kept on the device, so changes made offline survive closing the page and are sent the next time it's open. */
+export const firestore = firebaseApp
+  ? initializeFirestore(firebaseApp, {
+      ignoreUndefinedProperties: true,
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    })
+  : null;

@@ -1,3 +1,5 @@
+@import './fonts.css';
+
 /* Layout: one narrow phone-first column; posters lead every row, the score closes it. */
 :root {
   --bg: #dcf3df;
@@ -108,7 +110,8 @@
 }
 body {
   margin: 0;
-  background: var(--bg);
+  /* Shows wherever the scene can't reach: past the ends of the page, and behind a phone browser's bars. */
+  background: var(--sky-top);
   color: var(--ink);
   font: 16px/1.45 var(--font-body);
 }
@@ -163,6 +166,9 @@ ol {
 .scene {
   position: fixed;
   inset: 0;
+  /* As tall as the screen gets with a phone browser's address bar tucked away, so the scene neither
+     falls short nor shifts as the bar comes and goes. */
+  height: 100lvh;
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
@@ -608,6 +614,34 @@ ol {
     animation: barrel-roll 16s ease-in-out infinite;
   }
 }
+/* Phones and tablets: hold still whatever has to be redrawn every frame (colour-shifting filters, anything
+   moving inside a drawing) or needs an enormous layer (the sunburst, the far snow), or the browser can run
+   short and drop pieces of the page while it scrolls. Whole drawings still move, which is cheap. */
+@media (hover: none) and (pointer: coarse) {
+  .scene-burst,
+  .scene-rainbow,
+  .scene-stripe,
+  .shop-window,
+  .tree-baubles,
+  .bulb,
+  .puff,
+  .santa-eye,
+  .santa-pom,
+  .tree-pupil,
+  .tree-star,
+  .snow.far {
+    animation: none;
+  }
+  .snow.far {
+    will-change: auto;
+  }
+}
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  /* Enough to reach every corner of an upright screen. */
+  .scene-burst {
+    scale: 1.1;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   /* No motion: park the sleigh mid-sky rather than leave it off-screen. */
   .scene-flight {
@@ -756,6 +790,7 @@ main.wrap:has(+ .foot) {
 }
 /* The page itself is one raised slab floating over the scene. */
 main.wrap {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -788,6 +823,9 @@ app-movie-list h2 {
   background: var(--pine);
   color: var(--pine-ink);
   rotate: -1.5deg;
+}
+app-movie-list h2:not(:has(.count)) {
+  padding-right: 14px;
 }
 app-movie-list .count {
   display: grid;
@@ -1287,6 +1325,14 @@ input[type='password'] {
   }
   .card::after {
     animation: twinkle 2.4s ease-in-out -1.2s infinite;
+  }
+}
+/* Steady on phones and tablets: twinkling gives every tile several layers of its own, which can make tiles
+   drop out of sight while the list scrolls. */
+@media (hover: none) and (pointer: coarse) {
+  .card::before,
+  .card::after {
+    animation: none;
   }
 }
 /* Dimmed, a layer loses its glow and darkens a little but stays plainly a bulb. */
@@ -2622,12 +2668,12 @@ app-emoji-burst app-rating-icons img {
   color: var(--muted);
 }
 
-/* The light/dark switch: pinned to the bottom of the screen, just right of the page's slab. */
+/* The light/dark switch: pinned over the top right edge of the movie list's slab, clear of what's inside. */
 .theme-switch {
-  position: fixed;
-  left: min(50% + 20rem + 12px, 100% - 50px - env(safe-area-inset-right, 0px));
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  z-index: 15;
+  position: absolute;
+  top: -24px;
+  right: 18px;
+  z-index: 1;
   display: grid;
   place-items: center;
   width: 38px;
@@ -2637,12 +2683,6 @@ app-emoji-burst app-rating-icons img {
   border-radius: 999px;
   background: var(--surface);
   box-shadow: 0 3px 0 var(--edge);
-}
-/* With no room beside the slab it lies over the edge, high enough to clear the form's save bar. */
-@media (max-width: 47.74rem) {
-  .theme-switch {
-    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-  }
 }
 .theme-switch:active {
   translate: 0 3px;

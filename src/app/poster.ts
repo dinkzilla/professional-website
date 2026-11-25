@@ -1,4 +1,4 @@
-import { Component, booleanAttribute, computed, input, signal } from '@angular/core';
+import { Component, booleanAttribute, computed, input, linkedSignal } from '@angular/core';
 import { safePoster } from './criteria';
 
 @Component({
@@ -20,6 +20,7 @@ export class Poster {
   readonly title = input('');
   /** Stamp it as not recommended. */
   readonly coal = input(false, { transform: booleanAttribute });
-  protected readonly broken = signal(false);
   protected readonly src = computed(() => safePoster(this.url()));
+  /** Whether the picture failed to load. Starts over when another takes its place. */
+  protected readonly broken = linkedSignal({ source: () => this.src(), computation: () => false });
 }

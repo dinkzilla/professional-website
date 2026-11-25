@@ -148,6 +148,9 @@ function rememberedMic(): Mic | null {
     @if (store.status() === 'ready' && !uploads().length && !reviews().length) {
       <p class="note">No recordings yet.</p>
     }
+    @if (store.status() === 'loading' && store.slow()) {
+      <p class="note">Still trying to reach the saved recordings…</p>
+    }
     @if (store.status() === 'unavailable') {
       <p class="note">The saved recordings can’t be reached right now. Check your connection and reopen this page.</p>
     }
