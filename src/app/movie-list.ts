@@ -120,6 +120,7 @@ import { Poster } from './poster';
                     <span class="tag">{{ progress(m) }}</span>
                   </span>
                 </button>
+                <span class="lights" aria-hidden="true"></span>
               </li>
             }
           </ul>
@@ -202,6 +203,7 @@ import { Poster } from './poster';
                   }
                 </span>
               </button>
+              <span class="lights" aria-hidden="true"></span>
             </li>
           }
         </ol>
