@@ -699,6 +699,10 @@ ol {
   filter: drop-shadow(0 3px 0 rgba(59, 16, 48, 0.28));
 }
 .back {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
   justify-self: start;
   min-width: 38px;
   min-height: 38px;
@@ -711,13 +715,25 @@ ol {
   font-size: 0.875rem;
   white-space: nowrap;
 }
+.back svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 /* On a phone there's no room for the words beside a centred name, so only the arrow shows. */
 @media (max-width: 31.99rem) {
   .top .back {
     position: relative;
-    padding: 0 0 2px;
-    font-size: 1.375rem;
-    line-height: 1;
+    padding: 0;
+  }
+  .top .back svg {
+    width: 18px;
+    height: 18px;
   }
   .back-text {
     position: absolute;
@@ -727,9 +743,12 @@ ol {
     clip-path: inset(50%);
   }
 }
-/* The second one, at the foot of a movie, always has room for its words. */
-.detail > .back {
-  align-self: flex-start;
+/* The second one, below a movie's page, always has room for its words. It sits as far off the page as the top one does. */
+main.wrap:has(+ .foot) {
+  margin-bottom: 18px;
+}
+.foot {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 }
 .back:active {
   translate: 0 3px;

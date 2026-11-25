@@ -102,8 +102,6 @@ import { Thermometer } from './thermometer';
             }
           </div>
         }
-
-        <button type="button" class="back" (click)="store.go({ name: 'list' })">‹ All Movies</button>
       </article>
     } @else if (store.status() === 'unavailable') {
       <p class="empty">The ratings can’t be reached right now. Check your connection and reload the page.</p>

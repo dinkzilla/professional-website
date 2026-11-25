@@ -14,7 +14,7 @@ import { SignIn } from './sign-in';
     <header class="top" [class.sub]="view().name !== 'list'">
       <div class="wrap">
         @if (view().name !== 'list') {
-          <button type="button" class="back" (click)="store.go({ name: 'list' })">‹<span class="back-text"> All Movies</span></button>
+          <button type="button" class="back" (click)="store.go({ name: 'list' })"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8H2.5M7.5 3l-5 5 5 5" /></svg><span class="back-text">All Movies</span></button>
         }
         <h1><span class="kikis">Kiki’s</span> Yule <span>Swoon</span></h1>
       </div>
@@ -55,6 +55,11 @@ import { SignIn } from './sign-in';
         </p>
       }
     </main>
+    @if (v.name === 'detail' || (v.name === 'edit' && !store.canWrite())) {
+      <footer class="wrap foot">
+        <button type="button" class="back" (click)="store.go({ name: 'list' })"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8H2.5M7.5 3l-5 5 5 5" /></svg>All Movies</button>
+      </footer>
+    }
   `,
 })
 export class App {
