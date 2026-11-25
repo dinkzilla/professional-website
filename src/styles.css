@@ -115,14 +115,6 @@ body {
   color: var(--ink);
   font: 16px/1.45 var(--font-body);
 }
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0 0 auto;
-  height: env(safe-area-inset-top, 0px);
-  z-index: 10;
-  background: var(--sky-top);
-}
 button,
 input,
 select {
