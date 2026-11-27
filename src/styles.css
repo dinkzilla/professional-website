@@ -2554,6 +2554,7 @@ html:has(.rec) {
 .recording-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 .recording-actions .btn {
@@ -2696,7 +2697,7 @@ html.editing body {
   outline-offset: 2px;
 }
 .editor-wave canvas {
-  height: min(240px, 34vh);
+  height: min(160px, 22vh);
   border: 2px solid var(--edge);
 }
 .editor-hint {
@@ -2735,21 +2736,21 @@ html.editing body {
 .editor-side.end {
   justify-content: flex-start;
 }
-.editor-jingles {
+.editor-pairs {
   min-height: 0;
 }
-.editor-jingle {
+.editor-pair {
   display: flex;
   flex: 1 1 0;
   gap: 4px;
   min-width: 9rem;
   max-width: 16rem;
 }
-.editor-jingle .btn {
+.editor-pair .btn {
   max-width: none;
   min-width: 0;
 }
-.editor-jingle .editor-x {
+.editor-pair .editor-x {
   flex: 0 0 auto;
   min-width: 44px;
   padding-inline: 0;
@@ -2764,6 +2765,10 @@ html.editing body {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.editor button {
+  /* No waiting to see if a tap is the start of a double tap. */
+  touch-action: manipulation;
 }
 .editor-step {
   min-width: 56px;

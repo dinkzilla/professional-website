@@ -19,6 +19,8 @@ const AROUND = 2;
 /** Shortest stretch a handle can leave between itself and the one it faces. */
 const GAP = 0.1;
 const HANDLE = '#f4c542';
+/** An end this close to the end of the file is the end of the file. */
+const END_SLACK = 0.05;
 /** The intro and outro's marks and how far they reach. */
 const JINGLE = '#5b4bb7';
 
@@ -71,7 +73,7 @@ type Drag =
       }
     </p>
 
-    <div class="editor-tools" role="toolbar" aria-label="Edit">
+    <div class="editor-tools" role="toolbar" aria-label="Cut">
       @if (mark() != null) {
         <!-- Moving the playhead stretches the selection from the mark. -->
         <button type="button" class="btn primary" [disabled]="!selection()" (click)="markEnd()">End Cut</button>
@@ -85,20 +87,33 @@ type Drag =
         <button type="button" class="btn" (click)="hear(c, false)">Hear the join</button>
         <button type="button" class="btn quiet" (click)="chosenCut.set(null)">Close</button>
       } @else {
-        <button type="button" class="btn" title="Start the recording at the playhead, trimming what’s before" (click)="trimStart()">Mark Start</button>
         <button type="button" class="btn" (click)="markStart()">Start Cut</button>
-        <button type="button" class="btn" title="End the recording at the playhead, trimming what’s after" (click)="trimEnd()">Mark End</button>
       }
     </div>
 
-    <div class="editor-tools editor-jingles" role="toolbar" aria-label="Intro and outro">
-      <span class="editor-jingle">
+    <div class="editor-tools editor-pairs" role="toolbar" aria-label="Start and end">
+      <span class="editor-pair">
+        <button type="button" class="btn" title="Start the recording at the playhead, trimming what’s before" (click)="trimStart()">Mark Start</button>
+        @if (view().start > 0) {
+          <button type="button" class="btn quiet editor-x" aria-label="Untrim the start" title="Untrim the start" (click)="untrimStart()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
+        }
+      </span>
+      <span class="editor-pair">
+        <button type="button" class="btn" title="End the recording at the playhead, trimming what’s after" (click)="trimEnd()">Mark End</button>
+        @if (trimmedEnd()) {
+          <button type="button" class="btn quiet editor-x" aria-label="Untrim the end" title="Untrim the end" (click)="untrimEnd()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
+        }
+      </span>
+    </div>
+
+    <div class="editor-tools editor-pairs" role="toolbar" aria-label="Intro and outro">
+      <span class="editor-pair">
         <button type="button" class="btn" title="The intro finishes playing at the playhead" (click)="setIntro()">{{ marks().introEnd == null ? 'Intro Ends' : 'Move Intro End' }}</button>
         @if (marks().introEnd != null) {
           <button type="button" class="btn quiet editor-x" aria-label="Leave out the intro" title="Leave out the intro" (click)="removeMark('introEnd')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
         }
       </span>
-      <span class="editor-jingle">
+      <span class="editor-pair">
         <button type="button" class="btn" title="The outro starts playing at the playhead" (click)="setOutro()">{{ marks().outroStart == null ? 'Outro Starts' : 'Move Outro Start' }}</button>
         @if (marks().outroStart != null) {
           <button type="button" class="btn quiet editor-x" aria-label="Leave out the outro" title="Leave out the outro" (click)="removeMark('outroStart')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
@@ -121,7 +136,7 @@ type Drag =
         }
       </div>
       @if (playing()) {
-        <button type="button" class="player-key editor-play" aria-label="Stop, back to where playing started" (click)="stop()">
+        <button type="button" class="player-key editor-play" aria-label="Stop, back to where playing started" (pointerdown)="now($event, stop)" (click)="stop()">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
         </button>
       } @else {
@@ -131,7 +146,7 @@ type Drag =
       }
       <div class="editor-side end">
         @if (playing()) {
-          <button type="button" class="editor-step" aria-label="Pause" title="Pause" (click)="pauseHere()">
+          <button type="button" class="editor-step" aria-label="Pause" title="Pause" (pointerdown)="now($event, pauseHere)" (click)="pauseHere()">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
           </button>
         } @else {
@@ -190,6 +205,8 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
   protected readonly marks = signal<Marks>({});
   private initialMarks: Marks = {};
   private readonly hasMarks = computed(() => this.marks().introEnd != null || this.marks().outroStart != null);
+  /** Whether the end is trimmed off, not just where the file ends. */
+  protected readonly trimmedEnd = computed(() => this.view().end < this.duration() - END_SLACK);
   protected readonly changed = computed(() => this.hasMarks() || !sameCuts(this.view(), whole(this.duration())));
   /** How long the published version would be, jingles and all, once their lengths are known. */
   protected readonly finalLength = computed(() => {
@@ -296,7 +313,9 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
   ngOnInit() {
     const r = this.review();
     this.duration.set(Math.max(r.seconds, 0.1));
-    this.initial = r.edit ? { start: r.edit.start, end: r.edit.end, cuts: r.edit.cuts } : { start: 0, end: Infinity, cuts: [] };
+    // An end saved where the recording ended, as far as was known then, is no trim: the file may turn out a little longer.
+    const end = r.edit && r.edit.end < r.seconds - END_SLACK ? r.edit.end : Infinity;
+    this.initial = r.edit ? { start: r.edit.start, end, cuts: r.edit.cuts } : { start: 0, end: Infinity, cuts: [] };
     this.edit.set(this.initial);
     this.initialMarks = r.marks ?? {};
     this.marks.set(this.initialMarks);
@@ -311,6 +330,7 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
     const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
     this.colors = { ink: v('--ink', '#000'), muted: v('--muted', '#888'), accent: v('--accent', '#c00'), line: v('--line', '#ddd'), surface: v('--surface', '#fff'), holly: v('--holly', '#1a7a4a') };
 
+    this.host.nativeElement.addEventListener('click', this.onClick, true);
     this.resize = new ResizeObserver(() => this.measure());
     this.resize.observe(this.host.nativeElement);
     this.measure();
@@ -674,6 +694,8 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
   }
 
   protected down(e: PointerEvent) {
+    // Touching the waveform stops the sound at once, whatever the touch turns out to be.
+    if (this.playing()) this.pauseHere();
     const canvas = this.waveRef().nativeElement;
     canvas.setPointerCapture(e.pointerId);
     this.pointers.set(e.pointerId, this.localX(e));
@@ -866,6 +888,7 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
   // The overview strip
 
   protected overviewDown(e: PointerEvent) {
+    if (this.playing()) this.pauseHere();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     this.overviewMove(e);
   }
@@ -903,6 +926,27 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
   protected togglePlay() {
     if (this.playing()) this.pauseHere();
     else this.play();
+  }
+
+  /** Set when a button has already acted as the finger came down, so the click that follows is ignored. */
+  private swallowClick = false;
+  private readonly onClick = (e: MouseEvent) => {
+    if (!this.swallowClick) return;
+    this.swallowClick = false;
+    e.stopPropagation();
+    e.preventDefault();
+  };
+
+  /**
+   * Acts as soon as the finger touches, rather than when it lifts as a click does, so stopping is
+   * instant. The click that follows, which would land on the Play button that replaces this one, is
+   * ignored. Keys still work through the click.
+   */
+  protected now(e: PointerEvent, act: () => void) {
+    if (e.button !== 0) return;
+    act.call(this);
+    this.swallowClick = true;
+    setTimeout(() => (this.swallowClick = false), 800);
   }
 
   /** Stops where it is. Playing on from there keeps the place it first started from, for Stop. */
@@ -1032,6 +1076,17 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
     if (t >= e.end - GAP) return this.message.set('Move the playhead before the end first.');
     this.apply({ ...e, start: t });
     this.announcement.set(`Recording now starts at ${clock(t, true)}.`);
+  }
+
+  protected untrimStart() {
+    this.apply({ ...this.view(), start: 0 });
+    this.announcement.set('The start is back.');
+  }
+
+  protected untrimEnd() {
+    // Untrimmed, whatever the file's length turns out to be.
+    this.apply({ ...this.view(), end: Infinity });
+    this.announcement.set('The end is back.');
   }
 
   protected trimEnd() {

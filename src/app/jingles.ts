@@ -19,6 +19,12 @@ export const jingleLengths = signal<JingleLengths | null>(null);
 
 let context: AudioContext | undefined;
 let loading: Promise<Jingles> | undefined;
+let loaded: Jingles | null = null;
+
+/** The jingles, if they've been loaded already; null until then. */
+export function readyJingles(): Jingles | null {
+  return loaded;
+}
 
 /** The one audio context for the page, made when first needed. */
 export function audioContext(): AudioContext {
@@ -35,8 +41,9 @@ export function loadJingles(): Promise<Jingles> {
       return audioContext().decodeAudioData(await response.arrayBuffer());
     };
     const [intro, outro] = await Promise.all([decode(JINGLE_FILES.intro), decode(JINGLE_FILES.outro)]);
+    loaded = { intro, outro };
     jingleLengths.set({ intro: intro.duration, outro: outro.duration });
-    return { intro, outro };
+    return loaded;
   })();
   loading.catch(() => (loading = undefined));
   return loading;

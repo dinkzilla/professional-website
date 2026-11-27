@@ -41,6 +41,12 @@ interface Playable {
   marks: Marks | null;
   /** How long it plays for, jingles and all. */
   length: number;
+  /**
+   * Whether it can be paused and its slider dragged: a published version, which is one file. A
+   * recording plays cut and with its jingles, so it plays from the beginning to the end or until
+   * stopped, and its slider only shows how far it's got.
+   */
+  seekable: boolean;
   label: string;
 }
 
@@ -166,7 +172,7 @@ function lengthOfRecording(r: Review): number {
                 </span>
               </form>
             } @else {
-              @let item = { id: r.id, path: r.path, seconds: r.seconds, spans: spans, marks: r.marks ?? null, length: finalLength(r), label: 'recording from ' + when(r.createdAt) };
+              @let item = { id: r.id, path: r.path, seconds: r.seconds, spans: spans, marks: r.marks ?? null, length: finalLength(r), seekable: false, label: 'recording from ' + when(r.createdAt) };
               <ng-container *ngTemplateOutlet="player; context: { $implicit: item }" />
               <div class="recording-actions">
                 <button type="button" class="btn" [disabled]="store.recording()" (click)="edit(r)">Edit</button>
@@ -219,7 +225,7 @@ function lengthOfRecording(r: Review): number {
               </span>
             } @else {
               @if (p.status === 'done') {
-                @let item = { id: p.id, path: p.path, seconds: p.seconds, spans: null, marks: null, length: p.seconds, label: p.title || 'published version' };
+                @let item = { id: p.id, path: p.path, seconds: p.seconds, spans: null, marks: null, length: p.seconds, seekable: true, label: p.title || 'published version' };
                 <ng-container *ngTemplateOutlet="player; context: { $implicit: item }" />
               } @else if (p.status === 'error') {
                 <p class="error" role="alert">{{ p.error || 'Couldn’t make this version’s file.' }}</p>
@@ -246,9 +252,17 @@ function lengthOfRecording(r: Review): number {
       @let length = item.length;
       @let at = current ? position() : 0;
       <div class="player">
-        <button type="button" class="player-key" [disabled]="store.recording()" [attr.aria-label]="(current && !paused() ? 'Pause ' : 'Play ') + item.label" (click)="toggle(item)">
+        <button
+          type="button"
+          class="player-key"
+          [disabled]="store.recording()"
+          [attr.aria-label]="(current && !paused() ? (item.seekable ? 'Pause ' : 'Stop ') : 'Play ') + item.label"
+          (click)="toggle(item)"
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            @if (current && !paused()) {
+            @if (current && !paused() && !item.seekable) {
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            } @else if (current && !paused()) {
               <path d="M7 5h4v14H7zM13 5h4v14h-4z" />
             } @else {
               <path d="M8 4.5v15l12-7.5z" />
@@ -262,7 +276,7 @@ function lengthOfRecording(r: Review): number {
           step="0.1"
           [max]="length"
           [value]="at"
-          [disabled]="!current"
+          [disabled]="!current || !item.seekable"
           aria-label="Position"
           [attr.aria-valuetext]="clock(at)"
           (input)="seek($any($event.target).value)"
@@ -753,6 +767,11 @@ export class AudioReviews implements OnInit, OnDestroy {
     this.mix.length = r.seconds;
     if (r.marks) this.mix.prepare();
     if (this.playing() === r.id) {
+      if (!r.seekable) {
+        // Stopping goes back to the start, from where it always plays.
+        if (this.mix.playing) return this.stopPlaying();
+        this.audio.currentTime = 0;
+      }
       if (!this.mix.playing) void this.mix.play().catch(() => {});
       else this.mix.pause();
       return;

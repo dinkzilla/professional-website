@@ -1,11 +1,15 @@
-import { Marks, MixPlan, Span, editedLength, mixPlan, spotsOf, toEdited, toOriginal } from './audio-edit';
-import { JingleName, Jingles, audioContext, audioSession, loadJingles } from './jingles';
+import { Marks, MixPlan, Span, editedLength, mixPlan, spotsOf, toEdited } from './audio-edit';
+import { JingleName, Jingles, audioContext, audioSession, loadJingles, readyJingles } from './jingles';
 import { SkipPlayer } from './skip-player';
 
 /** A jingle is started this far ahead of when it's due, on the audio clock, which is exact. */
 const LOOKAHEAD = 0.5;
-/** How far a jingle can drift from the recording before it's put back in step. Phones are slow to start an audio element, and jumping the music sounds worse than being a little late. */
-const TOLERANCE = 0.15;
+/**
+ * A jingle and the recording further apart than this means a jump, so the jingle is moved to match.
+ * Anything less is the recording being a little slow to start or to get past a cut, and the jingle is
+ * left alone, as moving the music is what sounds choppy; the recording carries on that little behind it.
+ */
+const JUMP = 0.4;
 const NAMES: JingleName[] = ['intro', 'outro'];
 
 interface Sounding {
@@ -35,12 +39,15 @@ export class MixPlayer {
   /** Called if the recording couldn't be started after the intro's lead-in. */
   onError: (e: unknown) => void = () => {};
 
-  private jingles: Jingles | null = null;
-  private phase: 'idle' | 'before' | 'main' | 'after' = 'idle';
-  /** In the silence before the recording or after it, the mix's clock runs from here. */
-  private clockAt = { wall: 0, mix: 0 };
-  /** Whether the recording is really playing, rather than just asked to. */
+  /** 'loading' waits for the jingles before starting; 'before' is the intro's lead-in; 'after' the outro running past the end. */
+  private phase: 'idle' | 'loading' | 'before' | 'main' | 'after' = 'idle';
+  /** In the silence before the recording or after it, the mix's clock runs from here, on the audio clock the jingles play by. */
+  private clockAt = { context: 0, mix: 0 };
+  /** Whether the recording is really moving, rather than just asked to: its clock has gone on from where it was then. */
   private rolling = false;
+  private stillAt = 0;
+  /** How far behind the jingle that's sounding the recording is running. */
+  private skew = 0;
   private readonly sounding = new Map<JingleName, Sounding>();
   private frame = 0;
   private ticker: ReturnType<typeof setInterval> | undefined;
@@ -48,12 +55,9 @@ export class MixPlayer {
   constructor(readonly audio: HTMLAudioElement) {
     this.skip = new SkipPlayer(audio);
     this.skip.onFinish = (atEnd) => this.recordingDone(atEnd);
-    audio.addEventListener('playing', () => {
-      this.rolling = true;
-      this.sync();
-    });
-    audio.addEventListener('waiting', () => (this.rolling = false));
-    audio.addEventListener('seeked', () => this.sync());
+    // A browser says it's playing a little before it can be heard, and again after each jump over a cut.
+    audio.addEventListener('waiting', () => this.still());
+    audio.addEventListener('seeking', () => this.still());
     audio.addEventListener('timeupdate', () => this.sync());
     // The pause that comes with reaching the end is followed by ended.
     audio.addEventListener('pause', () => {
@@ -84,9 +88,9 @@ export class MixPlayer {
   get playing(): boolean {
     return this.phase !== 'idle';
   }
-  /** True during the intro's lead-in, before the recording itself starts. */
+  /** True while the recording waits its turn: for the jingles to load, or during the intro's lead-in. */
   get waiting(): boolean {
-    return this.phase === 'before';
+    return this.phase === 'loading' || this.phase === 'before';
   }
 
   /** Where playing would start from a moment of the recording. */
@@ -94,16 +98,22 @@ export class MixPlayer {
     return this.skip.from(t);
   }
 
+  private get jingles(): Jingles | null {
+    return readyJingles();
+  }
+
+  private wantsJingles(): boolean {
+    return this.marks.introEnd != null || this.marks.outroStart != null;
+  }
+
   /** Loads the jingles, so they're ready when wanted. */
   prepare() {
-    if (this.jingles) return;
-    loadJingles().then(
-      (j) => {
-        this.jingles = j;
-        this.sync();
-      },
-      () => {},
-    );
+    if (!this.jingles) loadJingles().catch(() => {});
+  }
+
+  private still() {
+    this.rolling = false;
+    this.stillAt = this.audio.currentTime;
   }
 
   private edited(t: number): number {
@@ -123,12 +133,13 @@ export class MixPlayer {
 
   /** Where it's got to in the mix. */
   time(): number {
+    if (this.phase === 'loading') return 0;
     if (this.phase === 'before' || this.phase === 'after') {
-      const t = this.clockAt.mix + (performance.now() - this.clockAt.wall) / 1000;
+      const t = this.clockAt.mix + (audioContext().currentTime - this.clockAt.context);
       const p = this.plan();
-      return Math.min(t, this.phase === 'before' ? p.lead : p.length);
+      return Math.min(t, this.phase === 'before' ? p.lead : p.length + this.skew);
     }
-    return this.plan().lead + this.edited(this.audio.currentTime);
+    return this.plan().lead + this.edited(this.audio.currentTime) + this.skew;
   }
 
   /**
@@ -136,15 +147,37 @@ export class MixPlayer {
    * the intro, which may come first. Call it in answer to a tap, so the phone lets it sound.
    */
   play(): Promise<void> {
-    const context = audioContext();
-    void context.resume().catch(() => {});
+    void audioContext()
+      .resume()
+      .catch(() => {});
+    if (this.wantsJingles()) audioSession('playback');
+    this.still();
+    this.skew = 0;
+    if (this.wantsJingles() && !this.jingles) {
+      // Starting without them would mean starting them part way through once they came.
+      this.phase = 'loading';
+      const from = this.audio.currentTime;
+      this.unlock(from);
+      this.onState(true);
+      const go = () => {
+        if (this.phase !== 'loading') return;
+        if (!this.skip.suspended) this.audio.currentTime = from;
+        this.begin().catch((e) => e?.name === 'AbortError' || this.onError(e));
+      };
+      // If they can't be had, it plays without them.
+      loadJingles().then(go, go);
+      return Promise.resolve();
+    }
+    return this.begin();
+  }
+
+  private begin(): Promise<void> {
     const p = this.plan();
-    if (p.introAt != null || p.outroAt != null) audioSession('playback');
-    this.rolling = false;
+    this.still();
     this.loop();
     if (p.lead > 0 && this.edited(this.audio.currentTime) < 0.01) {
       this.phase = 'before';
-      this.clockAt = { wall: performance.now(), mix: 0 };
+      this.clockAt = { context: audioContext().currentTime, mix: 0 };
       this.unlock(this.audio.currentTime);
       this.onState(true);
       this.sync();
@@ -152,6 +185,7 @@ export class MixPlayer {
     }
     this.phase = 'main';
     this.onState(true);
+    if (!this.skip.suspended) this.audio.muted = false;
     return this.audio.play().catch((e) => {
       this.halt();
       throw e;
@@ -163,13 +197,9 @@ export class MixPlayer {
     this.halt();
   }
 
-  /** Moves to a moment of the mix. Before the recording starts is its start, after it ends its end. */
-  seek(mix: number) {
-    const p = this.plan();
-    const e = Math.min(Math.max(0, mix - p.lead), this.recorded());
-    this.audio.currentTime = this.spans ? toOriginal(this.spans, e) : e;
-    if (this.phase === 'before' || this.phase === 'after') this.startRecording();
-    this.sync();
+  /** Moves to a moment of a file that plays whole, without cuts or jingles: a published version. */
+  seek(t: number) {
+    this.audio.currentTime = Math.max(0, t);
   }
 
   destroy() {
@@ -185,7 +215,7 @@ export class MixPlayer {
     a.play()
       .then(
         () => {
-          if (this.phase !== 'before' || this.skip.suspended) return;
+          if (!this.waiting || this.skip.suspended) return;
           a.pause();
           a.currentTime = at;
         },
@@ -198,6 +228,7 @@ export class MixPlayer {
 
   private startRecording() {
     this.phase = 'main';
+    this.still();
     if (this.skip.suspended) return;
     this.audio.muted = false;
     this.audio.play().catch((e) => {
@@ -214,7 +245,7 @@ export class MixPlayer {
     if (atEnd && p.length > end + 0.02) {
       // The outro carries on after the recording.
       this.phase = 'after';
-      this.clockAt = { wall: performance.now(), mix: end };
+      this.clockAt = { context: audioContext().currentTime, mix: end + this.skew };
       this.sync();
       return;
     }
@@ -229,6 +260,7 @@ export class MixPlayer {
     if (this.phase === 'idle') return;
     this.phase = 'idle';
     this.rolling = false;
+    this.skew = 0;
     audioSession('auto');
     this.onState(false);
   }
@@ -248,7 +280,7 @@ export class MixPlayer {
   private tick() {
     if (this.phase === 'idle') return;
     if (this.phase === 'before' && this.time() >= this.plan().lead) this.startRecording();
-    if (this.phase === 'after' && this.time() >= this.plan().length) {
+    if (this.phase === 'after' && this.time() >= this.plan().length + this.skew) {
       this.halt();
       this.onFinish();
       return;
@@ -257,28 +289,45 @@ export class MixPlayer {
     this.onTick();
   }
 
-  /** Starts, stops or moves each jingle to be where the mix's clock says. */
+  /** Starts and stops each jingle as the mix's clock comes to it, and moves one only if the recording jumped. */
   private sync() {
     if (this.phase === 'idle' || this.skip.suspended || !this.jingles) return;
-    // Until the recording really gets going, its clock stands still.
-    const waitForRecording = this.phase === 'main' && (!this.rolling || this.audio.seeking || this.audio.paused);
     const context = audioContext();
     const p = this.plan();
+    const at = (name: JingleName) => (name === 'intro' ? p.introAt : p.outroAt);
+    if (this.phase === 'main') {
+      const a = this.audio;
+      if (!this.rolling) {
+        // Until the recording can be heard to move, the jingles carry on as they are.
+        if (a.paused || a.seeking || a.currentTime - this.stillAt < 0.005) return;
+        this.rolling = true;
+      }
+      // Keeps in step with the jingle that's sounding, by its own clock: a small difference is the recording running a little late.
+      const base = p.lead + this.edited(a.currentTime);
+      const name = NAMES.find((n) => this.sounding.has(n) && at(n) != null);
+      if (name) {
+        const into = context.currentTime - this.sounding.get(name)!.zero;
+        const off = into - (base + this.skew - at(name)!);
+        if (Math.abs(off) > JUMP) {
+          for (const n of NAMES) this.silence(n);
+          this.skew = 0;
+        } else {
+          this.skew += off;
+        }
+      } else {
+        this.skew = 0;
+      }
+    }
     const m = this.time();
     for (const name of NAMES) {
-      const at = name === 'intro' ? p.introAt : p.outroAt;
+      const start = at(name);
       const buffer = this.jingles[name];
-      const now = this.sounding.get(name);
-      const into = at == null ? -Infinity : m - at;
+      const into = start == null ? -Infinity : m - start;
       if (into < -LOOKAHEAD || into >= buffer.duration) {
-        if (now && !waitForRecording) this.silence(name);
+        this.silence(name);
         continue;
       }
-      if (waitForRecording) continue;
-      if (now) {
-        if (Math.abs(context.currentTime - now.zero - into) <= TOLERANCE) continue;
-        this.silence(name);
-      }
+      if (this.sounding.has(name)) continue;
       const node = context.createBufferSource();
       node.buffer = buffer;
       node.connect(context.destination);
