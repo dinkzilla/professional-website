@@ -29,6 +29,8 @@ jobs:
 
       - run: npm ci
 
+      - run: npm ci --prefix functions
+
       - run: npm run build
 
       # Keyless: trust is set up once by scripts/setup-github-deploy.sh. Neither value is secret.
@@ -37,4 +39,4 @@ jobs:
           workload_identity_provider: projects/842316071349/locations/global/workloadIdentityPools/github/providers/github
           service_account: github-deploy@yule-swoon.iam.gserviceaccount.com
 
-      - run: npx firebase deploy --only hosting,firestore:rules --project yule-swoon --non-interactive
+      - run: npx firebase deploy --only hosting,firestore:rules,storage,functions --project yule-swoon --non-interactive

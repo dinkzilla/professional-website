@@ -2532,6 +2532,213 @@ html:has(.rec) {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
+.audio-sub {
+  margin: 12px 0 0;
+  font: 800 0.9375rem var(--font-display);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.recording-head {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.recording-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.recording-actions .btn {
+  min-height: 40px;
+  padding: 0 14px;
+}
+.tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.tag.quiet {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.published-title {
+  font: 800 1rem var(--font-display);
+}
+.published-notes {
+  margin: 0;
+  white-space: pre-line;
+}
+.publish {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.publish p {
+  margin: 0 0 4px;
+}
+.publish textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 10px 14px;
+  border: 2px solid var(--edge);
+  border-radius: 14px;
+  background: var(--surface);
+  font: inherit;
+  /* Smaller text makes iPhones zoom in. */
+  font-size: 16px;
+  resize: vertical;
+}
+.publish .confirm {
+  margin-top: 6px;
+}
+
+/* The recording editor: the whole screen, laid out for a thumb. */
+html.editing,
+html.editing body {
+  overflow: hidden;
+}
+.editor {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px))
+    calc(12px + env(safe-area-inset-left, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg);
+}
+@media (min-width: 48rem) {
+  .editor {
+    padding-inline: max(24px, calc(50% - 22rem));
+  }
+}
+.editor-top {
+  display: flex;
+  justify-content: center;
+}
+.editor-top h2 {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  font: 800 1.125rem var(--font-display);
+}
+.editor-ask {
+  flex-basis: 100%;
+  text-align: center;
+  font-weight: 700;
+}
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.editor-actions .btn {
+  flex: 1 1 0;
+  max-width: 12rem;
+}
+.editor-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.editor-clock {
+  font: 800 2.25rem/1.1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+.editor-overview,
+.editor-wave canvas {
+  display: block;
+  width: 100%;
+  border-radius: 12px;
+  background: var(--surface);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.editor-overview {
+  height: 44px;
+  border: 2px solid var(--line);
+}
+.editor-wave {
+  border-radius: 14px;
+}
+.editor-wave:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.editor-wave canvas {
+  height: min(240px, 34vh);
+  border: 2px solid var(--edge);
+}
+.editor-hint {
+  margin: -4px 0 0;
+  text-align: center;
+  font-size: 0.8125rem;
+}
+.editor-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.editor-tools {
+  min-height: 50px;
+}
+.editor-tools .btn {
+  flex: 1 1 0;
+  min-width: 6.5rem;
+  max-width: 12rem;
+}
+.editor-transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.editor-step {
+  min-width: 56px;
+  height: 48px;
+  border: 2px solid var(--edge);
+  border-radius: 14px;
+  background: var(--surface);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.editor-step:active {
+  translate: 0 2px;
+}
+.player-key.editor-play {
+  width: 64px;
+  height: 64px;
+  background: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 65%, #000);
+  color: var(--accent-ink);
+}
+.editor-step svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: auto;
+  fill: currentColor;
+}
+.player-key.editor-play svg {
+  width: 30px;
+  height: 30px;
+}
+.editor .error {
+  margin: 0;
+}
 @media (prefers-reduced-motion: no-preference) {
   .rec.on .rec-wreath::after {
     animation: rec-pulse 2.4s ease-in-out infinite;

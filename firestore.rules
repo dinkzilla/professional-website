@@ -14,9 +14,19 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isEditor();
 
-      // Details of the audio reviews in Cloud Storage (storage.rules). Nobody else can see them yet.
+      // Details of the audio reviews in Cloud Storage (storage.rules), and the edits made to them. Nobody else can see them yet.
       match /reviews/{review} {
         allow read, write: if isEditor();
+      }
+
+      // Versions of the audio reviews published as podcast episodes. The backend makes their files.
+      match /published/{episode} {
+        allow read, write: if isEditor();
+      }
+
+      // Each recording's waveform, for the editor. Only the backend makes them.
+      match /peaks/{review} {
+        allow read, delete: if isEditor();
       }
     }
 

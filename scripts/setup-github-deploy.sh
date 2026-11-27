@@ -39,12 +39,22 @@ for attempt in 1 2 3 4 5 6; do
 done
 sleep 10
 
-# Publish the site, publish the rules, check indexes, check that APIs are enabled.
-for role in firebasehosting.admin firebaserules.admin datastore.indexAdmin serviceusage.serviceUsageConsumer; do
+gcloud services enable cloudfunctions.googleapis.com cloudbuild.googleapis.com run.googleapis.com \
+  eventarc.googleapis.com artifactregistry.googleapis.com pubsub.googleapis.com storage.googleapis.com
+
+# Publish the site, publish the rules, check indexes, check that APIs are enabled, read the Storage
+# bucket for its rules, and deploy the functions (which run as the default compute service account).
+for role in firebasehosting.admin firebaserules.admin datastore.indexAdmin serviceusage.serviceUsageConsumer \
+  firebasestorage.viewer cloudfunctions.developer run.developer artifactregistry.writer eventarc.developer; do
   gcloud projects add-iam-policy-binding yule-swoon \
     --member="serviceAccount:$SA" --role="roles/$role" --condition=None --quiet >/dev/null
   echo "Granted $role"
 done
+
+# Deploying a function means acting as the service account it runs as.
+gcloud iam service-accounts add-iam-policy-binding "$PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+  --member="serviceAccount:$SA" --role=roles/iam.serviceAccountUser --quiet >/dev/null
+echo "Granted iam.serviceAccountUser on the functions' service account"
 
 gcloud iam workload-identity-pools describe github --location=global >/dev/null 2>&1 ||
   gcloud iam workload-identity-pools create github --location=global --display-name="GitHub"

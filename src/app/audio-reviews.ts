@@ -1,5 +1,10 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
-import { Review, ReviewStore, Upload } from './review-store';
+import { Span, changes, clock, editedLength, kept, normalize, sameCuts, toEdited, toOriginal, whole } from './audio-edit';
+import { AudioEditor } from './audio-editor';
+import { MovieStore } from './movie-store';
+import { Published, Review, ReviewStore, Upload } from './review-store';
+import { SkipPlayer } from './skip-player';
 
 /** A guard against a recording nobody stopped. Recording stops and saves here. */
 const MAX_SECONDS = 45 * 60;
@@ -24,9 +29,25 @@ function rememberedMic(): Mic | null {
   }
 }
 
-/** Records, lists, plays and deletes a movie's audio reviews. */
+/** Something the list can play: a recording, edited or not, or a published version. */
+interface Playable {
+  id: string;
+  path: string;
+  seconds: number;
+  /** What's kept of a recording that's edited; null to play it all. */
+  spans: Span[] | null;
+  label: string;
+}
+
+/** A recording's length: as timed while recording, or further if an edit was made against the file's own length. */
+function lengthOfRecording(r: Review): number {
+  return Math.max(r.seconds, r.edit && Number.isFinite(r.edit.end) ? r.edit.end : 0);
+}
+
+/** Records, lists, plays, edits, publishes and deletes a movie's audio reviews. */
 @Component({
   selector: 'app-audio-reviews',
+  imports: [AudioEditor, NgTemplateOutlet],
   host: { class: 'crit', role: 'group', 'aria-labelledby': 'audio-title' },
   template: `
     <h3 id="audio-title">Audio Reviews</h3>
@@ -85,6 +106,7 @@ function rememberedMic(): Mic | null {
     }
     <p class="sr-only" role="status">{{ announcement() }}</p>
 
+    <h4 class="audio-sub">Recordings</h4>
     @if (uploads().length || reviews().length) {
       <ul class="recordings">
         @for (u of uploads(); track u.id) {
@@ -102,43 +124,57 @@ function rememberedMic(): Mic | null {
           </li>
         }
         @for (r of reviews(); track r.id) {
-          @let current = playing() === r.id;
+          @let spans = spansOf(r);
           <li>
             <div class="recording-head">
-              <span class="muted">{{ when(r) }} · {{ clock(r.seconds) }}</span>
-              @if (confirming() !== r.id) {
-                <button type="button" class="clear" [attr.aria-label]="'Delete recording from ' + when(r) + ', ' + clock(r.seconds)" (click)="confirming.set(r.id)">Delete</button>
+              <span class="muted">
+                {{ when(r.createdAt) }} ·
+                @if (spans) {
+                  {{ clock(lengthOf(spans)) }} of {{ clock(r.seconds) }}
+                } @else {
+                  {{ clock(r.seconds) }}
+                }
+              </span>
+              @if (spans) {
+                <span class="tag">Edited</span>
+              }
+              @if (publishedAs(r); as state) {
+                <span class="tag" [class.quiet]="state === 'changed'">{{ state === 'same' ? 'Published' : 'Changed since published' }}</span>
               }
             </div>
             @if (confirming() === r.id) {
               <span class="confirm">
-                Delete this recording?
+                Delete this recording? Published versions are kept.
                 <button type="button" class="btn danger" [disabled]="busy()" (click)="remove(r)">Delete</button>
                 <button type="button" class="btn quiet" [disabled]="busy()" (click)="confirming.set('')">Keep</button>
               </span>
+            } @else if (publishing() === r.id) {
+              <form class="publish" (submit)="publish($event, r)">
+                <p class="muted">Publishes the recording as it’s edited now, {{ clock(spans ? lengthOf(spans) : r.seconds) }} long, as a new episode.</p>
+                <label for="pub-title">Title</label>
+                <input id="pub-title" type="text" required [value]="pubTitle()" (input)="pubTitle.set($any($event.target).value)" />
+                <label for="pub-notes">Notes</label>
+                <textarea id="pub-notes" rows="3" [value]="pubNotes()" (input)="pubNotes.set($any($event.target).value)"></textarea>
+                <span class="confirm">
+                  <button type="submit" class="btn primary" [disabled]="busy() || !pubTitle().trim()">{{ busy() ? 'Publishing…' : 'Publish' }}</button>
+                  <button type="button" class="btn quiet" [disabled]="busy()" (click)="publishing.set('')">Cancel</button>
+                </span>
+              </form>
             } @else {
-              <div class="player">
-                <button type="button" class="player-key" [disabled]="store.recording()" [attr.aria-label]="(current && !paused() ? 'Pause' : 'Play') + ' recording from ' + when(r)" (click)="toggle(r)">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    @if (current && !paused()) {
-                      <path d="M7 5h4v14H7zM13 5h4v14h-4z" />
-                    } @else {
-                      <path d="M8 4.5v15l12-7.5z" />
-                    }
-                  </svg>
+              @let item = { id: r.id, path: r.path, seconds: r.seconds, spans: spans, label: 'recording from ' + when(r.createdAt) };
+              <ng-container *ngTemplateOutlet="player; context: { $implicit: item }" />
+              <div class="recording-actions">
+                <button type="button" class="btn" [disabled]="store.recording()" (click)="edit(r)">Edit</button>
+                <button
+                  type="button"
+                  class="btn"
+                  [disabled]="!store.canPublish()"
+                  [title]="store.canPublish() ? '' : 'Publishing needs the live site'"
+                  (click)="startPublishing(r)"
+                >
+                  Publish
                 </button>
-                <input
-                  type="range"
-                  min="0"
-                  step="0.1"
-                  [max]="r.seconds"
-                  [value]="current ? position() : 0"
-                  [disabled]="!current"
-                  aria-label="Position in recording"
-                  [attr.aria-valuetext]="clock(current ? position() : 0)"
-                  (input)="seek($any($event.target).value)"
-                />
-                <span class="player-time">{{ clock(current ? position() : 0) }}</span>
+                <button type="button" class="btn quiet" [attr.aria-label]="'Delete recording from ' + when(r.createdAt)" (click)="confirming.set(r.id)">Delete</button>
               </div>
             }
           </li>
@@ -153,6 +189,84 @@ function rememberedMic(): Mic | null {
     }
     @if (store.status() === 'unavailable') {
       <p class="note">The saved recordings can’t be reached right now. Check your connection and reopen this page.</p>
+    }
+    @if (!store.canPublish() && reviews().length) {
+      <p class="note">Publishing needs the live site, so it’s off while previewing.</p>
+    }
+
+    @if (store.published().length) {
+      <h4 class="audio-sub">Published</h4>
+      <ul class="recordings">
+        @for (p of store.published(); track p.id) {
+          <li>
+            <div class="recording-head">
+              <strong class="published-title">{{ p.title || 'Untitled' }}</strong>
+              <span class="muted">{{ when(p.publishedAt || p.createdAt) }} · {{ clock(p.seconds || p.source.seconds) }}</span>
+            </div>
+            @if (p.description) {
+              <p class="published-notes muted">{{ p.description }}</p>
+            }
+            @if (confirming() === p.id) {
+              <span class="confirm">
+                Delete this published version? The recording is kept.
+                <button type="button" class="btn danger" [disabled]="busy()" (click)="removePublished(p)">Delete</button>
+                <button type="button" class="btn quiet" [disabled]="busy()" (click)="confirming.set('')">Keep</button>
+              </span>
+            } @else {
+              @if (p.status === 'done') {
+                @let item = { id: p.id, path: p.path, seconds: p.seconds, spans: null, label: p.title || 'published version' };
+                <ng-container *ngTemplateOutlet="player; context: { $implicit: item }" />
+              } @else if (p.status === 'error') {
+                <p class="error" role="alert">{{ p.error || 'Couldn’t make this version’s file.' }}</p>
+              } @else if (stuck(p)) {
+                <p class="error" role="alert">This is taking far too long. Try again.</p>
+              } @else {
+                <span class="muted">Publishing… this takes a minute or so.</span>
+                <progress aria-label="Publishing"></progress>
+              }
+              <div class="recording-actions">
+                @if (p.status === 'error' || stuck(p)) {
+                  <button type="button" class="btn" [disabled]="busy()" (click)="retryPublish(p)">Try again</button>
+                }
+                <button type="button" class="btn quiet" [attr.aria-label]="'Delete published version ' + p.title" (click)="confirming.set(p.id)">Delete</button>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
+
+    <ng-template #player let-item>
+      @let current = playing() === item.id;
+      @let length = item.spans ? lengthOf(item.spans) : item.seconds;
+      @let at = current ? shown(item.spans, position()) : 0;
+      <div class="player">
+        <button type="button" class="player-key" [disabled]="store.recording()" [attr.aria-label]="(current && !paused() ? 'Pause ' : 'Play ') + item.label" (click)="toggle(item)">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            @if (current && !paused()) {
+              <path d="M7 5h4v14H7zM13 5h4v14h-4z" />
+            } @else {
+              <path d="M8 4.5v15l12-7.5z" />
+            }
+          </svg>
+        </button>
+        <input
+          type="range"
+          min="0"
+          step="0.1"
+          [max]="length"
+          [value]="at"
+          [disabled]="!current"
+          aria-label="Position"
+          [attr.aria-valuetext]="clock(at)"
+          (input)="seek(item.spans, $any($event.target).value)"
+        />
+        <span class="player-time">{{ clock(at) }}</span>
+      </div>
+    </ng-template>
+
+    @if (editing(); as e) {
+      <app-audio-editor [movieId]="movieId()" [review]="e.review" [url]="e.url" (closed)="editing.set(null)" />
     }
   `,
 })
@@ -203,8 +317,18 @@ export class AudioReviews implements OnInit, OnDestroy {
   /** Set while finding the length of a file that doesn't state it, which Chrome can't seek in otherwise. */
   private measuring = false;
 
+  private readonly skipper = new SkipPlayer(this.audio);
+
   protected readonly confirming = signal('');
   protected readonly busy = signal(false);
+
+  // Editing and publishing
+  private readonly movies = inject(MovieStore);
+  protected readonly editing = signal<{ review: Review; url: string } | null>(null);
+  /** The recording whose publish form is open. */
+  protected readonly publishing = signal('');
+  protected readonly pubTitle = signal('');
+  protected readonly pubNotes = signal('');
 
   private readonly onDevices = () => void this.checkAccess();
 
@@ -213,6 +337,7 @@ export class AudioReviews implements OnInit, OnDestroy {
     // Safari only plays in direct answer to a tap, so the addresses have to be ready beforehand.
     effect(() => {
       for (const r of this.reviews()) this.store.url(r).catch(() => {});
+      for (const p of this.store.published()) if (p.status === 'done' && p.path) this.store.url(p).catch(() => {});
     });
     let saving: string[] = [];
     effect(() => {
@@ -235,15 +360,97 @@ export class AudioReviews implements OnInit, OnDestroy {
     this.stop();
     this.audio.pause();
     this.audio.removeAttribute('src');
+    this.skipper.destroy();
   }
 
-  protected clock(seconds: number): string {
-    const s = Math.max(0, Math.floor(seconds));
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  /** What's kept of a recording, or null if it isn't edited. */
+  protected spansOf(r: Review): Span[] | null {
+    const d = lengthOfRecording(r);
+    return r.edit && changes(r.edit, d) ? kept(r.edit, d) : null;
   }
 
-  protected when(r: Review): string {
-    const d = new Date(r.createdAt);
+  /** Where playing has got to, on the edited version's own clock. */
+  protected shown(spans: Span[] | null, t: number): number {
+    return spans ? toEdited(spans, t) : t;
+  }
+
+  /** Whether a recording has been published, and if so whether it's been edited since. */
+  protected publishedAs(r: Review): 'same' | 'changed' | null {
+    const latest = this.store.published().find((p) => p.source.reviewId === r.id);
+    if (!latest) return null;
+    const d = lengthOfRecording(r);
+    return sameCuts(normalize(latest.source.edit, d), normalize(r.edit ?? whole(d), d)) ? 'same' : 'changed';
+  }
+
+  protected async edit(r: Review) {
+    this.listMessage.set('');
+    if (this.playing()) this.stopPlaying();
+    try {
+      const url = this.store.knownUrl(r.id) ?? (await this.store.url(r));
+      if (!this.destroyed) this.editing.set({ review: r, url });
+    } catch {
+      this.listMessage.set('Couldn’t open that recording. Check your connection and try again.');
+    }
+  }
+
+  protected startPublishing(r: Review) {
+    this.confirming.set('');
+    this.pubTitle.set(this.movies.byId(this.movieId())?.title ?? '');
+    this.pubNotes.set('');
+    this.publishing.set(r.id);
+  }
+
+  protected async publish(event: Event, r: Review) {
+    event.preventDefault();
+    const title = this.pubTitle().trim();
+    if (!title || this.busy()) return;
+    this.busy.set(true);
+    this.listMessage.set('');
+    try {
+      const details = { title, description: this.pubNotes().trim(), movieTitle: this.movies.byId(this.movieId())?.title ?? '' };
+      // Offline, it's kept on the device and sent later, so there's no need to wait.
+      await Promise.race([this.store.publish(this.movieId(), r, details, lengthOfRecording(r)), new Promise((ok) => setTimeout(ok, 4000))]);
+      this.publishing.set('');
+      this.announcement.set('Publishing. It’s listed under Published.');
+    } catch {
+      this.listMessage.set('Couldn’t publish that recording. Sign in again if you were signed out, and try again.');
+    }
+    this.busy.set(false);
+  }
+
+  /** Whether a version has been waiting longer than the backend ever takes, which means it stopped. */
+  protected stuck(p: Published): boolean {
+    return p.status !== 'done' && p.status !== 'error' && Date.now() - +new Date(p.requestedAt) > 15 * 60_000;
+  }
+
+  protected async retryPublish(p: Published) {
+    this.listMessage.set('');
+    try {
+      await this.store.retryPublish(p);
+    } catch {
+      this.listMessage.set('Couldn’t try again. Check your connection.');
+    }
+  }
+
+  protected async removePublished(p: Published) {
+    this.busy.set(true);
+    this.listMessage.set('');
+    if (this.playing() === p.id) this.stopPlaying();
+    try {
+      await this.store.removePublished(this.movieId(), p);
+      this.announcement.set('Published version deleted.');
+    } catch {
+      this.listMessage.set('Couldn’t delete that published version. Check your connection and try again.');
+    }
+    this.busy.set(false);
+    this.confirming.set('');
+  }
+
+  protected readonly clock = clock;
+  protected readonly lengthOf = editedLength;
+
+  protected when(iso: string): string {
+    const d = new Date(iso);
     if (isNaN(+d)) return 'Unknown date';
     const day = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     return `${day} at ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
@@ -462,11 +669,13 @@ export class AudioReviews implements OnInit, OnDestroy {
     a.onloadedmetadata = () => {
       if (Number.isFinite(a.duration)) return;
       this.measuring = true;
+      this.skipper.suspended = true;
       a.muted = true;
       a.currentTime = Number.MAX_SAFE_INTEGER;
     };
     const measured = () => {
       this.measuring = false;
+      this.skipper.suspended = false;
       a.currentTime = 0;
       a.muted = false;
       void a.play().catch(() => {});
@@ -477,15 +686,20 @@ export class AudioReviews implements OnInit, OnDestroy {
     a.ontimeupdate = () => {
       if (!this.measuring) this.position.set(a.currentTime);
     };
-    a.onended = () => {
-      if (this.measuring) return measured();
+    const ended = () => {
       this.paused.set(true);
       this.position.set(0);
       a.currentTime = 0;
     };
+    a.onended = () => {
+      if (this.measuring) return measured();
+      ended();
+    };
+    this.skipper.onFinish = ended;
     a.onerror = () => {
       if (!a.getAttribute('src')) return;
       this.measuring = false;
+      this.skipper.suspended = false;
       a.muted = false;
       this.playing.set('');
       this.paused.set(true);
@@ -493,9 +707,10 @@ export class AudioReviews implements OnInit, OnDestroy {
     };
   }
 
-  protected async toggle(r: Review) {
+  protected async toggle(r: Playable) {
     const a = this.audio;
     this.listMessage.set('');
+    this.skipper.spans = r.spans;
     if (this.playing() === r.id) {
       if (a.paused) void a.play().catch(() => {});
       else a.pause();
@@ -520,10 +735,12 @@ export class AudioReviews implements OnInit, OnDestroy {
     }
   }
 
-  protected seek(value: string) {
+  /** Moves to a place on the slider, which runs on the edited version's clock. */
+  protected seek(spans: Span[] | null, value: string) {
     if (this.measuring) return;
-    this.audio.currentTime = +value;
-    this.position.set(+value);
+    const t = spans ? toOriginal(spans, +value) : +value;
+    this.audio.currentTime = t;
+    this.position.set(t);
   }
 
   private stopPlaying() {

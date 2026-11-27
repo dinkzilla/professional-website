@@ -4,7 +4,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "start:lan": "ng serve --host 0.0.0.0",
+    "start:lan": "ng serve --host 0.0.0.0 --ssl",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
@@ -29,7 +29,9 @@
     "@angular/cli": "^21.2.31",
     "@angular/compiler-cli": "^21.2.0",
     "firebase-tools": "^15.37.0",
+    "jsdom": "^29.1.1",
     "prettier": "^3.8.1",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^4.1.12"
   }
 }
