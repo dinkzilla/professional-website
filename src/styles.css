@@ -2189,9 +2189,17 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 .stepper {
-  display: flex;
+  display: grid;
+  /* The −, value and + stay centred; Clear hangs off to the right without shifting them. */
+  grid-template-columns: 1fr repeat(3, auto) 1fr;
   align-items: center;
   gap: 8px;
+}
+.stepper > :first-child {
+  grid-column: 2;
+}
+.stepper .clear {
+  justify-self: start;
 }
 .stepper button:not(.clear) {
   width: 56px;
@@ -2618,15 +2626,26 @@ html.editing body {
     padding-inline: max(24px, calc(50% - 22rem));
   }
 }
-.editor-top {
+.editor-foot {
+  position: sticky;
+  bottom: 0;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  margin: auto calc(-12px - env(safe-area-inset-right, 0px)) calc(-12px - env(safe-area-inset-bottom, 0px)) calc(-12px - env(safe-area-inset-left, 0px));
+  padding: 10px calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px));
+  border-top: 1px solid var(--line);
+  background: var(--bg);
 }
-.editor-top h2 {
-  flex: 1;
+.editor-foot h2 {
   margin: 0;
   text-align: center;
-  font: 800 1.125rem var(--font-display);
+  font: 800 clamp(1.375rem, 6vw, 1.875rem) / 1.1 var(--font-display);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.editor-movie {
+  color: light-dark(var(--accent), var(--holly));
 }
 .editor-ask {
   flex-basis: 100%;
@@ -2638,9 +2657,6 @@ html.editing body {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-  margin-top: auto;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
 }
 .editor-actions .btn {
   flex: 1 1 0;
@@ -2650,6 +2666,8 @@ html.editing body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* With the footer's own auto margin, this centres the controls in the space above it. */
+  margin-top: auto;
 }
 .editor-clock {
   font: 800 2.25rem/1.1 var(--font-display);
@@ -2735,6 +2753,17 @@ html.editing body {
   flex: 0 0 auto;
   min-width: 44px;
   padding-inline: 0;
+}
+.editor-x svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  margin: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .editor-step {
   min-width: 56px;

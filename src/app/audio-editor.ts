@@ -2,6 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, computed, effe
 import { Cuts, Marks, Span, clock, cut, cutAt, editedLength, kept, mixPlan, normalize, restore, sameCuts, sameMarks, snapMark, spotsOf, toEdited, toOriginal, whole } from './audio-edit';
 import { jingleLengths } from './jingles';
 import { MixPlayer } from './mix-player';
+import { MovieStore } from './movie-store';
 import { PEAKS_PER_SECOND, Review, ReviewStore } from './review-store';
 import { height, loudest, top } from './waveform';
 
@@ -39,10 +40,6 @@ type Drag =
   selector: 'app-audio-editor',
   host: { class: 'editor', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'editor-title' },
   template: `
-    <header class="editor-top">
-      <h2 id="editor-title">Edit recording</h2>
-    </header>
-
     <div class="editor-readout">
       <output class="editor-clock" aria-label="Playhead">{{ clock(playhead(), true) }}</output>
       <span class="muted">
@@ -98,13 +95,13 @@ type Drag =
       <span class="editor-jingle">
         <button type="button" class="btn" title="The intro finishes playing at the playhead" (click)="setIntro()">{{ marks().introEnd == null ? 'Intro Ends' : 'Move Intro End' }}</button>
         @if (marks().introEnd != null) {
-          <button type="button" class="btn quiet editor-x" aria-label="Leave out the intro" title="Leave out the intro" (click)="removeMark('introEnd')">✕</button>
+          <button type="button" class="btn quiet editor-x" aria-label="Leave out the intro" title="Leave out the intro" (click)="removeMark('introEnd')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
         }
       </span>
       <span class="editor-jingle">
         <button type="button" class="btn" title="The outro starts playing at the playhead" (click)="setOutro()">{{ marks().outroStart == null ? 'Outro Starts' : 'Move Outro Start' }}</button>
         @if (marks().outroStart != null) {
-          <button type="button" class="btn quiet editor-x" aria-label="Leave out the outro" title="Leave out the outro" (click)="removeMark('outroStart')">✕</button>
+          <button type="button" class="btn quiet editor-x" aria-label="Leave out the outro" title="Leave out the outro" (click)="removeMark('outroStart')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
         }
       </span>
     </div>
@@ -146,28 +143,39 @@ type Drag =
     @if (message()) {
       <p class="error" role="alert">{{ message() }}</p>
     }
-    <div class="editor-actions">
-      @if (confirmingClose()) {
-        <span class="editor-ask">Discard your changes?</span>
-        <button type="button" class="btn danger" (click)="close()">Discard</button>
-        <button type="button" class="btn quiet" (click)="confirmingClose.set(false)">Keep editing</button>
-      } @else {
-        <button type="button" class="btn quiet" [disabled]="saving()" (click)="cancel()">Cancel</button>
-        <button type="button" class="btn primary" [disabled]="saving()" (click)="done()">{{ saving() ? 'Saving…' : 'Save' }}</button>
-      }
-    </div>
+    <!-- Held at the foot of the screen; the controls above are centred in what's left. -->
+    <footer class="editor-foot">
+      <h2 id="editor-title">
+        Editing Recording
+        @if (movieTitle()) {
+          for <span class="editor-movie">{{ movieTitle() }}</span>
+        }
+      </h2>
+      <div class="editor-actions">
+        @if (confirmingClose()) {
+          <span class="editor-ask">Discard your changes?</span>
+          <button type="button" class="btn danger" (click)="close()">Discard</button>
+          <button type="button" class="btn quiet" (click)="confirmingClose.set(false)">Keep editing</button>
+        } @else {
+          <button type="button" class="btn quiet" [disabled]="saving()" (click)="cancel()">Cancel</button>
+          <button type="button" class="btn primary" [disabled]="saving()" (click)="done()">{{ saving() ? 'Saving…' : 'Save' }}</button>
+        }
+      </div>
+    </footer>
     <p class="sr-only" role="status">{{ announcement() }}</p>
   `,
 })
 export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
   private readonly store = inject(ReviewStore);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly movies = inject(MovieStore);
   readonly movieId = input.required<string>();
   readonly review = input.required<Review>();
   readonly url = input.required<string>();
   readonly closed = output<void>();
 
   protected readonly clock = clock;
+  protected readonly movieTitle = computed(() => this.movies.byId(this.movieId())?.title ?? '');
 
   /** Timed while recording at first, then the file's own length once it's known. */
   protected readonly duration = signal(1);

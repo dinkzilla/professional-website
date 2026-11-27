@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Marks, Span, changes, clock, editedLength, kept, mixPlan, normalize, sameCuts, sameMarks, spotsOf, whole } from './audio-edit';
 import { AudioEditor } from './audio-editor';
 import { MovieStore } from './movie-store';
@@ -140,14 +140,8 @@ function lengthOfRecording(r: Review): number {
                   {{ clock(r.seconds) }}
                 }
               </span>
-              @if (spans) {
+              @if (spans || r.marks) {
                 <span class="tag">Edited</span>
-              }
-              @if (r.marks?.introEnd != null) {
-                <span class="tag">Intro</span>
-              }
-              @if (r.marks?.outroStart != null) {
-                <span class="tag">Outro</span>
               }
               @if (publishedAs(r); as state) {
                 <span class="tag" [class.quiet]="state === 'changed'">{{ state === 'same' ? 'Published' : 'Changed since published' }}</span>
@@ -263,6 +257,7 @@ function lengthOfRecording(r: Review): number {
         </button>
         <input
           type="range"
+          autocomplete="off"
           min="0"
           step="0.1"
           [max]="length"
@@ -279,7 +274,7 @@ function lengthOfRecording(r: Review): number {
     @if (editing(); as e) {
       <!-- Loaded when first opened, as only Kiki ever needs it. -->
       @defer (on immediate) {
-        <app-audio-editor [movieId]="movieId()" [review]="e.review" [url]="e.url" (closed)="editing.set(null)" />
+        <app-audio-editor [movieId]="movieId()" [review]="e.review" [url]="e.url" (closed)="closeEditor()" />
       } @loading (minimum 0ms) {
         <p class="note" role="status">Opening the editor…</p>
       }
@@ -351,6 +346,11 @@ export class AudioReviews implements OnInit, OnDestroy {
 
   constructor() {
     effect((onCleanup) => onCleanup(this.store.watch(this.movieId())));
+    // Going straight from one movie's page to another's keeps this component, so its player starts over.
+    effect(() => {
+      this.movieId();
+      untracked(() => this.stopPlaying());
+    });
     // Safari only plays in direct answer to a tap, so the addresses have to be ready beforehand.
     effect(() => {
       for (const r of this.reviews()) this.store.url(r).catch(() => {});
@@ -416,6 +416,12 @@ export class AudioReviews implements OnInit, OnDestroy {
     } catch {
       this.listMessage.set('Couldn’t open that recording. Check your connection and try again.');
     }
+  }
+
+  /** Back from the editor, every recording starts from the beginning again. */
+  protected closeEditor() {
+    this.editing.set(null);
+    this.stopPlaying();
   }
 
   protected startPublishing(r: Review) {
@@ -715,7 +721,7 @@ export class AudioReviews implements OnInit, OnDestroy {
       if (this.measuring) measured();
     };
     a.ontimeupdate = () => {
-      if (!this.measuring) this.position.set(this.mix.time());
+      if (!this.measuring && this.playing()) this.position.set(this.mix.time());
     };
     const ended = () => {
       this.paused.set(true);
