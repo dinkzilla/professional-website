@@ -58,6 +58,11 @@
                 "glob": "movies.json",
                 "input": "seed",
                 "output": "seed"
+              },
+              {
+                "glob": "{intro,outro}.wav",
+                "input": "jingle",
+                "output": "jingles"
               }
             ],
             "styles": [

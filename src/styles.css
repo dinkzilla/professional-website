@@ -2700,11 +2700,41 @@ html.editing body {
   min-width: 6.5rem;
   max-width: 12rem;
 }
+/* Three columns, so the main button stays in the middle whatever is either side of it. */
 .editor-transport {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  gap: 8px;
+}
+.editor-side {
+  display: flex;
+  gap: 8px;
+}
+.editor-side.start {
+  justify-content: flex-end;
+}
+.editor-side.end {
+  justify-content: flex-start;
+}
+.editor-jingles {
+  min-height: 0;
+}
+.editor-jingle {
+  display: flex;
+  flex: 1 1 0;
+  gap: 4px;
+  min-width: 9rem;
+  max-width: 16rem;
+}
+.editor-jingle .btn {
+  max-width: none;
+  min-width: 0;
+}
+.editor-jingle .editor-x {
+  flex: 0 0 auto;
+  min-width: 44px;
+  padding-inline: 0;
 }
 .editor-step {
   min-width: 56px;

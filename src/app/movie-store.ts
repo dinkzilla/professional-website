@@ -4,6 +4,7 @@ import { AuthService } from './auth';
 import { Movie, MovieData, normalize } from './criteria';
 import { firestore } from './firebase';
 import { ReviewStore } from './review-store';
+import { freeSlug } from './slug';
 import { View, urlFor, viewFor } from './routes';
 
 const LOCAL_KEY = 'holiday-romance-movies';
@@ -167,20 +168,25 @@ export class MovieStore {
   async save(id: string | null, data: MovieData, confirmed?: () => void): Promise<string | null> {
     this.error.set('');
     const db = this.db;
+    // Until the list has arrived, a new movie's id could be one that's already taken, and saving would replace that movie.
+    if (!id && db && !this.auth.previewing() && this.status() !== 'ready') {
+      this.error.set('The list is still loading. Try again in a moment.');
+      return null;
+    }
+    // A new movie's id is made from its title, so its address and folders are readable. It stays the same if the title changes.
+    const newId = id ?? freeSlug(data.title, this.movies().map((m) => m.id));
     if (!db) {
-      const newId = id ?? 'm' + Date.now().toString(36);
       const rest = this.movies().filter((m) => m.id !== newId);
       this.writeLocal([...rest, { ...data, id: newId }]);
       confirmed?.();
       return newId;
     }
     if (this.auth.previewing()) {
-      const newId = id ?? 'm' + Date.now().toString(36);
       this.setPretend(newId, { ...data, id: newId });
       confirmed?.();
       return newId;
     }
-    const ref = id ? doc(db, 'movies', id) : doc(collection(db, 'movies'));
+    const ref = doc(db, 'movies', newId);
     const write = setDoc(ref, data).then(
       () => {
         confirmed?.();

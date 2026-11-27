@@ -1,8 +1,10 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Bytes, collection, deleteDoc, deleteField, doc, getDocsFromServer, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
-import { Cuts, Edit, Segment, changes, editedLength, kept, ms, normalize, segments } from './audio-edit';
+import { Cuts, Edit, Marks, Segment, changes, cleanMarks, editedLength, kept, mixPlan, ms, normalize, segments, spotsOf } from './audio-edit';
 import { AuthService } from './auth';
 import { firebaseApp, firestore } from './firebase';
+import { JINGLE_FILES, jingleLengths, loadJingles } from './jingles';
+import { datedName, extension } from './slug';
 import { decodePeaks } from './waveform';
 
 /** One saved audio review of a movie. */
@@ -17,12 +19,14 @@ export interface Review {
   createdAt: string;
   /** The last edit saved, if any. */
   edit?: Edit;
+  /** Where the intro ends and the outro starts, if Kiki has put them in. */
+  marks?: Marks;
 }
 
 /**
  * A published version of a recording, at movies/<id>/published/<id>: the recording as edited when
  * Publish was pressed, made into a file of its own by the backend (functions/src/index.ts). It doesn't
- * depend on the recording, so either can be deleted without the other. Its id is the podcast episode's.
+ * depend on the recording, so either can be deleted without the other. Its id, the movie's id and when it was published, is the podcast episode's, and names its file.
  */
 export interface Published {
   id: string;
@@ -31,7 +35,19 @@ export interface Published {
   title: string;
   description: string;
   /** What it's made from, as it was when published. */
-  source: { reviewId: string; path: string; edit: Cuts; segments: Segment[]; seconds: number };
+  source: {
+    reviewId: string;
+    path: string;
+    edit: Cuts;
+    segments: Segment[];
+    /** How long the finished version is, as far as could be told when publishing. */
+    seconds: number;
+    /** The recording's marks then, in its own time. */
+    marks?: Marks;
+    /** The jingles laid over it, by file, and where on the edited recording's clock the intro ends and the outro starts. */
+    intro?: { file: string; end: number };
+    outro?: { file: string; start: number };
+  };
   /** ISO date and time Publish was pressed */
   createdAt: string;
   /** ISO date and time it was last asked for: when published, or retried. */
@@ -69,6 +85,11 @@ function toCuts(raw: unknown): Cuts {
   return { start: num(e['start']), end: num(e['end']), cuts };
 }
 
+function toMarks(raw: unknown): Marks | undefined {
+  const m = obj(raw);
+  return cleanMarks({ introEnd: m['introEnd'] as number, outroStart: m['outroStart'] as number }, Infinity);
+}
+
 function toReview(id: string, raw: Record<string, unknown>): Review {
   const review: Review = {
     id,
@@ -78,6 +99,8 @@ function toReview(id: string, raw: Record<string, unknown>): Review {
     createdAt: str(raw['createdAt']),
   };
   if (raw['edit']) review.edit = { ...toCuts(raw['edit']), updatedAt: str(obj(raw['edit'])['updatedAt']) };
+  const marks = toMarks(raw['marks']);
+  if (marks) review.marks = marks;
   return review;
 }
 
@@ -100,6 +123,7 @@ function toPublished(id: string, raw: Record<string, unknown>): Published {
         ? source['segments'].map(obj).map((s) => ({ start: num(s['start']), end: typeof s['end'] === 'number' ? s['end'] : null }))
         : [],
       seconds: num(source['seconds']),
+      marks: toMarks(source['marks']),
     },
     createdAt: str(raw['createdAt']),
     requestedAt: str(raw['requestedAt']) || str(raw['createdAt']),
@@ -121,7 +145,7 @@ async function cloud() {
 
 /**
  * Kiki's audio reviews. The audio is in Cloud Storage and its details are in
- * the Firestore subcollection movies/<id>/reviews, apart from the movie itself
+ * the Firestore subcollection movies/<id>/recordings, apart from the movie itself
  * because saving the rating form replaces that whole document. While
  * previewing, or without Firebase, recordings last until the page reloads.
  *
@@ -168,7 +192,7 @@ export class ReviewStore {
     const timer = setTimeout(() => this.slow.set(true), 10_000);
     let confirmed = false;
     const stop = onSnapshot(
-      collection(firestore!, 'movies', movieId, 'reviews'),
+      collection(firestore!, 'movies', movieId, 'recordings'),
       // Otherwise the server confirming there are none isn't reported.
       { includeMetadataChanges: true },
       (snap) => {
@@ -241,7 +265,7 @@ export class ReviewStore {
       return () => (stopped = true);
     }
     return onSnapshot(
-      doc(firestore!, 'movies', movieId, 'peaks', review.id),
+      doc(firestore!, 'movies', movieId, 'waveforms', review.id),
       (snap) => {
         const data = snap.data()?.['data'];
         found(data instanceof Bytes ? data.toUint8Array() : null);
@@ -251,35 +275,48 @@ export class ReviewStore {
   }
 
   /** Saves the edit made to a recording, or clears it if it changes nothing. Throws if that fails. */
-  async saveEdit(movieId: string, review: Review, edit: Cuts, duration: number) {
+  async saveEdit(movieId: string, review: Review, edit: Cuts, duration: number, marks: Marks = {}) {
     const keep = changes(edit, duration);
     const saved: Edit | undefined = keep ? { ...normalize(edit, duration), updatedAt: new Date().toISOString() } : undefined;
+    const spots = cleanMarks(marks, duration);
     if (this.inMemory()) {
       this.setMemory(
         movieId,
         (this.memory().get(movieId) ?? []).map((r) => {
           if (r.id !== review.id) return r;
-          const { edit: _, ...rest } = r;
-          return saved ? { ...rest, edit: saved } : rest;
+          const { edit: _, marks: __, ...rest } = r;
+          return { ...rest, ...(saved ? { edit: saved } : {}), ...(spots ? { marks: spots } : {}) };
         }),
       );
       return;
     }
-    await updateDoc(doc(firestore!, 'movies', movieId, 'reviews', review.id), { edit: saved ?? deleteField() });
+    await updateDoc(doc(firestore!, 'movies', movieId, 'recordings', review.id), { edit: saved ?? deleteField(), marks: spots ?? deleteField() });
   }
 
   /** Publishes a recording as it's edited now. The backend then makes its file. Throws if that fails. */
   async publish(movieId: string, review: Review, details: { title: string; description: string; movieTitle: string }, duration: number) {
     if (this.inMemory()) throw new Error('Publishing needs the live site.');
     const edit = normalize(review.edit ?? { start: 0, end: duration, cuts: [] }, duration);
-    const id = crypto.randomUUID();
-    const now = new Date().toISOString();
+    const spans = kept(edit, duration);
+    const marks = cleanMarks(review.marks, duration);
+    const spots = spotsOf(marks, spans);
+    // Only for showing how long it'll be until it's made, so it can do without the jingles' lengths.
+    const lengths = jingleLengths() ?? (marks ? await loadJingles().then(() => jingleLengths(), () => null) : null);
+    const seconds = mixPlan(editedLength(spans), lengths ? spots : { introEnd: null, outroStart: null }, lengths ?? { intro: 0, outro: 0 }).length;
+    // Firestore won't take a field that's undefined, so what's left out is left out.
+    const source: Record<string, unknown> = { reviewId: review.id, path: review.path, edit, segments: segments(edit, duration), seconds: ms(seconds) };
+    if (marks) source['marks'] = marks;
+    if (spots.introEnd != null) source['intro'] = { file: JINGLE_FILES.intro, end: spots.introEnd };
+    if (spots.outroStart != null) source['outro'] = { file: JINGLE_FILES.outro, start: spots.outroStart };
+    const at = new Date();
+    const id = datedName(movieId, at, this.published().map((p) => p.id));
+    const now = at.toISOString();
     await setDoc(doc(firestore!, 'movies', movieId, 'published', id), {
       movieId,
       movieTitle: details.movieTitle,
       title: details.title,
       description: details.description,
-      source: { reviewId: review.id, path: review.path, edit, segments: segments(edit, duration), seconds: ms(editedLength(kept(edit, duration))) },
+      source,
       createdAt: now,
       requestedAt: now,
       status: 'pending',
@@ -300,15 +337,19 @@ export class ReviewStore {
   }
 
   add(movieId: string, blob: Blob, seconds: number) {
-    const id = crypto.randomUUID();
+    const now = new Date();
+    // Named for the movie and when it was made, so it's easy to tell apart in Storage and once downloaded.
+    const taken = [...(this.inMemory() ? (this.memory().get(movieId) ?? []) : this.saved()), ...this.uploads()].map((r) => r.id);
+    const id = datedName(movieId, now, taken);
+    const type = blob.type.split(';')[0] || 'audio/webm';
     const upload: Upload = {
       id,
       movieId,
       blob,
-      path: `movies/${movieId}/reviews/${id}`,
-      type: blob.type.split(';')[0] || 'audio/webm',
+      path: `movies/${movieId}/recordings/${id}${extension(type)}`,
+      type,
       seconds,
-      createdAt: new Date().toISOString(),
+      createdAt: now.toISOString(),
       progress: 0,
       problem: '',
     };
@@ -332,7 +373,7 @@ export class ReviewStore {
     this.uploads.update((all) => all.filter((u) => u.id !== upload.id));
     // The audio may have arrived even though its details didn't, and then its waveform will be made.
     void this.removeFile(upload.path).catch(() => {});
-    if (firestore) void deleteDoc(doc(firestore, 'movies', upload.movieId, 'peaks', upload.id)).catch(() => {});
+    if (firestore) void deleteDoc(doc(firestore, 'movies', upload.movieId, 'waveforms', upload.id)).catch(() => {});
   }
 
   /** Deletes one review. Throws if that fails. */
@@ -343,8 +384,8 @@ export class ReviewStore {
     } else {
       // Audio first: if this stops halfway, the review is still listed and can be deleted again.
       await this.removeFile(review.path);
-      await deleteDoc(doc(firestore!, 'movies', movieId, 'peaks', review.id));
-      await deleteDoc(doc(firestore!, 'movies', movieId, 'reviews', review.id));
+      await deleteDoc(doc(firestore!, 'movies', movieId, 'waveforms', review.id));
+      await deleteDoc(doc(firestore!, 'movies', movieId, 'recordings', review.id));
     }
     this.urls.delete(review.id);
   }
@@ -358,13 +399,13 @@ export class ReviewStore {
   async removeAll(movieId: string) {
     const all = this.inMemory()
       ? (this.memory().get(movieId) ?? [])
-      : (await getDocsFromServer(collection(firestore!, 'movies', movieId, 'reviews'))).docs.map((d) => toReview(d.id, d.data()));
+      : (await getDocsFromServer(collection(firestore!, 'movies', movieId, 'recordings'))).docs.map((d) => toReview(d.id, d.data()));
     for (const review of all) await this.remove(movieId, review);
     if (this.inMemory()) return;
     const published = (await getDocsFromServer(collection(firestore!, 'movies', movieId, 'published'))).docs.map((d) => toPublished(d.id, d.data()));
     for (const p of published) await this.removePublished(movieId, p);
     // Waveforms of recordings whose details never arrived.
-    for (const d of (await getDocsFromServer(collection(firestore!, 'movies', movieId, 'peaks'))).docs) await deleteDoc(d.ref);
+    for (const d of (await getDocsFromServer(collection(firestore!, 'movies', movieId, 'waveforms'))).docs) await deleteDoc(d.ref);
   }
 
   /** Drops the unsaved recordings of a movie that has been deleted. */
@@ -378,7 +419,7 @@ export class ReviewStore {
       const task = sdk.uploadBytesResumable(sdk.ref(storage, path), blob, { contentType: type });
       task.on('state_changed', (s) => this.patch(id, { progress: s.totalBytes ? s.bytesTransferred / s.totalBytes : 0 }));
       await task;
-      await setDoc(doc(firestore!, 'movies', movieId, 'reviews', id), { path, type, seconds, createdAt });
+      await setDoc(doc(firestore!, 'movies', movieId, 'recordings', id), { path, type, seconds, createdAt });
       this.uploads.update((all) => all.filter((u) => u.id !== id));
     } catch (e: any) {
       const denied = ['storage/unauthorized', 'storage/unauthenticated', 'permission-denied', 'unauthenticated'].includes(e?.code);

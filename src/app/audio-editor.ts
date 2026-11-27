@@ -1,7 +1,8 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
-import { Cuts, Span, clock, cut, cutAt, editedLength, kept, normalize, restore, sameCuts, whole } from './audio-edit';
+import { Cuts, Marks, Span, clock, cut, cutAt, editedLength, kept, mixPlan, normalize, restore, sameCuts, sameMarks, snapMark, spotsOf, toEdited, toOriginal, whole } from './audio-edit';
+import { jingleLengths } from './jingles';
+import { MixPlayer } from './mix-player';
 import { PEAKS_PER_SECOND, Review, ReviewStore } from './review-store';
-import { SkipPlayer } from './skip-player';
 import { height, loudest, top } from './waveform';
 
 /** Most pixels a second of recording can be zoomed to. */
@@ -17,6 +18,8 @@ const AROUND = 2;
 /** Shortest stretch a handle can leave between itself and the one it faces. */
 const GAP = 0.1;
 const HANDLE = '#f4c542';
+/** The intro and outro's marks and how far they reach. */
+const JINGLE = '#5b4bb7';
 
 type Drag =
   | { kind: 'wait'; x: number; y: number; at: number; timer: ReturnType<typeof setTimeout> }
@@ -46,7 +49,7 @@ type Drag =
         @if (selection(); as s) {
           Selected {{ clock(s.end - s.start, true) }}
         } @else {
-          {{ changed() ? 'Edited to ' + clock(length()) + ' of ' + clock(duration()) : clock(duration()) + ' long' }}
+          {{ changed() ? 'Edited to ' + clock(finalLength()) + ' of ' + clock(duration()) : clock(duration()) + ' long' }}
         }
       </span>
     </div>
@@ -91,27 +94,53 @@ type Drag =
       }
     </div>
 
+    <div class="editor-tools editor-jingles" role="toolbar" aria-label="Intro and outro">
+      <span class="editor-jingle">
+        <button type="button" class="btn" title="The intro finishes playing at the playhead" (click)="setIntro()">{{ marks().introEnd == null ? 'Intro Ends' : 'Move Intro End' }}</button>
+        @if (marks().introEnd != null) {
+          <button type="button" class="btn quiet editor-x" aria-label="Leave out the intro" title="Leave out the intro" (click)="removeMark('introEnd')">✕</button>
+        }
+      </span>
+      <span class="editor-jingle">
+        <button type="button" class="btn" title="The outro starts playing at the playhead" (click)="setOutro()">{{ marks().outroStart == null ? 'Outro Starts' : 'Move Outro Start' }}</button>
+        @if (marks().outroStart != null) {
+          <button type="button" class="btn quiet editor-x" aria-label="Leave out the outro" title="Leave out the outro" (click)="removeMark('outroStart')">✕</button>
+        }
+      </span>
+    </div>
+
     <div class="editor-transport" role="toolbar" aria-label="Playback">
+      <!-- The main button keeps the middle, whatever is either side of it. -->
+      <div class="editor-side start">
+        @if (playing()) {
+          <button type="button" class="editor-step" aria-label="Back to where playing started" title="Back to where playing started" (click)="replay()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2.5v14H5zM19.5 5v14L8.5 12z" /></svg>
+          </button>
+        } @else {
+          <button type="button" class="editor-step" aria-label="Play from the beginning" title="Play from the beginning" (click)="playFromBeginning()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2.5v14H5zM19.5 5v14L8.5 12z" /></svg>
+          </button>
+          <button type="button" class="editor-step" aria-label="Back a tenth of a second" (click)="nudge(-0.1)">−0.1</button>
+        }
+      </div>
       @if (playing()) {
-        <button type="button" class="editor-step" aria-label="Back to where playing started" title="Back to where playing started" (click)="replay()">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2.5v14H5zM19.5 5v14L8.5 12z" /></svg>
-        </button>
         <button type="button" class="player-key editor-play" aria-label="Stop, back to where playing started" (click)="stop()">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
         </button>
-        <button type="button" class="editor-step" aria-label="Pause" title="Pause" (click)="pauseHere()">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
-        </button>
       } @else {
-        <button type="button" class="editor-step" aria-label="Play from the beginning" title="Play from the beginning" (click)="playFromBeginning()">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2.5v14H5zM19.5 5v14L8.5 12z" /></svg>
-        </button>
-        <button type="button" class="editor-step" aria-label="Back a tenth of a second" (click)="nudge(-0.1)">−0.1</button>
         <button type="button" class="player-key editor-play" aria-label="Play edited recording" (click)="play()">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5v15l12-7.5z" /></svg>
         </button>
-        <button type="button" class="editor-step" aria-label="Forward a tenth of a second" (click)="nudge(0.1)">+0.1</button>
       }
+      <div class="editor-side end">
+        @if (playing()) {
+          <button type="button" class="editor-step" aria-label="Pause" title="Pause" (click)="pauseHere()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
+          </button>
+        } @else {
+          <button type="button" class="editor-step" aria-label="Forward a tenth of a second" (click)="nudge(0.1)">+0.1</button>
+        }
+      </div>
     </div>
 
     @if (message()) {
@@ -149,7 +178,37 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
   protected readonly view = computed(() => normalize(this.edit(), this.duration()));
   protected readonly spans = computed(() => kept(this.view(), this.duration()));
   protected readonly length = computed(() => editedLength(this.spans()));
-  protected readonly changed = computed(() => !sameCuts(this.view(), whole(this.duration())));
+  /** Where the intro ends and the outro starts, on the original recording. */
+  protected readonly marks = signal<Marks>({});
+  private initialMarks: Marks = {};
+  private readonly hasMarks = computed(() => this.marks().introEnd != null || this.marks().outroStart != null);
+  protected readonly changed = computed(() => this.hasMarks() || !sameCuts(this.view(), whole(this.duration())));
+  /** How long the published version would be, jingles and all, once their lengths are known. */
+  protected readonly finalLength = computed(() => {
+    const lengths = jingleLengths();
+    return lengths ? mixPlan(this.length(), spotsOf(this.marks(), this.spans()), lengths).length : this.length();
+  });
+  /** Each jingle's mark, where it's heard, and the stretch of the recording it plays over. */
+  private readonly bands = computed(() => {
+    const spans = this.spans();
+    const m = this.marks();
+    const lengths = jingleLengths();
+    const total = editedLength(spans);
+    const out: { label: string; mark: number; from: number; to: number }[] = [];
+    if (m.introEnd != null) {
+      const e = toEdited(spans, m.introEnd);
+      const mark = snapMark(spans, m.introEnd);
+      const early = lengths ? lengths.intro - e : 0;
+      out.push({ label: early > 0.05 ? `Intro · ${clock(early, true)} before the recording` : 'Intro', mark, from: lengths ? toOriginal(spans, Math.max(0, e - lengths.intro)) : mark, to: mark });
+    }
+    if (m.outroStart != null) {
+      const e = toEdited(spans, m.outroStart);
+      const mark = snapMark(spans, m.outroStart);
+      const late = lengths ? e + lengths.outro - total : 0;
+      out.push({ label: late > 0.05 ? `Outro · ${clock(late, true)} after the end` : 'Outro', mark, from: mark, to: lengths ? toOriginal(spans, Math.min(total, e + lengths.outro)) : mark });
+    }
+    return out;
+  });
 
   protected readonly playhead = signal(0);
   /** Pixels per second. */
@@ -183,7 +242,7 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
   private readonly overviewRef = viewChild.required<ElementRef<HTMLCanvasElement>>('overview');
 
   private readonly audio = new Audio();
-  private readonly player = new SkipPlayer(this.audio);
+  private readonly player = new MixPlayer(this.audio);
   private measuring = false;
   private frame = 0;
   private fling = 0;
@@ -213,10 +272,16 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
       this.chosenCut();
       this.mark();
       this.startMark();
+      this.bands();
       this.dirty = true;
     });
     effect(() => {
       this.player.spans = this.spans();
+      this.player.marks = this.marks();
+      this.player.length = this.duration();
+    });
+    effect(() => {
+      if (this.hasMarks()) this.player.prepare();
     });
   }
 
@@ -225,6 +290,8 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
     this.duration.set(Math.max(r.seconds, 0.1));
     this.initial = r.edit ? { start: r.edit.start, end: r.edit.end, cuts: r.edit.cuts } : { start: 0, end: Infinity, cuts: [] };
     this.edit.set(this.initial);
+    this.initialMarks = r.marks ?? {};
+    this.marks.set(this.initialMarks);
     this.playhead.set(this.view().start);
     this.stopPeaks = this.store.watchPeaks(this.movieId(), r, (p) => this.peaks.set(p));
     this.setUpAudio();
@@ -263,7 +330,8 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
   private setUpAudio() {
     const a = this.audio;
     a.preload = 'auto';
-    a.onplay = a.onpause = () => this.playing.set(!a.paused);
+    this.player.onState = (on) => this.playing.set(on);
+    this.player.onError = () => this.message.set('Couldn’t play the recording. Check your connection.');
     a.onloadedmetadata = () => {
       if (Number.isFinite(a.duration)) return this.known(a.duration);
       // Chrome can't tell how long some recordings are without going to the end.
@@ -425,6 +493,29 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
+    // The intro and outro: a tint over what they play over, and a line at the mark
+    g.font = '600 11px system-ui, sans-serif';
+    for (const band of this.bands()) {
+      const a = this.xOf(band.from);
+      const b = this.xOf(band.to);
+      const mx = Math.round(this.xOf(band.mark));
+      g.fillStyle = JINGLE;
+      g.globalAlpha = 0.14;
+      if (b > a) g.fillRect(a, ruler, b - a, h - ruler);
+      g.globalAlpha = 1;
+      if (mx < -200 || mx > w + 200) continue;
+      g.fillRect(mx - 1, ruler, 2, h - ruler);
+      const text = band.label;
+      const tw = g.measureText(text).width + 10;
+      // The label sits on the side the jingle plays.
+      const lx = band.to > band.mark || band.from === band.mark ? mx : mx - tw;
+      g.beginPath();
+      g.roundRect(lx, ruler + 2, tw, 16, 4);
+      g.fill();
+      g.fillStyle = '#fff';
+      g.fillText(text, lx + 5, ruler + 4);
+    }
+
     // Selection
     if (sel) {
       const a = this.xOf(sel.start);
@@ -552,6 +643,13 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
     g.lineWidth = 2;
     g.strokeRect(Math.max(1, a), 1, Math.max(4, Math.min(w - 1, b) - Math.max(1, a)), h - 2);
     g.fillStyle = c.accent;
+    for (const band of this.bands()) {
+      g.fillStyle = JINGLE;
+      g.globalAlpha = 0.25;
+      g.fillRect(x(band.from), 0, Math.max(0, x(band.to) - x(band.from)), h);
+      g.globalAlpha = 1;
+      g.fillRect(x(band.mark) - 1, 0, 2, h);
+    }
     const started = this.startMark();
     if (started != null) {
       g.fillStyle = c.holly;
@@ -809,8 +907,9 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
   protected replay() {
     const back = this.returnTo();
     if (back == null) return;
-    this.listen();
-    this.seekTo(this.player.from(back) ?? back);
+    // From the top, the intro's lead-in comes again too.
+    this.pause();
+    this.play(back);
   }
 
   protected playFromBeginning() {
@@ -834,13 +933,13 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
     // Plays from the playhead, or from the top if it's past what's kept.
     const start = this.player.from(from) ?? this.spans()[0]?.start ?? 0;
     this.seekTo(start);
-    this.audio.play().catch((e) => {
+    this.player.play().catch((e) => {
       if (e?.name !== 'AbortError') this.message.set('Couldn’t play the recording. Check your connection.');
     });
   }
 
   private pause() {
-    this.audio.pause();
+    this.player.pause();
   }
 
   /** Back to playing the edit as it is, after hearing around a cut. */
@@ -872,7 +971,7 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
     const start = this.player.from(from);
     if (start == null) return;
     this.seekTo(start);
-    void this.audio.play().catch(() => {});
+    void this.player.play().catch(() => {});
   }
 
   // Editing
@@ -935,11 +1034,31 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
     this.announcement.set(`Recording now ends at ${clock(t, true)}.`);
   }
 
+  protected setIntro() {
+    const t = snapMark(this.spans(), this.playhead());
+    this.marks.update((m) => ({ ...m, introEnd: t }));
+    this.announcement.set(`The intro now ends at ${clock(t, true)}.`);
+  }
+
+  protected setOutro() {
+    const t = snapMark(this.spans(), this.playhead());
+    this.marks.update((m) => ({ ...m, outroStart: t }));
+    this.announcement.set(`The outro now starts at ${clock(t, true)}.`);
+  }
+
+  protected removeMark(which: keyof Marks) {
+    this.marks.update((m) => {
+      const { [which]: _, ...rest } = m;
+      return rest;
+    });
+    this.announcement.set(which === 'introEnd' ? 'No intro.' : 'No outro.');
+  }
+
   // Leaving
 
   private unsaved() {
     const d = this.duration();
-    return !sameCuts(this.view(), normalize(this.initial, d));
+    return !sameCuts(this.view(), normalize(this.initial, d)) || !sameMarks(this.marks(), this.initialMarks);
   }
 
   protected cancel() {
@@ -957,7 +1076,7 @@ export class AudioEditor implements OnInit, AfterViewInit, OnDestroy {
     this.message.set('');
     try {
       // Offline, the save waits to be sent; it's kept on the device, so there's no need to wait here.
-      await Promise.race([this.store.saveEdit(this.movieId(), this.review(), this.view(), this.duration()), new Promise((r) => setTimeout(r, 4000))]);
+      await Promise.race([this.store.saveEdit(this.movieId(), this.review(), this.view(), this.duration(), this.marks()), new Promise((r) => setTimeout(r, 4000))]);
       this.close();
     } catch {
       this.message.set('Couldn’t save the edit. Sign in again if you were signed out, and try again.');

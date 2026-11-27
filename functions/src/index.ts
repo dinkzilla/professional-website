@@ -7,7 +7,7 @@ import { RECORDING, makePeaks, renderPublished } from './jobs.js';
 initializeApp();
 
 /** Must be the Storage bucket's region, or the upload trigger can't be deployed. */
-setGlobalOptions({ region: 'us-central1', maxInstances: 3 });
+setGlobalOptions({ region: 'us-east1', maxInstances: 3 });
 
 /** Makes the waveform of each recording uploaded, for the editor. */
 export const recordingUploaded = onObjectFinalized({ memory: '512MiB', timeoutSeconds: 300 }, async (event) => {

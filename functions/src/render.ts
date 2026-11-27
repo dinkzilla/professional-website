@@ -6,7 +6,7 @@ export interface Segment {
   end: number | null;
 }
 
-/** A source laid on the output's timeline. Phase 2 adds the intro and outro as more tracks. */
+/** A source laid on the output's timeline: the recording, and the intro and outro over it. */
 export interface Track {
   file: string;
   /** Kept parts, joined end to end. */
@@ -62,13 +62,18 @@ export function filterGraph(tracks: Track[]): string {
       parts.push(`${joined}adelay=delays=${ms}:all=1[t${ti}d]`);
       joined = `[t${ti}d]`;
     }
+    if (tracks.length > 1) {
+      // The jingles are stereo and the recording mono; mixing needs them alike.
+      parts.push(`${joined}aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[t${ti}f]`);
+      joined = `[t${ti}f]`;
+    }
     outs.push(joined);
   });
   if (outs.length === 1) {
     parts.push(`${outs[0]}anull[out]`);
   } else {
     // Laid over each other at full level; the intro and outro carry their own fades.
-    parts.push(`${outs.join('')}amix=inputs=${outs.length}:duration=longest:normalize=0[out]`);
+    parts.push(`${outs.join('')}amix=inputs=${outs.length}:duration=longest:normalize=0,asetpts=N/SR/TB[out]`);
   }
   return parts.join(';');
 }

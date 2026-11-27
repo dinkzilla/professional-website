@@ -15,7 +15,7 @@ service cloud.firestore {
       allow write: if isEditor();
 
       // Details of the audio reviews in Cloud Storage (storage.rules), and the edits made to them. Nobody else can see them yet.
-      match /reviews/{review} {
+      match /recordings/{recording} {
         allow read, write: if isEditor();
       }
 
@@ -25,7 +25,7 @@ service cloud.firestore {
       }
 
       // Each recording's waveform, for the editor. Only the backend makes them.
-      match /peaks/{review} {
+      match /waveforms/{recording} {
         allow read, delete: if isEditor();
       }
     }

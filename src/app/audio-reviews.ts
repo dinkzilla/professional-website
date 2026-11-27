@@ -1,10 +1,11 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
-import { Span, changes, clock, editedLength, kept, normalize, sameCuts, toEdited, toOriginal, whole } from './audio-edit';
+import { Marks, Span, changes, clock, editedLength, kept, mixPlan, normalize, sameCuts, sameMarks, spotsOf, whole } from './audio-edit';
 import { AudioEditor } from './audio-editor';
 import { MovieStore } from './movie-store';
 import { Published, Review, ReviewStore, Upload } from './review-store';
-import { SkipPlayer } from './skip-player';
+import { jingleLengths, loadJingles } from './jingles';
+import { MixPlayer } from './mix-player';
 
 /** A guard against a recording nobody stopped. Recording stops and saves here. */
 const MAX_SECONDS = 45 * 60;
@@ -36,6 +37,10 @@ interface Playable {
   seconds: number;
   /** What's kept of a recording that's edited; null to play it all. */
   spans: Span[] | null;
+  /** Where its intro and outro go, if it has any. */
+  marks: Marks | null;
+  /** How long it plays for, jingles and all. */
+  length: number;
   label: string;
 }
 
@@ -129,14 +134,20 @@ function lengthOfRecording(r: Review): number {
             <div class="recording-head">
               <span class="muted">
                 {{ when(r.createdAt) }} ·
-                @if (spans) {
-                  {{ clock(lengthOf(spans)) }} of {{ clock(r.seconds) }}
+                @if (spans || r.marks) {
+                  {{ clock(finalLength(r)) }} of {{ clock(r.seconds) }}
                 } @else {
                   {{ clock(r.seconds) }}
                 }
               </span>
               @if (spans) {
                 <span class="tag">Edited</span>
+              }
+              @if (r.marks?.introEnd != null) {
+                <span class="tag">Intro</span>
+              }
+              @if (r.marks?.outroStart != null) {
+                <span class="tag">Outro</span>
               }
               @if (publishedAs(r); as state) {
                 <span class="tag" [class.quiet]="state === 'changed'">{{ state === 'same' ? 'Published' : 'Changed since published' }}</span>
@@ -150,7 +161,7 @@ function lengthOfRecording(r: Review): number {
               </span>
             } @else if (publishing() === r.id) {
               <form class="publish" (submit)="publish($event, r)">
-                <p class="muted">Publishes the recording as it’s edited now, {{ clock(spans ? lengthOf(spans) : r.seconds) }} long, as a new episode.</p>
+                <p class="muted">Publishes the recording as it’s edited now, {{ clock(finalLength(r)) }} long, as a new episode.</p>
                 <label for="pub-title">Title</label>
                 <input id="pub-title" type="text" required [value]="pubTitle()" (input)="pubTitle.set($any($event.target).value)" />
                 <label for="pub-notes">Notes</label>
@@ -161,7 +172,7 @@ function lengthOfRecording(r: Review): number {
                 </span>
               </form>
             } @else {
-              @let item = { id: r.id, path: r.path, seconds: r.seconds, spans: spans, label: 'recording from ' + when(r.createdAt) };
+              @let item = { id: r.id, path: r.path, seconds: r.seconds, spans: spans, marks: r.marks ?? null, length: finalLength(r), label: 'recording from ' + when(r.createdAt) };
               <ng-container *ngTemplateOutlet="player; context: { $implicit: item }" />
               <div class="recording-actions">
                 <button type="button" class="btn" [disabled]="store.recording()" (click)="edit(r)">Edit</button>
@@ -214,7 +225,7 @@ function lengthOfRecording(r: Review): number {
               </span>
             } @else {
               @if (p.status === 'done') {
-                @let item = { id: p.id, path: p.path, seconds: p.seconds, spans: null, label: p.title || 'published version' };
+                @let item = { id: p.id, path: p.path, seconds: p.seconds, spans: null, marks: null, length: p.seconds, label: p.title || 'published version' };
                 <ng-container *ngTemplateOutlet="player; context: { $implicit: item }" />
               } @else if (p.status === 'error') {
                 <p class="error" role="alert">{{ p.error || 'Couldn’t make this version’s file.' }}</p>
@@ -238,8 +249,8 @@ function lengthOfRecording(r: Review): number {
 
     <ng-template #player let-item>
       @let current = playing() === item.id;
-      @let length = item.spans ? lengthOf(item.spans) : item.seconds;
-      @let at = current ? shown(item.spans, position()) : 0;
+      @let length = item.length;
+      @let at = current ? position() : 0;
       <div class="player">
         <button type="button" class="player-key" [disabled]="store.recording()" [attr.aria-label]="(current && !paused() ? 'Pause ' : 'Play ') + item.label" (click)="toggle(item)">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -259,14 +270,19 @@ function lengthOfRecording(r: Review): number {
           [disabled]="!current"
           aria-label="Position"
           [attr.aria-valuetext]="clock(at)"
-          (input)="seek(item.spans, $any($event.target).value)"
+          (input)="seek($any($event.target).value)"
         />
         <span class="player-time">{{ clock(at) }}</span>
       </div>
     </ng-template>
 
     @if (editing(); as e) {
-      <app-audio-editor [movieId]="movieId()" [review]="e.review" [url]="e.url" (closed)="editing.set(null)" />
+      <!-- Loaded when first opened, as only Kiki ever needs it. -->
+      @defer (on immediate) {
+        <app-audio-editor [movieId]="movieId()" [review]="e.review" [url]="e.url" (closed)="editing.set(null)" />
+      } @loading (minimum 0ms) {
+        <p class="note" role="status">Opening the editor…</p>
+      }
     }
   `,
 })
@@ -317,7 +333,8 @@ export class AudioReviews implements OnInit, OnDestroy {
   /** Set while finding the length of a file that doesn't state it, which Chrome can't seek in otherwise. */
   private measuring = false;
 
-  private readonly skipper = new SkipPlayer(this.audio);
+  /** Plays recordings as they'll be published, cut and with their jingles. */
+  private readonly mix = new MixPlayer(this.audio);
 
   protected readonly confirming = signal('');
   protected readonly busy = signal(false);
@@ -345,6 +362,10 @@ export class AudioReviews implements OnInit, OnDestroy {
       if (saving.some((id) => saved.has(id))) this.announcement.set('Recording saved.');
       saving = this.uploads().map((u) => u.id);
     });
+    // Their lengths are needed to show how long recordings with them are, and they should be ready to play.
+    effect(() => {
+      if (this.reviews().some((r) => r.marks)) loadJingles().catch(() => {});
+    });
     this.setUpPlayer();
   }
 
@@ -360,7 +381,7 @@ export class AudioReviews implements OnInit, OnDestroy {
     this.stop();
     this.audio.pause();
     this.audio.removeAttribute('src');
-    this.skipper.destroy();
+    this.mix.destroy();
   }
 
   /** What's kept of a recording, or null if it isn't edited. */
@@ -369,9 +390,13 @@ export class AudioReviews implements OnInit, OnDestroy {
     return r.edit && changes(r.edit, d) ? kept(r.edit, d) : null;
   }
 
-  /** Where playing has got to, on the edited version's own clock. */
-  protected shown(spans: Span[] | null, t: number): number {
-    return spans ? toEdited(spans, t) : t;
+  /** How long a recording plays for as it'd be published, edited and with its jingles once they're loaded. */
+  protected finalLength(r: Review): number {
+    const d = lengthOfRecording(r);
+    const spans = kept(r.edit, d);
+    const lengths = jingleLengths();
+    const recorded = editedLength(spans);
+    return lengths ? mixPlan(recorded, spotsOf(r.marks, spans), lengths).length : recorded;
   }
 
   /** Whether a recording has been published, and if so whether it's been edited since. */
@@ -379,7 +404,7 @@ export class AudioReviews implements OnInit, OnDestroy {
     const latest = this.store.published().find((p) => p.source.reviewId === r.id);
     if (!latest) return null;
     const d = lengthOfRecording(r);
-    return sameCuts(normalize(latest.source.edit, d), normalize(r.edit ?? whole(d), d)) ? 'same' : 'changed';
+    return sameCuts(normalize(latest.source.edit, d), normalize(r.edit ?? whole(d), d)) && sameMarks(latest.source.marks, r.marks) ? 'same' : 'changed';
   }
 
   protected async edit(r: Review) {
@@ -447,7 +472,6 @@ export class AudioReviews implements OnInit, OnDestroy {
   }
 
   protected readonly clock = clock;
-  protected readonly lengthOf = editedLength;
 
   protected when(iso: string): string {
     const d = new Date(iso);
@@ -535,7 +559,7 @@ export class AudioReviews implements OnInit, OnDestroy {
     if (this.access() !== 'granted') return this.allow();
     this.starting.set(true);
     this.message.set('');
-    this.audio.pause();
+    this.mix.pause();
     let stream: MediaStream | undefined;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -665,42 +689,50 @@ export class AudioReviews implements OnInit, OnDestroy {
 
   private setUpPlayer() {
     const a = this.audio;
-    a.onplay = a.onpause = () => this.paused.set(a.paused);
+    this.mix.onState = (on) => this.paused.set(!on);
+    this.mix.onTick = () => this.position.set(this.mix.time());
+    this.mix.onError = () => {
+      this.stopPlaying();
+      this.listMessage.set('Couldn’t play that recording. Check your connection and try again.');
+    };
     a.onloadedmetadata = () => {
       if (Number.isFinite(a.duration)) return;
       this.measuring = true;
-      this.skipper.suspended = true;
+      this.mix.suspended = true;
       a.muted = true;
       a.currentTime = Number.MAX_SAFE_INTEGER;
     };
     const measured = () => {
       this.measuring = false;
-      this.skipper.suspended = false;
+      this.mix.suspended = false;
       a.currentTime = 0;
       a.muted = false;
-      void a.play().catch(() => {});
+      // During the intro's lead-in, the recording waits its turn.
+      if (this.mix.waiting) a.pause();
+      else void a.play().catch(() => {});
     };
     a.onseeked = () => {
       if (this.measuring) measured();
     };
     a.ontimeupdate = () => {
-      if (!this.measuring) this.position.set(a.currentTime);
+      if (!this.measuring) this.position.set(this.mix.time());
     };
     const ended = () => {
       this.paused.set(true);
       this.position.set(0);
       a.currentTime = 0;
     };
+    // Reaching the end is the mix player's to report, as an outro may still be playing.
     a.onended = () => {
-      if (this.measuring) return measured();
-      ended();
+      if (this.measuring) measured();
     };
-    this.skipper.onFinish = ended;
+    this.mix.onFinish = ended;
     a.onerror = () => {
       if (!a.getAttribute('src')) return;
       this.measuring = false;
-      this.skipper.suspended = false;
+      this.mix.suspended = false;
       a.muted = false;
+      this.mix.pause();
       this.playing.set('');
       this.paused.set(true);
       this.listMessage.set('Couldn’t play that recording. Check your connection and try again.');
@@ -710,13 +742,16 @@ export class AudioReviews implements OnInit, OnDestroy {
   protected async toggle(r: Playable) {
     const a = this.audio;
     this.listMessage.set('');
-    this.skipper.spans = r.spans;
+    this.mix.spans = r.spans;
+    this.mix.marks = r.marks ?? {};
+    this.mix.length = r.seconds;
+    if (r.marks) this.mix.prepare();
     if (this.playing() === r.id) {
-      if (a.paused) void a.play().catch(() => {});
-      else a.pause();
+      if (!this.mix.playing) void this.mix.play().catch(() => {});
+      else this.mix.pause();
       return;
     }
-    a.pause();
+    this.mix.pause();
     this.measuring = false;
     a.muted = false;
     this.playing.set(r.id);
@@ -726,7 +761,7 @@ export class AudioReviews implements OnInit, OnDestroy {
       const url = this.store.knownUrl(r.id) ?? (await this.store.url(r));
       if (this.playing() !== r.id || this.destroyed) return;
       a.src = url;
-      await a.play();
+      await this.mix.play();
     } catch (e: any) {
       // Pausing or switching recordings before it gets going isn't a problem.
       if (e?.name === 'AbortError' || this.playing() !== r.id) return;
@@ -735,16 +770,15 @@ export class AudioReviews implements OnInit, OnDestroy {
     }
   }
 
-  /** Moves to a place on the slider, which runs on the edited version's clock. */
-  protected seek(spans: Span[] | null, value: string) {
+  /** Moves to a place on the slider, which runs on the finished version's clock. */
+  protected seek(value: string) {
     if (this.measuring) return;
-    const t = spans ? toOriginal(spans, +value) : +value;
-    this.audio.currentTime = t;
-    this.position.set(t);
+    this.mix.seek(+value);
+    this.position.set(this.mix.time());
   }
 
   private stopPlaying() {
-    this.audio.pause();
+    this.mix.pause();
     this.audio.removeAttribute('src');
     this.audio.load();
     this.playing.set('');

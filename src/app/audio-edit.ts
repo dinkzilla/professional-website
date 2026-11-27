@@ -169,3 +169,71 @@ export function clock(seconds: number, tenths = false): string {
   const tail = tenths ? '.' + Math.round((t - whole) * 10) : '';
   return h ? `${h}:${String(m).padStart(2, '0')}:${s}${tail}` : `${m}:${s}${tail}`;
 }
+
+/** Where the intro finishes and the outro begins, in seconds of the original recording. Either may be left out. */
+export interface Marks {
+  introEnd?: number;
+  outroStart?: number;
+}
+
+/** The marks on the edited version's clock, or null where there's none. */
+export interface Spots {
+  introEnd: number | null;
+  outroStart: number | null;
+}
+
+/** How long the intro and outro are. */
+export interface JingleLengths {
+  intro: number;
+  outro: number;
+}
+
+/** The finished mix's timeline, in seconds from its very start. */
+export interface MixPlan {
+  /** Silence before the recording, so an intro longer than what comes before its mark can play in full. */
+  lead: number;
+  /** Where the intro starts, if there is one. */
+  introAt: number | null;
+  /** Where the outro starts, if there is one. */
+  outroAt: number | null;
+  /** How long it all is. */
+  length: number;
+}
+
+/** Only the marks that are real moments of a recording, kept inside it. Undefined if there are none. */
+export function cleanMarks(marks: Marks | undefined, duration: number): Marks | undefined {
+  const ok = (t: unknown): t is number => typeof t === 'number' && Number.isFinite(t);
+  const clamp = (t: number) => ms(Math.min(Math.max(t, 0), duration));
+  const out: Marks = {};
+  if (ok(marks?.introEnd)) out.introEnd = clamp(marks.introEnd);
+  if (ok(marks?.outroStart)) out.outroStart = clamp(marks.outroStart);
+  return out.introEnd === undefined && out.outroStart === undefined ? undefined : out;
+}
+
+export function sameMarks(a: Marks | undefined, b: Marks | undefined): boolean {
+  return (a?.introEnd ?? null) === (b?.introEnd ?? null) && (a?.outroStart ?? null) === (b?.outroStart ?? null);
+}
+
+/** Where the marks come in the edited version. A mark in a cut comes where the cut is; one trimmed off, at that end. */
+export function spotsOf(marks: Marks | undefined, spans: Span[]): Spots {
+  const at = (t: number | undefined) => (typeof t === 'number' && Number.isFinite(t) ? ms(toEdited(spans, t)) : null);
+  return { introEnd: at(marks?.introEnd), outroStart: at(marks?.outroStart) };
+}
+
+/** Where a mark is really heard: the moment itself if it's kept, otherwise the kept moment it comes at. */
+export function snapMark(spans: Span[], t: number): number {
+  return toOriginal(spans, toEdited(spans, t));
+}
+
+/**
+ * Lays out the intro, the edited recording and the outro. The intro ends at its spot, starting the
+ * recording after some silence if it wouldn't otherwise fit; the outro starts at its spot, and may run
+ * on past the recording. Either may overlap the speech. Must match mixOffsets() in functions/src/mix.ts.
+ */
+export function mixPlan(recorded: number, spots: Spots, lengths: JingleLengths): MixPlan {
+  const lead = spots.introEnd != null ? Math.max(0, lengths.intro - spots.introEnd) : 0;
+  const introAt = spots.introEnd != null ? ms(lead + spots.introEnd - lengths.intro) : null;
+  const outroAt = spots.outroStart != null ? ms(lead + spots.outroStart) : null;
+  const length = Math.max(lead + recorded, introAt != null ? introAt + lengths.intro : 0, outroAt != null ? outroAt + lengths.outro : 0);
+  return { lead: ms(lead), introAt, outroAt, length: ms(length) };
+}

@@ -15,8 +15,8 @@ export class SkipPlayer {
   stopAt: number | null = null;
   /** While true, it leaves the element alone. */
   suspended = false;
-  /** Called on reaching the end of what's kept, or stopAt, after pausing. */
-  onFinish: () => void = () => {};
+  /** Called after pausing on reaching the end of what's kept (atEnd true), or stopAt (false). */
+  onFinish: (atEnd: boolean) => void = () => {};
 
   private frame = 0;
 
@@ -44,17 +44,17 @@ export class SkipPlayer {
     const a = this.audio;
     if (this.suspended || a.paused || a.seeking) return;
     const t = a.currentTime;
-    if (this.stopAt != null && t >= this.stopAt - AHEAD / 2) return this.finish();
+    if (this.stopAt != null && t >= this.stopAt - AHEAD / 2) return this.finish(false);
     if (!this.spans) return;
     const next = playable(this.spans, t, AHEAD);
-    if (next == null) return this.finish();
+    if (next == null) return this.finish(true);
     if (next - t > 0.001) a.currentTime = next;
   }
 
-  private finish() {
+  private finish(atEnd: boolean) {
     this.audio.pause();
     this.stopAt = null;
-    this.onFinish();
+    this.onFinish(atEnd);
   }
 
   destroy() {

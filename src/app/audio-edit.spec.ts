@@ -1,4 +1,4 @@
-import { changes, clock, cut, editedLength, kept, normalize, playable, restore, segments, toEdited, toOriginal, whole } from './audio-edit';
+import { changes, cleanMarks, clock, cut, editedLength, kept, mixPlan, normalize, playable, restore, sameMarks, segments, snapMark, spotsOf, toEdited, toOriginal, whole } from './audio-edit';
 
 describe('normalize', () => {
   it('keeps a plain edit as it is', () => {
@@ -125,5 +125,49 @@ describe('clock', () => {
     expect(clock(3725)).toBe('1:02:05');
     expect(clock(65.94, true)).toBe('1:05.9');
     expect(clock(65.96, true)).toBe('1:06.0');
+  });
+});
+
+describe('intro and outro', () => {
+  const spans = [
+    { start: 2, end: 10 },
+    { start: 15, end: 30 },
+  ];
+  const lengths = { intro: 10, outro: 8 };
+
+  it('puts marks on the edited clock', () => {
+    expect(spotsOf({ introEnd: 12, outroStart: 20 }, spans)).toEqual({ introEnd: 8, outroStart: 13 });
+    expect(spotsOf({}, spans)).toEqual({ introEnd: null, outroStart: null });
+    expect(spotsOf({ introEnd: 0 }, spans).introEnd).toBe(0);
+  });
+
+  it('moves a mark in a cut to where it is heard', () => {
+    expect(snapMark(spans, 12)).toBe(15);
+    expect(snapMark(spans, 5)).toBe(5);
+    expect(snapMark(spans, 0)).toBe(2);
+    expect(snapMark(spans, 40)).toBe(30);
+  });
+
+  it('leaves out what has no spot', () => {
+    expect(mixPlan(23, { introEnd: null, outroStart: null }, lengths)).toEqual({ lead: 0, introAt: null, outroAt: null, length: 23 });
+  });
+
+  it('ends the intro at its spot', () => {
+    expect(mixPlan(23, { introEnd: 15, outroStart: null }, lengths)).toEqual({ lead: 0, introAt: 5, outroAt: null, length: 23 });
+  });
+
+  it('starts the recording late if the intro needs more room', () => {
+    expect(mixPlan(23, { introEnd: 4, outroStart: 10 }, lengths)).toEqual({ lead: 6, introAt: 0, outroAt: 16, length: 29 });
+  });
+
+  it('lets the outro run past the end', () => {
+    expect(mixPlan(23, { introEnd: null, outroStart: 20 }, lengths)).toEqual({ lead: 0, introAt: null, outroAt: 20, length: 28 });
+  });
+
+  it('keeps only real marks, inside the recording', () => {
+    expect(cleanMarks({}, 30)).toBeUndefined();
+    expect(cleanMarks({ introEnd: NaN, outroStart: 40 }, 30)).toEqual({ outroStart: 30 });
+    expect(sameMarks(undefined, {})).toBe(true);
+    expect(sameMarks({ introEnd: 1 }, {})).toBe(false);
   });
 });
