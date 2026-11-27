@@ -32,6 +32,26 @@ export function audioContext(): AudioContext {
   return context;
 }
 
+/**
+ * How much quieter the jingles play in previews than they're made. Published versions bring the recording
+ * and the jingles to the same loudness (see functions/src/render.ts), but a preview plays the recording
+ * as it was recorded, about 10 dB quieter than the jingles, so they're turned down to match it.
+ */
+const PREVIEW_JINGLE_DB = -10;
+
+let output: GainNode | undefined;
+
+/** Where the jingles play into for previews: turned down to sit level with the recording. */
+export function jingleOutput(): AudioNode {
+  if (!output) {
+    const context = audioContext();
+    output = context.createGain();
+    output.gain.value = 10 ** (PREVIEW_JINGLE_DB / 20);
+    output.connect(context.destination);
+  }
+  return output;
+}
+
 /** Fetches and decodes the jingles, once. A failure lets a later call try again. */
 export function loadJingles(): Promise<Jingles> {
   loading ??= (async () => {

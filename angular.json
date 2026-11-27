@@ -74,8 +74,8 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "1MB",
-                  "maximumError": "1.5MB"
+                  "maximumWarning": "1.25MB",
+                  "maximumError": "2MB"
                 },
                 {
                   "type": "anyComponentStyle",
@@ -96,7 +96,38 @@
             "development": {
               "optimization": false,
               "extractLicenses": false,
-              "sourceMap": true
+              "sourceMap": true,
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "public"
+                },
+                {
+                  "glob": "**/*.jpg",
+                  "input": "posters",
+                  "output": "posters"
+                },
+                {
+                  "glob": "movies.json",
+                  "input": "seed",
+                  "output": "seed"
+                },
+                {
+                  "glob": "{intro,outro}.wav",
+                  "input": "jingle",
+                  "output": "jingles"
+                },
+                {
+                  "glob": "audio.json",
+                  "input": "seed",
+                  "output": "seed"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "seed/audio",
+                  "output": "seed/audio"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"

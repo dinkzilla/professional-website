@@ -1,0 +1,188 @@
+[
+  {
+    "movieId": "the-princess-switch",
+    "recordings": [
+      {
+        "id": "the-princess-switch-2026-11-25-2333",
+        "path": "movies/the-princess-switch/recordings/the-princess-switch-2026-11-25-2333.m4a",
+        "marks": {
+          "outroStart": 905.352,
+          "introEnd": 5.128
+        },
+        "edit": {
+          "updatedAt": "2026-11-27T22:11:09.722Z",
+          "start": 3.799,
+          "end": 905.392,
+          "cuts": [
+            {
+              "start": 144.041,
+              "end": 150.369
+            },
+            {
+              "start": 888.387,
+              "end": 892.808
+            },
+            {
+              "start": 900.236,
+              "end": 904.853
+            }
+          ]
+        },
+        "type": "audio/mp4",
+        "createdAt": "2026-11-26T04:33:20.777Z",
+        "seconds": 907.651
+      }
+    ],
+    "published": [
+      {
+        "id": "the-princess-switch-2026-11-27-1711",
+        "movieId": "the-princess-switch",
+        "movieTitle": "The Princess Switch",
+        "title": "The Princess Switch",
+        "description": "",
+        "source": {
+          "reviewId": "the-princess-switch-2026-11-25-2333",
+          "path": "movies/the-princess-switch/recordings/the-princess-switch-2026-11-25-2333.m4a",
+          "edit": {
+            "start": 3.799,
+            "end": 905.392,
+            "cuts": [
+              {
+                "start": 144.041,
+                "end": 150.369
+              },
+              {
+                "start": 888.387,
+                "end": 892.808
+              },
+              {
+                "start": 900.236,
+                "end": 904.853
+              }
+            ]
+          },
+          "segments": [
+            {
+              "start": 3.799,
+              "end": 144.041
+            },
+            {
+              "start": 150.369,
+              "end": 888.387
+            },
+            {
+              "start": 892.808,
+              "end": 900.236
+            },
+            {
+              "start": 904.853,
+              "end": 905.392
+            }
+          ],
+          "seconds": 904.858,
+          "marks": {
+            "introEnd": 5.128,
+            "outroStart": 905.352
+          },
+          "intro": {
+            "file": "intro.wav",
+            "end": 1.329
+          },
+          "outro": {
+            "file": "outro.wav",
+            "start": 886.187
+          }
+        },
+        "createdAt": "2026-11-27T22:11:16.626Z",
+        "requestedAt": "2026-11-27T22:11:16.626Z",
+        "path": "movies/the-princess-switch/published/the-princess-switch-2026-11-27-1711.m4a",
+        "seconds": 904.85,
+        "publishedAt": "2026-11-27T22:12:09.943Z",
+        "bytes": 14666314,
+        "mime": "audio/mp4",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "movieId": "winter-wonderlanes",
+    "recordings": [
+      {
+        "id": "winter-wonderlanes-2026-11-26-0025",
+        "type": "audio/mp4",
+        "seconds": 1363.237,
+        "createdAt": "2026-11-26T05:25:08.943Z",
+        "path": "movies/winter-wonderlanes/recordings/winter-wonderlanes-2026-11-26-0025.m4a",
+        "marks": {
+          "outroStart": 1361.015,
+          "introEnd": 3.313
+        },
+        "edit": {
+          "cuts": [
+            {
+              "start": 425.988,
+              "end": 450.783
+            }
+          ],
+          "updatedAt": "2026-11-27T21:44:14.097Z",
+          "end": 1362.9,
+          "start": 0
+        }
+      }
+    ],
+    "published": [
+      {
+        "id": "winter-wonderlanes-2026-11-27-1647",
+        "movieId": "winter-wonderlanes",
+        "movieTitle": "Winter Wonderlanes",
+        "title": "Winter Wonderlanes",
+        "description": "",
+        "source": {
+          "reviewId": "winter-wonderlanes-2026-11-26-0025",
+          "path": "movies/winter-wonderlanes/recordings/winter-wonderlanes-2026-11-26-0025.m4a",
+          "edit": {
+            "start": 0,
+            "end": 1362.9,
+            "cuts": [
+              {
+                "start": 425.988,
+                "end": 450.783
+              }
+            ]
+          },
+          "segments": [
+            {
+              "start": 0,
+              "end": 425.988
+            },
+            {
+              "start": 450.783,
+              "end": 1362.9
+            }
+          ],
+          "seconds": 1352.907,
+          "marks": {
+            "introEnd": 3.313,
+            "outroStart": 1361.015
+          },
+          "intro": {
+            "file": "intro.wav",
+            "end": 3.313
+          },
+          "outro": {
+            "file": "outro.wav",
+            "start": 1336.22
+          }
+        },
+        "createdAt": "2026-11-27T21:47:02.578Z",
+        "requestedAt": "2026-11-27T21:47:02.578Z",
+        "path": "movies/winter-wonderlanes/published/winter-wonderlanes-2026-11-27-1647.m4a",
+        "seconds": 1352.9,
+        "publishedAt": "2026-11-27T21:48:12.439Z",
+        "bytes": 21909755,
+        "mime": "audio/mp4",
+        "status": "done"
+      }
+    ]
+  }
+]

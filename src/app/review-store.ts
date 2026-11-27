@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Bytes, collection, deleteDoc, deleteField, doc, getDocsFromServer, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { Bytes, collection, deleteDoc, deleteField, doc, getDocsFromServer, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { Cuts, Edit, Marks, Segment, changes, cleanMarks, editedLength, kept, mixPlan, ms, normalize, segments, spotsOf } from './audio-edit';
 import { AuthService } from './auth';
 import { firebaseApp, firestore } from './firebase';
@@ -164,6 +164,10 @@ export class ReviewStore {
 
   private readonly inMemory = computed(() => !firestore || this.auth.previewing());
   private readonly memory = signal<ReadonlyMap<string, Review[]>>(new Map());
+  private readonly memoryPublished = signal<ReadonlyMap<string, Published[]>>(new Map());
+  /** Copies of live recordings and published versions for trying things out (scripts/pull-seed-audio.mjs), served beside the app in development only. */
+  private seed: Promise<{ movieId: string; recordings: Record<string, unknown>[]; published: Record<string, unknown>[] }[]> | undefined;
+  private readonly seeded = new Set<string>();
   /** Saved reviews of the movie being watched. */
   private readonly saved = signal<Review[]>([]);
   /** Published versions of the movie being watched, newest first. */
@@ -185,7 +189,9 @@ export class ReviewStore {
     this.published.set([]);
     if (this.inMemory()) {
       this.status.set('ready');
-      return () => {};
+      let stopped = false;
+      void this.fromSeed(movieId).then(() => stopped || this.published.set(this.memoryPublished().get(movieId) ?? []));
+      return () => (stopped = true);
     }
     this.status.set('loading');
     this.slow.set(false);
@@ -222,6 +228,44 @@ export class ReviewStore {
       stop();
       stopPublished();
     };
+  }
+
+  /** Puts the seed's recordings and published versions of a movie in with the ones made here, once. */
+  private async fromSeed(movieId: string) {
+    if (this.seeded.has(movieId)) return;
+    this.seed ??= fetch('seed/audio.json')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => (Array.isArray(rows) ? rows : []))
+      // In a build without it, the address gives the page instead.
+      .catch(() => []);
+    const entry = (await this.seed).find((m) => m.movieId === movieId);
+    if (this.seeded.has(movieId)) return;
+    this.seeded.add(movieId);
+    if (!entry) return;
+    const recordings = entry.recordings.map((r) => toReview(String(r['id']), r));
+    const published = entry.published.map((p) => toPublished(String(p['id']), p)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    for (const item of [...recordings, ...published]) if (item.path) this.urls.set(item.id, `seed/audio/${item.path}`);
+    const mine = this.memory().get(movieId) ?? [];
+    this.setMemory(movieId, [...mine, ...recordings.filter((r) => !mine.some((m) => m.id === r.id))]);
+    this.memoryPublished.update((m) => new Map(m).set(movieId, published));
+  }
+
+  /**
+   * Keeps up with a movie's finished published versions, newest first, for anyone to play. Apart from
+   * published, which the editor's list keeps for the movie being edited. Returns a function that stops it.
+   */
+  watchFinished(movieId: string, found: (episodes: Published[]) => void): () => void {
+    if (!firestore) {
+      found([]);
+      return () => {};
+    }
+    const newest = (p: Published) => p.publishedAt || p.createdAt;
+    return onSnapshot(
+      // Only finished ones are public, and rules aren't filters, so the query has to ask for just those.
+      query(collection(firestore, 'movies', movieId, 'published'), where('status', '==', 'done')),
+      (snap) => found(snap.docs.map((d) => toPublished(d.id, d.data())).filter((p) => p.path).sort((a, b) => newest(b).localeCompare(newest(a)))),
+      () => found([]),
+    );
   }
 
   /** A movie's saved reviews, newest first. */
@@ -330,6 +374,13 @@ export class ReviewStore {
 
   /** Deletes a published version, leaving the recording. Throws if that fails. */
   async removePublished(movieId: string, p: Published) {
+    if (this.inMemory()) {
+      const left = (this.memoryPublished().get(movieId) ?? []).filter((q) => q.id !== p.id);
+      this.memoryPublished.update((m) => new Map(m).set(movieId, left));
+      this.published.set(left);
+      this.urls.delete(p.id);
+      return;
+    }
     // File first: if this stops halfway, it's still listed and can be deleted again.
     if (p.path) await this.removeFile(p.path);
     await deleteDoc(doc(firestore!, 'movies', movieId, 'published', p.id));
@@ -401,7 +452,10 @@ export class ReviewStore {
       ? (this.memory().get(movieId) ?? [])
       : (await getDocsFromServer(collection(firestore!, 'movies', movieId, 'recordings'))).docs.map((d) => toReview(d.id, d.data()));
     for (const review of all) await this.remove(movieId, review);
-    if (this.inMemory()) return;
+    if (this.inMemory()) {
+      for (const p of this.memoryPublished().get(movieId) ?? []) await this.removePublished(movieId, p);
+      return;
+    }
     const published = (await getDocsFromServer(collection(firestore!, 'movies', movieId, 'published'))).docs.map((d) => toPublished(d.id, d.data()));
     for (const p of published) await this.removePublished(movieId, p);
     // Waveforms of recordings whose details never arrived.

@@ -20,6 +20,7 @@ service cloud.firestore {
       }
 
       // Versions of the audio reviews published as podcast episodes. The backend makes their files.
+      // Everyone can see the finished ones (below); the editor sees them all.
       match /published/{episode} {
         allow read, write: if isEditor();
       }
@@ -28,6 +29,12 @@ service cloud.firestore {
       match /waveforms/{recording} {
         allow read, delete: if isEditor();
       }
+    }
+
+    // Finished published episodes are public, in one movie or across them all (the list's audio badges).
+    // Rules aren't filters, so a visitor's query must ask for status == 'done'.
+    match /{path=**}/published/{episode} {
+      allow read: if resource.data.status == 'done';
     }
 
     // private/tmdb holds the movie-search API key. Set it from the Firebase console or `npm run seed`.

@@ -1,5 +1,5 @@
 import { Marks, MixPlan, Span, editedLength, mixPlan, spotsOf, toEdited } from './audio-edit';
-import { JingleName, Jingles, audioContext, audioSession, loadJingles, readyJingles } from './jingles';
+import { JingleName, Jingles, audioContext, audioSession, jingleOutput, loadJingles, readyJingles } from './jingles';
 import { SkipPlayer } from './skip-player';
 
 /** A jingle is started this far ahead of when it's due, on the audio clock, which is exact. */
@@ -330,7 +330,7 @@ export class MixPlayer {
       if (this.sounding.has(name)) continue;
       const node = context.createBufferSource();
       node.buffer = buffer;
-      node.connect(context.destination);
+      node.connect(jingleOutput());
       const zero = context.currentTime - into;
       if (into < 0) node.start(zero);
       else node.start(context.currentTime, into);

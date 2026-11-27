@@ -65,13 +65,43 @@ type Drag =
         (contextmenu)="$event.preventDefault()"
       ></canvas>
     </div>
-    <p class="editor-hint muted">
-      @if (!peaks()) {
-        The waveform isn’t ready yet. You can still edit.
+    <div class="editor-transport" role="toolbar" aria-label="Playback">
+      <!-- The main button keeps the middle, whatever is either side of it. -->
+      <div class="editor-side start">
+        @if (playing()) {
+          <button type="button" class="editor-step" aria-label="Back to where playing started" title="Back to where playing started" (click)="replay()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2.5v14H5zM19.5 5v14L8.5 12z" /></svg>
+          </button>
+        } @else {
+          <button type="button" class="editor-step" aria-label="Play from the beginning" title="Play from the beginning" (click)="playFromBeginning()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2.5v14H5zM19.5 5v14L8.5 12z" /></svg>
+          </button>
+          <button type="button" class="editor-step" aria-label="Back a tenth of a second" (click)="nudge(-0.1)">−0.1</button>
+        }
+      </div>
+      @if (playing()) {
+        <button type="button" class="player-key editor-play" aria-label="Stop, back to where playing started" (pointerdown)="now($event, stop)" (click)="stop()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+        </button>
       } @else {
-        Drag to move · pinch to zoom · hold and drag to select
+        <button type="button" class="player-key editor-play" aria-label="Play edited recording" (click)="play()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5v15l12-7.5z" /></svg>
+        </button>
       }
-    </p>
+      <div class="editor-side end">
+        @if (playing()) {
+          <button type="button" class="editor-step" aria-label="Pause" title="Pause" (pointerdown)="now($event, pauseHere)" (click)="pauseHere()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
+          </button>
+        } @else {
+          <button type="button" class="editor-step" aria-label="Forward a tenth of a second" (click)="nudge(0.1)">+0.1</button>
+        }
+      </div>
+    </div>
+
+    @if (!peaks()) {
+      <p class="editor-hint muted">The waveform isn’t ready yet. You can still edit.</p>
+    }
 
     <div class="editor-tools" role="toolbar" aria-label="Cut">
       @if (mark() != null) {
@@ -119,40 +149,6 @@ type Drag =
           <button type="button" class="btn quiet editor-x" aria-label="Leave out the outro" title="Leave out the outro" (click)="removeMark('outroStart')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
         }
       </span>
-    </div>
-
-    <div class="editor-transport" role="toolbar" aria-label="Playback">
-      <!-- The main button keeps the middle, whatever is either side of it. -->
-      <div class="editor-side start">
-        @if (playing()) {
-          <button type="button" class="editor-step" aria-label="Back to where playing started" title="Back to where playing started" (click)="replay()">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2.5v14H5zM19.5 5v14L8.5 12z" /></svg>
-          </button>
-        } @else {
-          <button type="button" class="editor-step" aria-label="Play from the beginning" title="Play from the beginning" (click)="playFromBeginning()">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2.5v14H5zM19.5 5v14L8.5 12z" /></svg>
-          </button>
-          <button type="button" class="editor-step" aria-label="Back a tenth of a second" (click)="nudge(-0.1)">−0.1</button>
-        }
-      </div>
-      @if (playing()) {
-        <button type="button" class="player-key editor-play" aria-label="Stop, back to where playing started" (pointerdown)="now($event, stop)" (click)="stop()">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-        </button>
-      } @else {
-        <button type="button" class="player-key editor-play" aria-label="Play edited recording" (click)="play()">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5v15l12-7.5z" /></svg>
-        </button>
-      }
-      <div class="editor-side end">
-        @if (playing()) {
-          <button type="button" class="editor-step" aria-label="Pause" title="Pause" (pointerdown)="now($event, pauseHere)" (click)="pauseHere()">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
-          </button>
-        } @else {
-          <button type="button" class="editor-step" aria-label="Forward a tenth of a second" (click)="nudge(0.1)">+0.1</button>
-        }
-      </div>
     </div>
 
     @if (message()) {

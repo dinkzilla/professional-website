@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { CRITERIA, Movie, answered, blankMovie, fmt, matchesSearch, ranked, total, lastWatched } from './criteria';
 import { LookupHit, MovieLookup } from './movie-lookup';
@@ -6,7 +7,7 @@ import { Poster } from './poster';
 
 @Component({
   selector: 'app-movie-list',
-  imports: [Poster],
+  imports: [NgTemplateOutlet, Poster],
   template: `
     @if (store.status() === 'unavailable') {
       <p class="empty">The ratings can’t be reached right now. Check your connection and reload the page.</p>
@@ -115,7 +116,10 @@ import { Poster } from './poster';
                 <button type="button" class="card" (click)="open(m)">
                   <app-poster [url]="m.poster" [title]="m.title" [coal]="!m.recommend" thumb />
                   <span class="card-text">
-                    <strong>{{ m.title }}</strong>
+                    <strong>{{ m.title }}@if (m.released) {<span class="year"> ({{ m.released.slice(0, 4) }})</span>}</strong>
+                    @if (store.hasAudio().has(m.id)) {
+                      <span class="audio-note"><ng-container *ngTemplateOutlet="micIcon" />Audio Review</span>
+                    }
                     <span class="muted">{{ meta(m) }}</span>
                     <span class="tag">{{ progress(m) }}</span>
                   </span>
@@ -146,7 +150,10 @@ import { Poster } from './poster';
                   @if (sort() === 'score' && r.rank === 1) {
                     <span class="crown">★ Top of the tree</span>
                   }
-                  <strong>{{ m.title }}</strong>
+                  <strong>{{ m.title }}@if (m.released) {<span class="year"> ({{ m.released.slice(0, 4) }})</span>}</strong>
+                  @if (store.hasAudio().has(m.id)) {
+                    <span class="audio-note"><ng-container *ngTemplateOutlet="micIcon" />Audio Review</span>
+                  }
                   <span class="muted">{{ meta(m) }}</span>
                 </span>
                 @let angel = sort() === 'score' && r.rank === 1 && m.recommend;
@@ -205,6 +212,29 @@ import { Poster } from './poster';
         </ol>
       </section>
     }
+
+    <!-- A gold microphone tied with a bow, on a sprig of holly, in front of the Audio Review text. -->
+    <ng-template #micIcon>
+      <svg class="mic" viewBox="0 0 32 32" aria-hidden="true">
+        <g stroke="#14402f" stroke-width="1.2" stroke-linejoin="round">
+          <path fill="#1a7a4a" d="M15 27C11 29 6 29 3 26C5 25 5 23 4 21C8 20 12 22 15 27Z" />
+          <path fill="#1a7a4a" d="M17 27C21 29 26 29 29 26C27 25 27 23 28 21C24 20 20 22 17 27Z" />
+        </g>
+        <g fill="#c8102e" stroke="#7a0a1c" stroke-width="0.8">
+          <circle cx="13" cy="28.5" r="2" />
+          <circle cx="19" cy="28.5" r="2" />
+          <circle cx="16" cy="30" r="2" />
+        </g>
+        <path fill="none" stroke="#a8770f" stroke-width="2.4" stroke-linecap="round" d="M8 12.5a8 8 0 0 0 16 0M16 20.5v4.5" />
+        <rect x="11" y="1.5" width="10" height="16" rx="5" fill="#f4c542" stroke="#a8770f" stroke-width="1.4" />
+        <path fill="none" stroke="#a8770f" stroke-width="1" stroke-linecap="round" d="M13.5 5.5h5M13 8.5h6M13 11.5h6M13.5 14.5h5" />
+        <g fill="#e0304e" stroke="#7a0a1c" stroke-width="0.9" stroke-linejoin="round">
+          <path d="M16 22C13 19 9.5 19.5 9.5 21.5C9.5 23.5 13 24 16 22Z" />
+          <path d="M16 22C19 19 22.5 19.5 22.5 21.5C22.5 23.5 19 24 16 22Z" />
+          <circle cx="16" cy="22" r="1.6" />
+        </g>
+      </svg>
+    </ng-template>
   `,
 })
 export class MovieList {

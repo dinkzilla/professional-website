@@ -18,8 +18,12 @@ service firebase.storage {
     }
 
     // Published versions' files, made by the backend (functions/). It writes them; nobody else can.
+    // Everyone can hear a finished one. The file, <episode>.m4a, is uploaded before its episode is
+    // marked done, so it's the episode in Firestore that says whether it's finished.
     match /movies/{movie}/published/{file} {
-      allow read, delete: if isEditor();
+      allow read: if isEditor()
+        || firestore.get(/databases/(default)/documents/movies/$(movie)/published/$(file.split('\\.')[0])).data.status == 'done';
+      allow delete: if isEditor();
     }
   }
 }

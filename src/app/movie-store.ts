@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, collectionGroup, deleteDoc, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { AuthService } from './auth';
 import { Movie, MovieData, normalize } from './criteria';
 import { firestore } from './firebase';
@@ -60,6 +60,9 @@ export class MovieStore {
   readonly sort = signal<'score' | 'date' | 'watches'>('score');
   readonly network = signal('');
 
+  /** The movies with a finished, published audio review, by id. Empty without Firebase. */
+  readonly hasAudio = signal<ReadonlySet<string>>(new Set());
+
   private readonly db = firestore;
 
   constructor() {
@@ -117,6 +120,13 @@ export class MovieStore {
       this.status.set('ready');
       return;
     }
+    // Only finished episodes are public, and rules aren't filters, so the query has to ask for just those.
+    // Without them the badges just don't show: they're not worth an error.
+    onSnapshot(
+      query(collectionGroup(db, 'published'), where('status', '==', 'done')),
+      (snap) => this.hasAudio.set(new Set(snap.docs.map((d) => d.ref.parent.parent!.id))),
+      () => {},
+    );
     const remembered = this.readMovies(SNAPSHOT_KEY);
     if (remembered.length) {
       this.saved.set(remembered);

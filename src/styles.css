@@ -1394,6 +1394,13 @@ input[type='password'] {
   font: 700 1.0625rem/1.25 var(--font-display);
   overflow-wrap: anywhere;
 }
+/* The release year trails the title, quieter than the title itself. */
+.card-text .year {
+  font-size: 0.8em;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+}
 /* The rank is a heart pinned to the tile's corner. Its outline is the shape's own stroke. */
 .rank {
   position: absolute;
@@ -1419,6 +1426,22 @@ input[type='password'] {
   stroke: var(--surface);
   stroke-width: 3.4px;
   paint-order: stroke;
+}
+/* A published audio review: its own line, ending in a gold microphone on holly. */
+.audio-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: light-dark(var(--holly), var(--accent));
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.mic {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-block: -3px;
+  filter: drop-shadow(0 1px 1px rgba(20, 5, 31, 0.25));
 }
 .crown {
   font-size: 0.75rem;
@@ -1523,6 +1546,7 @@ input[type='password'] {
     grid-template:
       'poster crown crown' auto
       'poster title title' auto
+      'poster audio audio' auto
       'poster meta score' 1fr / auto minmax(0, 1fr) auto;
     gap: 2px 12px;
     align-items: start;
@@ -1543,6 +1567,9 @@ input[type='password'] {
   }
   .champ .card-text .muted {
     grid-area: meta;
+  }
+  .champ .audio-note {
+    grid-area: audio;
   }
   .champ .score {
     grid-area: score;
@@ -2851,6 +2878,197 @@ html.editing body {
       translate 0.07s ease-out,
       box-shadow 0.07s ease-out;
   }
+}
+
+/* The published audio reviews' player: a pine garland docked along the bottom of the screen, gold-trimmed and
+   strung with the tiles' lights, with a red bauble to play and candy canes to step between reviews. It's the
+   same deep green in both themes, like a garland. */
+.dock {
+  position: fixed;
+  left: 50%;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  width: min(40rem, 100% - 16px);
+  translate: -50% 0;
+  border: 2px solid #c9982a;
+  border-radius: 22px;
+  background:
+    repeating-linear-gradient(60deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(-60deg, rgba(0, 0, 0, 0.08) 0 2px, transparent 2px 7px),
+    linear-gradient(#1f6043, #0e3925);
+  box-shadow:
+    0 0 0 3px rgba(255, 233, 163, 0.35),
+    0 10px 24px -6px rgba(20, 5, 31, 0.55);
+  color: #fff6e0;
+}
+/* The lights hang along its top, inside the trim. */
+.dock .lights {
+  inset: -3px 22px auto;
+}
+.dock-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 12px 12px;
+}
+/* The play key is a red glass ball, cap and all, like the tiles' scores. */
+.dock-play {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+.dock-play::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -14px -13px -23px;
+  background: var(--ball-red) 0 0 / 100% 100% no-repeat;
+}
+.dock-play svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+.dock-play:active {
+  scale: 0.94;
+}
+.dock-play:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.dock-body {
+  flex: 1;
+  min-width: 0;
+}
+.dock-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  margin: 0;
+}
+.dock-title strong {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 1rem/1.3 var(--font-display);
+}
+.dock-sub {
+  font-size: 0.8125rem;
+  color: rgba(255, 246, 224, 0.78);
+}
+.dock-problem {
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+  color: #ffd0d6;
+}
+.dock-scrub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dock-time {
+  flex: none;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: rgba(255, 246, 224, 0.85);
+}
+/* What's been played is striped like a candy cane; the thumb is a gold star.
+   The bar is drawn by .dock-bar, not the range track: a native thumb's center can't reach the
+   track's ends, so the invisible input reaches 13px (half the 26px star) past each end of the bar,
+   and the star sits right on the bar's start at 0:00 and on its end when finished.
+   --done is the fraction played. */
+.dock-bar {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  margin: 0 13px;
+}
+.dock-bar::before,
+.dock-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  height: 8px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+.dock-bar::before {
+  right: 0;
+  background: rgba(255, 246, 224, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.dock-bar::after {
+  width: calc(100% * var(--done, 0));
+  background: repeating-linear-gradient(-45deg, #fff 0 5px, #d42a3c 5px 10px);
+}
+.dock-scrub input {
+  position: absolute;
+  inset: 0 -13px;
+  z-index: 1;
+  width: calc(100% + 26px);
+  height: 28px;
+  margin: 0;
+  background: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.dock-scrub input:disabled {
+  cursor: default;
+}
+.dock-bar:has(input:disabled) {
+  opacity: 0.6;
+}
+.dock-scrub input:focus-visible {
+  outline: 2px solid #ffd84a;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.dock-scrub input::-webkit-slider-runnable-track {
+  height: 8px;
+  background: none;
+}
+.dock-scrub input::-moz-range-track {
+  height: 8px;
+  background: none;
+}
+.dock-scrub input::-webkit-slider-thumb {
+  width: 26px;
+  height: 26px;
+  margin-top: -9px;
+  border: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1.5l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.6l-6.4 3.5L7 14l-5.3-5 7.2-.9z' fill='%23ffd84a' stroke='%23a8770f' stroke-width='1.3' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+  -webkit-appearance: none;
+  appearance: none;
+}
+.dock-scrub input::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1.5l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.6l-6.4 3.5L7 14l-5.3-5 7.2-.9z' fill='%23ffd84a' stroke='%23a8770f' stroke-width='1.3' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+}
+/* Room at the foot of the page, so nothing ends up under the dock. */
+:root:has(.dock) .foot {
+  padding-bottom: calc(136px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Icons sprayed across the screen when a score button is pressed */

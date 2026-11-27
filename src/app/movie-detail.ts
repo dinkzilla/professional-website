@@ -2,13 +2,14 @@ import { Component, computed, inject, input, linkedSignal, signal } from '@angul
 import { AuthService } from './auth';
 import { BASE, CRITERIA, Criterion, answered, choiceColor, fmt, fmtDate, groupStart, ranked, total } from './criteria';
 import { MovieStore } from './movie-store';
+import { EpisodePlayer } from './episode-player';
 import { Poster } from './poster';
 import { RatingIcons } from './rating-icons';
 import { Thermometer } from './thermometer';
 
 @Component({
   selector: 'app-movie-detail',
-  imports: [Poster, RatingIcons, Thermometer],
+  imports: [EpisodePlayer, Poster, RatingIcons, Thermometer],
   template: `
     @if (movie(); as m) {
       <article class="detail">
@@ -102,6 +103,9 @@ import { Thermometer } from './thermometer';
             }
           </div>
         }
+
+        <!-- Docked to the bottom of the screen, wherever the page is scrolled to. -->
+        <app-episode-player [movieId]="m.id" />
       </article>
     } @else if (store.status() === 'unavailable') {
       <p class="empty">The ratings can’t be reached right now. Check your connection and reload the page.</p>

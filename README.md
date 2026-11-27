@@ -86,7 +86,7 @@ ng serve
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 
-To see Kiki's side without signing in, open `/kiki` on the local server and choose **Preview as Kiki**. It shows the live movies with all her controls, but changes stay in the page and go away on reload. Recordings made then can be edited, with their waveform worked out in the browser, but not published. It lasts until you stop it or close the tab, and the production build turns it off. Movie search uses the key in `public/tmdb-key.txt`.
+To see Kiki's side without signing in, open `/kiki` on the local server and choose **Preview as Kiki**. It shows the live movies with all her controls, but changes stay in the page and go away on reload. Recordings made then can be edited, with their waveform worked out in the browser, but not published. It lasts until you stop it or close the tab, and the production build turns it off. The live site's published versions and the recordings they came from, with their edits and intro and outro marks, are copied into `seed/audio.json` and `seed/audio/` by `npm run pull-seed-audio -- <project-id>` (it only reads from the live site), and are listed there too. Only the development build serves them; the production build leaves them out, and Hosting skips `seed/` anyway. Movie search uses the key in `public/tmdb-key.txt`.
 
 ## Code scaffolding
 

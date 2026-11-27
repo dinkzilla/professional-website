@@ -226,5 +226,41 @@
       "Tom Cavanagh"
     ],
     "addedAt": "2026-11-16T00:00:00.000Z"
+  },
+  {
+    "id": "the-princess-switch",
+    "watched": [
+      "2026-11-25"
+    ],
+    "recommend": true,
+    "title": "The Princess Switch",
+    "scores": {
+      "kisses": 2,
+      "saved": 0,
+      "couples": 3,
+      "originality": 3,
+      "soundtrack": 0,
+      "decor": 5,
+      "cheese": 4,
+      "traditions": 2,
+      "accents": 4,
+      "better": 2,
+      "celebrity": 2,
+      "horny": 1
+    },
+    "poster": "https://image.tmdb.org/t/p/w342/A8XgZE8CsHiYN243MEd07GLCep.jpg",
+    "addedAt": "2026-11-26T04:11:43.245Z",
+    "released": "2018-10-25",
+    "network": "Netflix",
+    "stars": [
+      "Vanessa Hudgens",
+      "Sam Palladio"
+    ],
+    "director": "Mike Rohl",
+    "viewers": [
+      "Kiki",
+      "Matt"
+    ],
+    "overview": "When a down-to-earth Chicago baker and a soon-to-be princess discover they look like twins, they hatch a Christmastime plan to trade places."
   }
 ]

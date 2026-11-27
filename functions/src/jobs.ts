@@ -6,7 +6,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { PEAKS_PER_SECOND, peaks } from './peaks.js';
 import { JINGLES, jinglePath, mixOffsets, wavSeconds } from './mix.js';
-import { Track, cleanSegments, render } from './render.js';
+import { Track, cleanSegments, levelTracks, render } from './render.js';
 
 /** Where recordings are kept: movies/<movie>/recordings/<recording>.<extension>, named the same as their details' document. */
 export const RECORDING = /^movies\/([^/]+)\/recordings\/([^/.]+)(\.[a-z0-9]+)?$/;
@@ -109,7 +109,7 @@ export async function renderPublished(movie: string, episode: string) {
         const whole = [{ start: 0, end: null }];
         if (intro && at.introAt != null) tracks.push({ file: intro.file, segments: whole, offset: at.introAt });
         if (outro && at.outroAt != null) tracks.push({ file: outro.file, segments: whole, offset: at.outroAt });
-        const seconds = await render(tracks, output);
+        const seconds = await render(await levelTracks(tracks), output);
         const { size } = await stat(output);
         await bucket.upload(output, {
           destination: out,

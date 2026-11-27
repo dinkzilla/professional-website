@@ -9,7 +9,8 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "seed": "node scripts/seed-firestore.mjs",
-    "deploy": "ng build && firebase deploy"
+    "deploy": "ng build && firebase deploy",
+    "pull-seed-audio": "node scripts/pull-seed-audio.mjs"
   },
   "private": true,
   "packageManager": "npm@11.9.0",

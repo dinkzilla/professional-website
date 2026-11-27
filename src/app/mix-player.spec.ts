@@ -5,6 +5,7 @@ const context = {
   state: 'running',
   destination: {},
   resume: () => Promise.resolve(),
+  createGain: () => ({ gain: { value: 1 }, connect: () => {} }),
   createBufferSource() {
     const node = {
       buffer: null as { duration: number } | null,
