@@ -57,8 +57,10 @@ export class MovieStore {
   /** What's typed in the list's search box, kept here so it survives opening a movie and coming back. */
   readonly search = signal('');
   /** How the list is sorted, and the network it's filtered to or ''. Kept here for the same reason. */
-  readonly sort = signal<'score' | 'date' | 'watches'>('score');
+  readonly sort = signal<'score' | 'date' | 'watches' | 'released'>('score');
   readonly network = signal('');
+  /** Whether the list is filtered to movies with an audio review. Picked instead of a network, never alongside one. */
+  readonly audioOnly = signal(false);
 
   /** The movies with a finished, published audio review, by id. Empty without Firebase. */
   readonly hasAudio = signal<ReadonlySet<string>>(new Set());

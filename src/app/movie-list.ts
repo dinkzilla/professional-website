@@ -42,15 +42,20 @@ import { Poster } from './poster';
         <p class="muted" role="status">{{ found() }}</p>
       </div>
 
-      @if (networks().length > 1 || rated().length) {
+      @if (filterable() || rated().length) {
         <div class="section-head">
-          @if (networks().length > 1) {
+          @if (filterable()) {
             <div class="tray" role="group" aria-labelledby="filter-label">
               <span class="tray-tag" id="filter-label">Filter</span>
               <div class="tray-keys">
-                <button type="button" class="chip" [class.on]="!network()" [attr.aria-pressed]="!network()" (click)="store.network.set('')">All</button>
-                @for (n of networks(); track n) {
-                  <button type="button" class="chip" [class.on]="network() === n" [attr.aria-pressed]="network() === n" (click)="store.network.set(n)">{{ n }}</button>
+                <button type="button" class="chip" [class.on]="!network() && !audioOnly()" [attr.aria-pressed]="!network() && !audioOnly()" (click)="pickNetwork('')">All</button>
+                @if (anyAudio()) {
+                  <button type="button" class="chip" [class.on]="audioOnly()" [attr.aria-pressed]="audioOnly()" (click)="pickAudio()">Audio Review</button>
+                }
+                @if (networks().length > 1) {
+                  @for (n of networks(); track n) {
+                    <button type="button" class="chip" [class.on]="network() === n" [attr.aria-pressed]="network() === n" (click)="pickNetwork(n)">{{ n }}</button>
+                  }
                 }
               </div>
             </div>
@@ -61,7 +66,8 @@ import { Poster } from './poster';
               <div class="tray-keys">
                 <button type="button" class="chip" [class.on]="sort() === 'score'" [attr.aria-pressed]="sort() === 'score'" (click)="sort.set('score')">Top score</button>
                 <button type="button" class="chip" [class.on]="sort() === 'date'" [attr.aria-pressed]="sort() === 'date'" (click)="sort.set('date')">Latest</button>
-                <button type="button" class="chip" [class.on]="sort() === 'watches'" [attr.aria-pressed]="sort() === 'watches'" (click)="sort.set('watches')">Most watched</button>
+                <button type="button" class="chip" [class.on]="sort() === 'watches'" [attr.aria-pressed]="sort() === 'watches'" (click)="sort.set('watches')">Most Watched</button>
+                <button type="button" class="chip" [class.on]="sort() === 'released'" [attr.aria-pressed]="sort() === 'released'" (click)="sort.set('released')">Release Date</button>
               </div>
             </div>
           }
@@ -264,10 +270,27 @@ export class MovieList {
     [...new Set(this.listed().map((m) => m.network).filter(Boolean))].sort(),
   );
 
+  /** Whether any listed movie has an audio review, so its filter chip is worth showing. */
+  protected readonly anyAudio = computed(() => this.listed().some((m) => this.store.hasAudio().has(m.id)));
+  /** The audio review filter, or false while its chip isn't showing. */
+  protected readonly audioOnly = computed(() => this.anyAudio() && this.store.audioOnly());
+  protected readonly filterable = computed(() => this.networks().length > 1 || this.anyAudio());
+
   private readonly visible = computed(() => {
     const n = this.network();
-    return this.listed().filter((m) => !n || m.network === n);
+    const audio = this.audioOnly();
+    return this.listed().filter((m) => (!n || m.network === n) && (!audio || this.store.hasAudio().has(m.id)));
   });
+
+  protected pickNetwork(n: string) {
+    this.store.network.set(n);
+    this.store.audioOnly.set(false);
+  }
+
+  protected pickAudio() {
+    this.store.network.set('');
+    this.store.audioOnly.set(true);
+  }
 
   protected readonly toRate = computed(() =>
     this.visible()
@@ -280,6 +303,8 @@ export class MovieList {
     if (this.sort() === 'date') done.sort((a, b) => (lastWatched(b) || '0').localeCompare(lastWatched(a) || '0'));
     // A rated movie with no dates was still watched once. Movies watched equally often stay in score order.
     if (this.sort() === 'watches') done.sort((a, b) => Math.max(1, b.watched.length) - Math.max(1, a.watched.length));
+    // Newest first; movies with no release date go last. Movies released the same day stay in score order.
+    if (this.sort() === 'released') done.sort((a, b) => (b.released || '0').localeCompare(a.released || '0'));
     // Ranked before searching, so a movie found by search keeps its place in the full list.
     return done.map((movie, i) => ({ movie, rank: i + 1 })).filter((r) => matchesSearch(r.movie, this.store.search()));
   });
@@ -290,8 +315,9 @@ export class MovieList {
     if (!q) return '';
     const n = this.toRate().length + this.rated().length;
     const kind = this.network() ? this.network() + ' ' : '';
-    if (!n) return `No ${kind}movies match “${q}”.`;
-    return n === 1 ? `1 ${kind}movie found` : `${n} ${kind}movies found`;
+    const audio = this.audioOnly() ? ' with an Audio Review' : '';
+    if (!n) return `No ${kind}movies${audio} match “${q}”.`;
+    return n === 1 ? `1 ${kind}movie${audio} found` : `${n} ${kind}movies${audio} found`;
   });
 
   protected score(m: Movie) {
@@ -368,8 +394,8 @@ export class MovieList {
     if (id) {
       // Also calls off a search still under way, whose results would turn up after the movie was added.
       this.onQuery('');
-      // The filter would hide the movie just added.
-      if (data.network !== this.network()) this.store.network.set('');
+      // The filter would hide the movie just added, which has no audio review yet.
+      if (data.network !== this.network() || this.audioOnly()) this.pickNetwork('');
     }
   }
 }
