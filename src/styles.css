@@ -1998,7 +1998,6 @@ app-thermometer {
 }
 .thermo span {
   max-width: 100%;
-  overflow-wrap: break-word;
 }
 .thermo b {
   font-size: 0.9375rem;
