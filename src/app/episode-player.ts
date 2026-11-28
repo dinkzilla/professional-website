@@ -12,8 +12,12 @@ import { Published, ReviewStore } from './review-store';
   selector: 'app-episode-player',
   template: `
     @if (current(); as ep) {
-      <div class="dock" role="region" aria-label="Audio review player">
-        <span class="lights" aria-hidden="true"></span>
+      <div class="dock" [class.on]="!paused()" role="region" aria-label="Audio review player">
+        <span class="dock-wreath" aria-hidden="true"></span>
+        <span class="dock-lit" aria-hidden="true"></span>
+        <svg class="dock-bow" viewBox="0 0 68 54" aria-hidden="true">
+          <g stroke="#a8770f" stroke-width="2" stroke-linejoin="round"><path fill="#e0a526" d="M31 24L18 50L26 46L31 52L36 28Z"/><path fill="#e0a526" d="M37 24L50 50L42 46L37 52L32 28Z"/><path fill="#f4c542" d="M34 20C24 4 6 2 4 10C2 20 4 32 10 33C18 34 28 28 34 22Z"/><path fill="#f4c542" d="M34 20C44 4 62 2 64 10C66 20 64 32 58 33C50 34 40 28 34 22Z"/><path fill="none" d="M12 12Q20 16 28 20M56 12Q48 16 40 20"/><rect x="27" y="14" width="14" height="15" rx="5" fill="#ffdd7a"/></g>
+        </svg>
         <audio
           #audio
           preload="metadata"
