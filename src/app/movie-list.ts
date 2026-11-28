@@ -301,7 +301,14 @@ export class MovieList {
 
   protected readonly rated = computed(() => {
     const done = ranked(this.visible());
-    if (this.sort() === 'date') done.sort((a, b) => (lastWatched(b) || '0').localeCompare(lastWatched(a) || '0'));
+    // Movies with an audio review first, newest published first; then the rest by when they were last watched;
+    // then any with neither. Each group's dates are only compared with each other, and ties stay in score order.
+    if (this.sort() === 'date') {
+      const audio = this.store.hasAudio();
+      const group = (m: Movie) => (audio.has(m.id) ? 0 : lastWatched(m) ? 1 : 2);
+      const when = (m: Movie) => audio.get(m.id) || lastWatched(m);
+      done.sort((a, b) => group(a) - group(b) || when(b).localeCompare(when(a)));
+    }
     // A rated movie with no dates was still watched once. Movies watched equally often stay in score order.
     if (this.sort() === 'watches') done.sort((a, b) => Math.max(1, b.watched.length) - Math.max(1, a.watched.length));
     // Newest first; movies with no release date go last. Movies released the same day stay in score order.

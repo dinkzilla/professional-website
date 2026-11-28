@@ -2,10 +2,10 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // The one Google account that may change anything. Must match EDITOR_EMAIL in src/app/firebase.ts, and storage.rules.
+    // The Google accounts that may change anything. Must match EDITOR_EMAILS in src/app/firebase.ts, and storage.rules.
     function isEditor() {
       return request.auth != null
-        && request.auth.token.email == 'venablekd@gmail.com'
+        && request.auth.token.email in ['venablekd@gmail.com', 'dinkzilla@gmail.com']
         && request.auth.token.email_verified == true;
     }
 

@@ -5,7 +5,7 @@ Ratings for holiday romance movies. Anyone can view them; only Kiki can add, rat
 ## How access works
 
 - Movies live in the Firestore collection `movies`, read live by every visitor.
-- `firestore.rules` lets anyone read and only a verified `venablekd@gmail.com` Google sign-in write. That rule is the real protection; the app just hides the controls from everyone else.
+- `firestore.rules` lets anyone read and only a verified `venablekd@gmail.com` or `dinkzilla@gmail.com` Google sign-in write. That rule is the real protection; the app just hides the controls from everyone else.
 - A movie's id is made from its title when it's added (`a-danish-christmas`), and stays the same if the title changes.
 - Kiki's audio reviews are files in Cloud Storage at `movies/<id>/recordings/`, with their details in the Firestore subcollection `movies/<id>/recordings`. Only Kiki can read or change either (`storage.rules` and `firestore.rules`).
 - Published versions of them are files at `movies/<id>/published/`, with their details in `movies/<id>/published`. Both kinds of file are named for the movie and when they were made, like `a-danish-christmas-2026-11-27-1430.m4a`. Recordings' waveforms are in `movies/<id>/waveforms`, one document each, named the same as its recording. Only Kiki can see these for now, and only the backend makes them.

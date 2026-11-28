@@ -62,8 +62,8 @@ export class MovieStore {
   /** Whether the list is filtered to movies with an audio review. Picked instead of a network, never alongside one. */
   readonly audioOnly = signal(false);
 
-  /** The movies with a finished, published audio review, by id. Empty without Firebase. */
-  readonly hasAudio = signal<ReadonlySet<string>>(new Set());
+  /** The movies with a finished, published audio review: movie id to when its newest one was published. Empty without Firebase. */
+  readonly hasAudio = signal<ReadonlyMap<string, string>>(new Map());
 
   private readonly db = firestore;
 
@@ -126,7 +126,15 @@ export class MovieStore {
     // Without them the badges just don't show: they're not worth an error.
     onSnapshot(
       query(collectionGroup(db, 'published'), where('status', '==', 'done')),
-      (snap) => this.hasAudio.set(new Set(snap.docs.map((d) => d.ref.parent.parent!.id))),
+      (snap) => {
+        const newest = new Map<string, string>();
+        for (const d of snap.docs) {
+          const id = d.ref.parent.parent!.id;
+          const at = String(d.get('publishedAt') || d.get('createdAt') || '');
+          if (!newest.has(id) || at > newest.get(id)!) newest.set(id, at);
+        }
+        this.hasAudio.set(newest);
+      },
       () => {},
     );
     const remembered = this.readMovies(SNAPSHOT_KEY);

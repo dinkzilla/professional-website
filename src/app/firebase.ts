@@ -16,8 +16,8 @@ export const firebaseConfig = {
   measurementId: 'G-J8QJXVYF51',
 };
 
-/** The one Google account allowed to add, edit and delete. Must match firestore.rules and storage.rules. */
-export const EDITOR_EMAIL = 'venablekd@gmail.com';
+/** The Google accounts allowed to add, edit and delete, Kiki's first. Must match firestore.rules and storage.rules. */
+export const EDITOR_EMAILS = ['venablekd@gmail.com', 'dinkzilla@gmail.com'];
 
 /** False until the settings above are filled in; the app then keeps everything in this browser. */
 export const firebaseReady = !!firebaseConfig.apiKey && !!firebaseConfig.projectId;

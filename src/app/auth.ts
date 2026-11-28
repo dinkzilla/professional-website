@@ -12,7 +12,7 @@ import {
   signInWithPopup,
   signOut,
 } from 'firebase/auth';
-import { EDITOR_EMAIL, firebaseApp } from './firebase';
+import { EDITOR_EMAILS, firebaseApp } from './firebase';
 import { viewFor } from './routes';
 
 // Set by the Angular build: false in production.
@@ -43,11 +43,11 @@ function startAuth(app: NonNullable<typeof firebaseApp>): Auth {
 }
 
 function isEditorUser(user: User | null): boolean {
-  return !!user?.emailVerified && user.email?.toLowerCase() === EDITOR_EMAIL;
+  return !!user?.emailVerified && EDITOR_EMAILS.includes(user.email?.toLowerCase() ?? '');
 }
 
 /**
- * Google sign-in. Only EDITOR_EMAIL stays signed in; any other account is
+ * Google sign-in. Only EDITOR_EMAILS stay signed in; any other account is
  * signed straight back out. This only decides which controls are shown:
  * firestore.rules is what actually stops anyone else from changing the list.
  */
@@ -101,7 +101,7 @@ export class AuthService {
     this.busy.set(true);
     try {
       const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ login_hint: EDITOR_EMAIL, prompt: 'select_account' });
+      provider.setCustomParameters({ login_hint: EDITOR_EMAILS[0], prompt: 'select_account' });
       const { user } = await signInWithPopup(this.auth, provider, browserPopupRedirectResolver);
       return isEditorUser(user);
     } catch (e: any) {
