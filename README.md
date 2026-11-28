@@ -15,7 +15,7 @@ Ratings for holiday romance movies. Anyone can view them; only Kiki can add, rat
 
 ## One-time Firebase setup
 
-1. Create a project at <https://console.firebase.google.com> (no Analytics needed).
+1. Create a project at <https://console.firebase.google.com>.
 2. Build → Authentication → Sign-in method: enable **Google**.
 3. Build → Firestore Database: create a database in production mode.
 4. Project settings → Your apps → add a **Web** app, and paste its `apiKey`, `authDomain`, `projectId`, `storageBucket` and `appId` into `src/app/firebase.ts`.
@@ -135,3 +135,26 @@ Angular CLI does not come with an end-to-end testing framework by default. You c
 ## Additional Resources
 
 For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+
+## Search engines
+
+Movie cards on the list are real links to `/movie/<id>`, so search engines can find each movie's page. `/sitemap.xml` lists `https://yuleswoon.com/` and every fully rated movie. It's made by the `sitemap` Cloud Function (`functions/src/sitemap.ts`, sent there by `firebase.json`) straight from Firestore, so new ratings show up without a deploy, at most an hour late. `public/robots.txt` points search engines to it. The function keeps its own list of the rating criteria; `src/app/sitemap.spec.ts` fails if it no longer matches `src/app/criteria.ts`.
+
+## Traffic analytics
+
+The site sends visits and listening to Google Analytics through Firebase (`src/app/analytics.ts`). Kiki's own visits aren't counted: nothing is sent while she's signed in, or while previewing as her. `ng serve` prints events to the browser console (`[analytics]`, at the Verbose level) instead of sending them.
+
+To turn it on, open Project settings → Integrations → Google Analytics in the Firebase console, link or create an Analytics property, and deploy. The app reads the property from Firebase, so `src/app/firebase.ts` needs no change.
+
+What's sent:
+
+- `page_view` for each view: the list, a movie (`/movie/<id>`, titled with the movie) and sign-in.
+- `list_options` when the list's filter or sort changes, with `sort` and `filter`.
+- For audio reviews, each with `podcast_id`, `podcast_title`, `movie_id`, `movie_title` and `duration_sec`:
+  - `podcast_start` when a listen starts, with `play_count` (how many times this browser has started this review) and `replay` (whether it's more than once). Pausing and carrying on is one listen. Starting again after the end, or on another visit, is another.
+  - `podcast_progress` at each tenth heard during a listen, with `percent` (10–90). Only steady playing counts, so skipping ahead doesn't. Dividing each `percent`'s count by the starts shows how far people listen.
+  - `podcast_complete` when the end is reached.
+  - `podcast_seek` when the slider is moved by more than two seconds, with `direction` (`back` or `forward`), `from_sec`, `to_sec`, `from_percent` and `to_percent`. Going back shows what gets heard again; going forward shows what gets skipped.
+
+Analytics reports show event parameters only once they're registered: Analytics → Admin → Custom definitions → Create custom dimension, event-scoped, for `podcast_title`, `movie_title`, `percent`, `direction`, `to_percent`, `play_count`, `replay`, `sort` and `filter`. They count only from when they're registered. Explore → Free form, with event name and `percent` as rows and event count as the value, filtered to one `podcast_title`, gives the drop-off curve. Linking BigQuery (Admin → BigQuery links) keeps every event with all its parameters, registered or not.
+

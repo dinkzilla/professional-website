@@ -1,4 +1,5 @@
 import { Component, DestroyRef, ElementRef, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
+import { AnalyticsService } from './analytics';
 import { clock } from './audio-edit';
 import { fmtDate } from './criteria';
 import { Published, ReviewStore } from './review-store';
@@ -17,9 +18,9 @@ import { Published, ReviewStore } from './review-store';
           #audio
           preload="metadata"
           [attr.src]="src() || null"
-          (play)="paused.set(false)"
+          (play)="played()"
           (pause)="paused.set(true)"
-          (timeupdate)="position.set(audio.currentTime)"
+          (timeupdate)="timeUpdate(audio.currentTime)"
           (durationchange)="onDuration(audio.duration)"
           (ended)="ended()"
           (error)="src() && failed.set(true)"
@@ -77,6 +78,7 @@ import { Published, ReviewStore } from './review-store';
 })
 export class EpisodePlayer {
   private readonly store = inject(ReviewStore);
+  private readonly analytics = inject(AnalyticsService);
   readonly movieId = input.required<string>();
 
   protected readonly clock = clock;
@@ -118,6 +120,7 @@ export class EpisodePlayer {
         this.position.set(0);
         this.duration.set(0);
         this.failed.set(false);
+        this.listening = false;
         if (!ep) return;
         const ask = ++asked;
         this.store.url(ep).then(
@@ -151,8 +154,13 @@ export class EpisodePlayer {
   protected seek(value: string) {
     const a = this.audio()?.nativeElement;
     if (!a) return;
+    this.seekFrom ??= this.position();
+    this.heard = NaN;
     a.currentTime = +value;
     this.position.set(+value);
+    // Dragging the slider seeks many times; it's counted once, from where it was picked up to where it was let go.
+    clearTimeout(this.seekTimer);
+    this.seekTimer = setTimeout(() => this.seeked(+value), 800);
   }
 
   protected onDuration(d: number) {
@@ -160,9 +168,93 @@ export class EpisodePlayer {
   }
 
   protected ended() {
+    if (this.listening) this.analytics.log('podcast_complete', this.about());
+    this.listening = false;
     const a = this.audio()?.nativeElement;
     if (a) a.currentTime = 0;
     this.position.set(0);
     this.paused.set(true);
+  }
+
+  // What's sent to Analytics. A listen starts with the first play and lasts until the end is reached, so pausing
+  // and carrying on is one listen, and playing it again after the end, or on another visit, is another.
+  // Each listen sends podcast_start, then podcast_progress at every tenth heard, then podcast_complete.
+
+  /** Whether a listen is under way. */
+  private listening = false;
+  /** The tenths heard so far in this listen. */
+  private reached = new Set<number>();
+  /** Where it was last heard playing, or NaN just after a seek, so jumping ahead isn't counted as hearing it. */
+  private heard = NaN;
+  private seekFrom: number | undefined;
+  private seekTimer: ReturnType<typeof setTimeout> | undefined;
+
+  protected played() {
+    this.paused.set(false);
+    if (this.listening) return;
+    const ep = this.current();
+    if (!ep) return;
+    this.listening = true;
+    this.reached.clear();
+    this.heard = NaN;
+    const count = countPlay(ep.id);
+    this.analytics.log('podcast_start', { ...this.about(), play_count: count, replay: count > 1 });
+  }
+
+  protected timeUpdate(t: number) {
+    this.position.set(t);
+    const len = this.length();
+    const was = this.heard;
+    this.heard = t;
+    // Only steady playing counts: a seek, or the clock jumping more than a few seconds, doesn't.
+    if (!this.listening || !len || !(t > was && t - was < 3)) return;
+    for (let tenth = 1; tenth <= 9; tenth++) {
+      const at = (len * tenth) / 10;
+      if (was < at && t >= at && !this.reached.has(tenth)) {
+        this.reached.add(tenth);
+        this.analytics.log('podcast_progress', { ...this.about(), percent: tenth * 10 });
+      }
+    }
+  }
+
+  private seeked(to: number) {
+    const from = this.seekFrom ?? to;
+    this.seekFrom = undefined;
+    const len = this.length();
+    if (!len || Math.abs(to - from) < 2) return;
+    this.analytics.log('podcast_seek', {
+      ...this.about(),
+      direction: to < from ? 'back' : 'forward',
+      from_sec: Math.round(from),
+      to_sec: Math.round(to),
+      from_percent: Math.round((from / len) * 100),
+      to_percent: Math.round((to / len) * 100),
+    });
+  }
+
+  /** Which review, for every event about it. */
+  private about() {
+    const ep = this.current()!;
+    return {
+      podcast_id: ep.id,
+      podcast_title: this.title(ep),
+      movie_id: ep.movieId,
+      movie_title: ep.movieTitle,
+      duration_sec: Math.round(this.length()),
+    };
+  }
+}
+
+const PLAYS_KEY = 'yule-swoon-plays';
+
+/** How many times this browser has started a review, this time included. */
+function countPlay(id: string): number {
+  try {
+    const plays: Record<string, number> = JSON.parse(localStorage.getItem(PLAYS_KEY) || '{}');
+    plays[id] = (plays[id] || 0) + 1;
+    localStorage.setItem(PLAYS_KEY, JSON.stringify(plays));
+    return plays[id];
+  } catch {
+    return 1;
   }
 }

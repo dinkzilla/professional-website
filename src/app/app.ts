@@ -1,4 +1,5 @@
 import { Component, computed, inject } from '@angular/core';
+import { AnalyticsService } from './analytics';
 import { AuthService } from './auth';
 import { MovieDetail } from './movie-detail';
 import { MovieForm } from './movie-form';
@@ -85,6 +86,8 @@ export class App {
   protected readonly theme = inject(ThemeService);
   protected readonly view = this.store.view;
   private readonly reviews = inject(ReviewStore);
+  /** Started here so every view is counted, whichever is opened first. */
+  private readonly analytics = inject(AnalyticsService);
   /**
    * A recording that failed to save after its form was left. Not mentioned on any form: its own has a row for
    * it, and going to it from another movie's would swap the movie out from under what's been filled in.

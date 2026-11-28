@@ -12,6 +12,8 @@ export const firebaseConfig = {
   projectId: 'yule-swoon',
   storageBucket: 'yule-swoon.firebasestorage.app',
   appId: '1:842316071349:web:f7c7df4c543dd7f3b459fc',
+  /** The Google Analytics data stream, used by analytics.ts. */
+  measurementId: 'G-J8QJXVYF51',
 };
 
 /** The one Google account allowed to add, edit and delete. Must match firestore.rules and storage.rules. */

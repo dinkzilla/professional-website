@@ -29,6 +29,13 @@
     ],
     "rewrites": [
       {
+        "source": "/sitemap.xml",
+        "function": {
+          "functionId": "sitemap",
+          "region": "us-east1"
+        }
+      },
+      {
         "source": "!**/*.@(js|css|woff2|txt)",
         "destination": "/index.html"
       }

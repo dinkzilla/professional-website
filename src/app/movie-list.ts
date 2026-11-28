@@ -3,6 +3,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { CRITERIA, Movie, answered, blankMovie, fmt, matchesSearch, ranked, total, lastWatched } from './criteria';
 import { LookupHit, MovieLookup } from './movie-lookup';
 import { MovieStore } from './movie-store';
+import { urlFor } from './routes';
 import { Poster } from './poster';
 
 @Component({
@@ -147,7 +148,7 @@ import { Poster } from './poster';
           @for (r of rated(); track r.movie.id) {
             @let m = r.movie;
             <li>
-              <button type="button" class="card" [class.champ]="sort() === 'score' && r.rank === 1" (click)="open(m)">
+              <a class="card" [class.champ]="sort() === 'score' && r.rank === 1" [href]="href(m)" (click)="follow($event, m)">
                 @if (sort() === 'score') {
                   <span class="rank"><svg viewBox="0 0 32 30" aria-hidden="true"><path d="M16 29C16 29 1 19 1 9.5C1 4.5 5 1 9.2 1C12.2 1 14.8 2.6 16 5C17.2 2.6 19.8 1 22.8 1C27 1 31 4.5 31 9.5C31 19 16 29 16 29Z" /></svg>{{ r.rank }}</span>
                 }
@@ -211,7 +212,7 @@ import { Poster } from './poster';
                     <span class="sr-only">, not recommended</span>
                   }
                 </span>
-              </button>
+              </a>
               <span class="lights" aria-hidden="true"></span>
             </li>
           }
@@ -334,6 +335,18 @@ export class MovieList {
     // Viewers are saved with Kiki first; here it reads "Matt and Kiki".
     const watchedBy = m.viewers.length ? `Watched by: ${[...m.viewers].reverse().join(' and ')}${times}` : '';
     return [m.network, watchedBy].filter(Boolean).join(' · ');
+  }
+
+  /** A rated movie's own address, so its card is a real link that search engines can follow. */
+  protected href(m: Movie) {
+    return urlFor({ name: 'detail', id: m.id }, document.baseURI);
+  }
+
+  /** Opens the movie in place, unless it's being opened in a new tab or window. */
+  protected follow(event: MouseEvent, m: Movie) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    this.open(m);
   }
 
   protected open(m: Movie) {
